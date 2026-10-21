@@ -9,6 +9,7 @@ import {
   seedDevelopmentTenant,
 } from './db.js';
 import { validateExternalMediaUrl } from './media-validator.js';
+import { redactProviderDetails } from './adapters/redact.js';
 
 function formatJobRow(row) {
   if (!row) return null;
@@ -32,6 +33,9 @@ function formatJobRow(row) {
     modality: row.modality,
     model: row.model,
     resolved_provider_model: row.resolved_provider_model,
+    execution_route: row.execution_route || 'legacy',
+    execution_route_version: row.execution_route_version || '2026-10-21.v1',
+    pricing_policy_version: row.pricing_policy_version || 'tc-pricing-v1',
     inputs: row.inputs_json || {},
     workflow: row.workflow_json || {},
     delivery: row.delivery_json || {},
@@ -93,6 +97,7 @@ function formatAssetRow(row) {
     modality: row.modality,
     content_type: row.content_type,
     storage_type: row.storage_type,
+    provider: row.provider || null,
     durable: Boolean(row.durable),
     private: Boolean(row.private),
     source_url: row.source_url,
@@ -270,6 +275,9 @@ export async function createSubmissionTransaction({
   model,
   resolvedProviderModel,
   provider,
+  executionRoute = 'legacy',
+  executionRouteVersion = '2026-10-21.v1',
+  pricingPolicyVersion = 'tc-pricing-v1',
   inputs,
   workflow,
   delivery,
@@ -354,6 +362,7 @@ export async function createSubmissionTransaction({
       `INSERT INTO jobs (
          job_id, tenant_id, user_id, project_id, idempotency_key,
          modality, model, resolved_provider_model, provider,
+         execution_route, execution_route_version, pricing_policy_version,
          status, submission_state, progress,
          credits_reserved, estimated_cost,
          inputs_json, workflow_json, delivery_json,
@@ -361,10 +370,11 @@ export async function createSubmissionTransaction({
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9,
+         $10, $11, $12,
          'queued', 'not_submitted', 0,
-         $10, $10,
-         $11::jsonb, $12::jsonb, $13::jsonb,
-         1, $14
+         $13, $13,
+         $14::jsonb, $15::jsonb, $16::jsonb,
+         1, $17
        ) RETURNING *`,
       [
         jobId,
@@ -376,6 +386,9 @@ export async function createSubmissionTransaction({
         model,
         resolvedProviderModel,
         provider,
+        executionRoute,
+        executionRouteVersion,
+        pricingPolicyVersion,
         validCost,
         JSON.stringify(inputs || {}),
         JSON.stringify(workflow || {}),
@@ -403,7 +416,14 @@ export async function createSubmissionTransaction({
         validCost,
         currentBalance,
         newReserved,
-        JSON.stringify({ model, modality, provider }),
+        JSON.stringify({
+          model,
+          modality,
+          provider,
+          execution_route: executionRoute,
+          execution_route_version: executionRouteVersion,
+          pricing_policy_version: pricingPolicyVersion,
+        }),
       ]
     );
 
@@ -435,6 +455,8 @@ export async function createSubmissionTransaction({
         JSON.stringify({
           credits_reserved: validCost,
           estimated_cost: validCost,
+          execution_route: executionRoute,
+          pricing_policy_version: pricingPolicyVersion,
         }),
       ]
     );
@@ -451,6 +473,16 @@ export async function getJob(jobId) {
   const res = await query('SELECT * FROM jobs WHERE job_id = $1', [jobId]);
   if (res.rowCount === 0) return null;
   return formatJobRow(res.rows[0]);
+}
+
+export async function getJobPrivateProviderDetails(jobId) {
+  if (!jobId) return null;
+  const res = await query(
+    'SELECT job_id, provider, provider_job_id, execution_route, provider_details_private_json FROM jobs WHERE job_id = $1',
+    [jobId]
+  );
+  if (res.rowCount === 0) return null;
+  return res.rows[0].provider_details_private_json || {};
 }
 
 export async function listJobs(tenantId, limit = 50) {
@@ -686,6 +718,7 @@ export async function recordProviderTaskId({
   workerId,
   fencingToken,
   providerJobId,
+  providerDetails = null,
 }) {
   if (!providerJobId) {
     throw new Error('providerJobId is required');
@@ -709,6 +742,10 @@ export async function recordProviderTaskId({
 
     const nextEventVersion = Number(row.last_event_version || 0) + 1;
     const nextProgress = Math.max(Number(row.progress || 0), 0.15);
+    const mergedDetails = redactProviderDetails({
+      ...(row.provider_details_private_json || {}),
+      ...(providerDetails ? { submit: providerDetails } : {}),
+    });
 
     const updatedRes = await client.query(
       `UPDATE jobs
@@ -716,10 +753,11 @@ export async function recordProviderTaskId({
            submission_state = 'submitted',
            progress = $3,
            last_event_version = $4,
+           provider_details_private_json = $5::jsonb,
            updated_at = NOW()
        WHERE job_id = $1
        RETURNING *`,
-      [jobId, String(providerJobId), nextProgress, nextEventVersion]
+      [jobId, String(providerJobId), nextProgress, nextEventVersion, JSON.stringify(mergedDetails)]
     );
 
     await client.query(
@@ -924,11 +962,16 @@ export async function completeJobSuccess({
   fencingToken = null,
   providerJobId = null,
   sourceUrl,
+  outputs = null,
   userBilledCredits = null,
   providerReportedCost = null,
   providerCostUnit = null,
+  providerDetails = null,
 }) {
   const validatedMedia = validateExternalMediaUrl(sourceUrl);
+  const validatedOutputUrls = Array.isArray(outputs) && outputs.length > 0
+    ? outputs.map((u) => validateExternalMediaUrl(u).url)
+    : [validatedMedia.url];
 
   return withTransaction(async (client) => {
     // Resolve tenantId if not passed
@@ -1085,47 +1128,59 @@ export async function completeJobSuccess({
           released_unused_credits: reservedAmount - settledUserCredits,
           provider_reported_cost: normalizedProviderCost,
           provider_cost_unit: normalizedProviderCostUnit,
+          pricing_policy_version: jobRow.pricing_policy_version || 'tc-pricing-v1',
           capped_to_reservation:
             userBilledCredits !== null && Number(userBilledCredits) > reservedAmount,
         }),
       ]
     );
 
-    // 4. Register external media reference in assets table
-    const assetId = `ast_${crypto.randomBytes(8).toString('hex')}`;
-    const assetUrl = `/api/v1/assets/${assetId}`;
+    // 4. Register external media reference(s) in assets table
     const inferredMime =
       ['video', 'i2v', 'v2v', 'lipsync'].includes(jobRow.modality) ? 'video/mp4' : 'image/png';
-    const isInlineData = validatedMedia.url.startsWith('data:');
-    const storageType = isInlineData ? 'inline_data_url' : 'external_url_reference';
+    const outputPayloads = [];
 
-    await client.query(
-      `INSERT INTO assets (
-         asset_id, tenant_id, job_id, modality, content_type, storage_type, durable, private, source_url, status, url
-       ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, 'reference_registered', $8)`,
-      [
-        assetId,
-        resolvedTenantId,
-        jobId,
-        jobRow.modality,
-        inferredMime,
-        storageType,
-        validatedMedia.url,
-        assetUrl,
-      ]
-    );
+    for (const outUrl of validatedOutputUrls) {
+      const assetId = `ast_${crypto.randomBytes(8).toString('hex')}`;
+      const assetUrl = `/api/v1/assets/${assetId}`;
+      const isInlineData = outUrl.startsWith('data:');
+      const storageType = isInlineData ? 'inline_data_url' : 'external_url_reference';
 
-    const outputPayload = {
-      asset_id: assetId,
-      url: validatedMedia.url,
-      delivery_url: assetUrl,
-      content_type: inferredMime,
-      storage_type: storageType,
-      durable: false,
-    };
+      await client.query(
+        `INSERT INTO assets (
+           asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, status, url
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, 'reference_registered', $9)`,
+        [
+          assetId,
+          resolvedTenantId,
+          jobId,
+          jobRow.modality,
+          inferredMime,
+          storageType,
+          jobRow.provider,
+          outUrl,
+          assetUrl,
+        ]
+      );
 
+      outputPayloads.push({
+        asset_id: assetId,
+        url: outUrl,
+        delivery_url: assetUrl,
+        content_type: inferredMime,
+        storage_type: storageType,
+        provider: jobRow.provider,
+        durable: false,
+      });
+    }
+
+    const outputPayload = outputPayloads[0];
     const nextEventVersion = Number(jobRow.last_event_version || 0) + 1;
     const finalProviderJobId = providerJobId || jobRow.provider_job_id;
+    const mergedDetails = redactProviderDetails({
+      ...(jobRow.provider_details_private_json || {}),
+      ...(providerDetails ? { terminal: providerDetails } : {}),
+    });
 
     // 5. Transition job to terminal succeeded state
     const updatedJobRes = await client.query(
@@ -1140,9 +1195,10 @@ export async function completeJobSuccess({
            provider_cost_unit = $5,
            output_json = $6::jsonb,
            outputs_json = $7::jsonb,
+           provider_details_private_json = $8::jsonb,
            lease_owner = NULL,
            lease_expires_at = NULL,
-           last_event_version = $8,
+           last_event_version = $9,
            error = NULL,
            updated_at = NOW(),
            completed_at = NOW()
@@ -1155,7 +1211,8 @@ export async function completeJobSuccess({
         normalizedProviderCost,
         normalizedProviderCostUnit,
         JSON.stringify(outputPayload),
-        JSON.stringify([outputPayload]),
+        JSON.stringify(outputPayloads),
+        JSON.stringify(mergedDetails),
         nextEventVersion,
       ]
     );
@@ -1174,6 +1231,7 @@ export async function completeJobSuccess({
         finalProviderJobId ? String(finalProviderJobId) : null,
         JSON.stringify({
           url: outputPayload.url,
+          urls: outputPayloads.map((o) => o.url),
           delivery_url: outputPayload.delivery_url,
           asset_id: outputPayload.asset_id,
           storage_type: outputPayload.storage_type,
@@ -1209,6 +1267,7 @@ export async function completeJobFailure({
   workerId = null,
   fencingToken = null,
   errorMessage = 'Generation failed',
+  providerDetails = null,
 }) {
   return withTransaction(async (client) => {
     let resolvedTenantId = tenantId;
@@ -1334,6 +1393,10 @@ export async function completeJobFailure({
     );
 
     const nextEventVersion = Number(jobRow.last_event_version || 0) + 1;
+    const mergedDetails = redactProviderDetails({
+      ...(jobRow.provider_details_private_json || {}),
+      ...(providerDetails ? { failure: providerDetails } : {}),
+    });
 
     // 4. Transition job to terminal failed state
     const updatedJobRes = await client.query(
@@ -1343,11 +1406,12 @@ export async function completeJobFailure({
            lease_expires_at = NULL,
            last_event_version = $2,
            error = $3,
+           provider_details_private_json = $4::jsonb,
            updated_at = NOW(),
            completed_at = NOW()
        WHERE job_id = $1
        RETURNING *`,
-      [jobId, nextEventVersion, errorMessage]
+      [jobId, nextEventVersion, errorMessage, JSON.stringify(mergedDetails)]
     );
 
     // 5. Persist terminal generation.failed event
@@ -1493,8 +1557,8 @@ export async function registerAsset(assetRecord) {
 
   const res = await query(
     `INSERT INTO assets (
-       asset_id, tenant_id, job_id, modality, content_type, storage_type, durable, private, source_url, filename, status, url
-     ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, $10)
+       asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, filename, status, url
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, $9, $10, $11)
      RETURNING *`,
     [
       assetId,
@@ -1503,6 +1567,7 @@ export async function registerAsset(assetRecord) {
       assetRecord.modality || 'image',
       assetRecord.content_type || 'application/octet-stream',
       storageType,
+      assetRecord.provider || null,
       assetRecord.source_url,
       assetRecord.filename || null,
       assetRecord.status || 'reference_registered',

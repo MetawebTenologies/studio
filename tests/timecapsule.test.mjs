@@ -55,8 +55,11 @@ import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js
 import { validateExternalMediaUrl } from '../packages/timecapsule/src/server/media.js';
 import { GET as getSessionRoute, POST as postSessionRoute } from '../app/api/v1/session/route.js';
 import { GET as getGenerationsRoute, POST as postGenerationsRoute } from '../app/api/v1/generations/route.js';
+import { GET as getJobDetailRoute } from '../app/api/v1/generations/[jobId]/route.js';
 import { GET as getSseEvents } from '../app/api/v1/generations/[jobId]/events/route.js';
 import { GET as getAssetRoute } from '../app/api/v1/assets/[assetId]/route.js';
+import { POST as postUploadsRoute } from '../app/api/v1/uploads/route.js';
+import { GET as getModelsRoute } from '../app/api/v1/models/route.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,6 +109,9 @@ function withTestEnv(envOverrides, fn) {
 async function startFakeKieProviderServer(handlerOptions = {}) {
   const createTaskRequests = [];
   const recordInfoRequests = [];
+  const veoGenerateRequests = [];
+  const veoRecordInfoRequests = [];
+  const uploadRequests = [];
   let taskCounter = 0;
   const tasks = new Map();
 
@@ -117,6 +123,86 @@ async function startFakeKieProviderServer(handlerOptions = {}) {
     });
     req.on('end', async () => {
       try {
+        if (req.method === 'POST' && urlObj.pathname === '/api/file-base64-upload') {
+          const parsed = rawBody ? JSON.parse(rawBody) : {};
+          uploadRequests.push({
+            headers: req.headers,
+            body: parsed,
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              code: 200,
+              data: {
+                downloadUrl: `https://cdn.timecapsule.studio/kie-uploads/${parsed.fileName || 'upload.png'}`,
+              },
+            })
+          );
+          return;
+        }
+
+        if (req.method === 'POST' && urlObj.pathname === '/api/v1/veo/generate') {
+          const parsed = rawBody ? JSON.parse(rawBody) : {};
+          veoGenerateRequests.push({
+            headers: req.headers,
+            body: parsed,
+          });
+          taskCounter += 1;
+          const taskId = `fake_veo_task_${taskCounter}`;
+          tasks.set(taskId, {
+            taskId,
+            polls: 0,
+            requestBody: parsed,
+            isVeo: true,
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 200, data: { taskId } }));
+          return;
+        }
+
+        if (req.method === 'GET' && urlObj.pathname === '/api/v1/veo/record-info') {
+          const taskId = urlObj.searchParams.get('taskId');
+          veoRecordInfoRequests.push({
+            taskId,
+            headers: req.headers,
+          });
+          const entry = tasks.get(taskId) || { taskId, polls: 0 };
+          entry.polls += 1;
+          tasks.set(taskId, entry);
+
+          const requiredPolls = handlerOptions.pollsBeforeSuccess || 1;
+          if (entry.polls < requiredPolls) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                code: 200,
+                data: {
+                  successFlag: 0,
+                  progress: 50,
+                },
+              })
+            );
+            return;
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              code: 200,
+              data: {
+                successFlag: 1,
+                response: {
+                  resultUrls: [
+                    handlerOptions.resultUrl ||
+                      `https://cdn.timecapsule.studio/outputs/${taskId}.mp4`,
+                  ],
+                },
+              },
+            })
+          );
+          return;
+        }
+
         if (req.method === 'POST' && urlObj.pathname === '/api/v1/jobs/createTask') {
           const parsed = rawBody ? JSON.parse(rawBody) : {};
           createTaskRequests.push({
@@ -218,7 +304,179 @@ async function startFakeKieProviderServer(handlerOptions = {}) {
     baseUrl,
     createTaskRequests,
     recordInfoRequests,
+    veoGenerateRequests,
+    veoRecordInfoRequests,
+    uploadRequests,
     tasks,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+/**
+ * Starts a local fake Muapi HTTP provider server on 127.0.0.1:0.
+ * Matches verified api.muapi.ai/api/v1/* endpoints (`x-api-key`, `request_id`, `/predictions/{id}/result`, `/upload_file`).
+ */
+async function startFakeMuapiProviderServer(handlerOptions = {}) {
+  const submitRequests = [];
+  const pollRequests = [];
+  const uploadRequests = [];
+  let reqCounter = 0;
+  const predictions = new Map();
+
+  const server = http.createServer((req, res) => {
+    const urlObj = new URL(req.url, 'http://127.0.0.1');
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', async () => {
+      const rawBuffer = Buffer.concat(chunks);
+      const rawText = rawBuffer.toString('utf8');
+      try {
+        if (req.method === 'POST' && urlObj.pathname === '/api/v1/upload_file') {
+          uploadRequests.push({
+            headers: req.headers,
+            byteLength: rawBuffer.byteLength,
+            rawPreview: rawText.slice(0, 256),
+          });
+          if (handlerOptions.onUpload) {
+            const custom = await handlerOptions.onUpload(req, res, rawBuffer);
+            if (custom !== undefined) return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              url:
+                handlerOptions.uploadResultUrl ||
+                'https://cdn.timecapsule.studio/muapi-uploads/input_asset.png',
+            })
+          );
+          return;
+        }
+
+        const pollMatch = urlObj.pathname.match(/^\/api\/v1\/predictions\/([^/]+)\/result$/);
+        if (req.method === 'GET' && pollMatch) {
+          const requestId = decodeURIComponent(pollMatch[1]);
+          pollRequests.push({
+            requestId,
+            headers: req.headers,
+          });
+
+          if (handlerOptions.onPoll) {
+            const custom = await handlerOptions.onPoll(requestId, req, res, {
+              pollRequests,
+              predictions,
+            });
+            if (custom !== undefined) return;
+          }
+
+          const entry = predictions.get(requestId) || {
+            requestId,
+            endpoint: 'nano-banana-pro',
+            polls: 0,
+          };
+          entry.polls += 1;
+          predictions.set(requestId, entry);
+
+          const requiredPolls = handlerOptions.pollsBeforeSuccess || 1;
+          if (entry.polls < requiredPolls) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                request_id: requestId,
+                status: 'processing',
+                progress: 50,
+              })
+            );
+            return;
+          }
+
+          if (handlerOptions.failOnPoll) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                request_id: requestId,
+                status: 'failed',
+                error: handlerOptions.failMessage || 'Muapi model execution failed',
+              })
+            );
+            return;
+          }
+
+          const isVideo =
+            entry.endpoint.includes('t2v') ||
+            entry.endpoint.includes('i2v') ||
+            entry.endpoint.includes('video');
+          const ext = isVideo ? 'mp4' : 'png';
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              request_id: requestId,
+              status: 'completed',
+              outputs: [
+                handlerOptions.resultUrl ||
+                  `https://cdn.timecapsule.studio/muapi-outputs/${requestId}.${ext}`,
+              ],
+              cost: handlerOptions.providerCost ?? 0.08,
+            })
+          );
+          return;
+        }
+
+        const submitMatch = urlObj.pathname.match(/^\/api\/v1\/([^/]+)$/);
+        if (req.method === 'POST' && submitMatch) {
+          const endpoint = submitMatch[1];
+          const parsed = rawText ? JSON.parse(rawText) : {};
+          submitRequests.push({
+            endpoint,
+            headers: req.headers,
+            body: parsed,
+          });
+
+          if (handlerOptions.onSubmit) {
+            const custom = await handlerOptions.onSubmit(endpoint, parsed, req, res, {
+              submitRequests,
+              predictions,
+            });
+            if (custom !== undefined) return;
+          }
+
+          reqCounter += 1;
+          const requestId = `fake_muapi_req_${reqCounter}`;
+          predictions.set(requestId, {
+            requestId,
+            endpoint,
+            polls: 0,
+            requestBody: parsed,
+          });
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              request_id: requestId,
+              status: 'processing',
+            })
+          );
+          return;
+        }
+
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}/api/v1`;
+
+  return {
+    baseUrl,
+    submitRequests,
+    pollRequests,
+    uploadRequests,
+    predictions,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
@@ -296,10 +554,32 @@ test('Track A: Model catalog seam preserves all 29 upstream exports and hides un
   }
 
   assert.ok(tcModels.getModelById('nano-banana-pro'));
-  assert.ok(tcModels.getVideoModelById('veo3.1-text-to-video'));
-  assert.ok(tcModels.getI2VModelById('seedance-v2.0-i2v'));
-  assert.ok(tcModels.getLipSyncModelById('sync-lipsync'));
-  assert.ok(tcModels.getV2VModelById('video-watermark-remover'));
+  assert.ok(tcModels.getI2IModelById('nano-banana-pro-edit'));
+  assert.ok(tcModels.getVideoModelById('seedance-pro-t2v'));
+  assert.ok(tcModels.getVideoModelById('veo3.1-fast-text-to-video'));
+  assert.ok(tcModels.getI2VModelById('seedance-pro-i2v'));
+  assert.ok(tcModels.getI2VModelById('veo3.1-fast-image-to-video'));
+
+  // Unverified catalog_only models are excluded from active release pickers and preserved in inheritedUpstreamCatalog
+  assert.equal(tcModels.getVideoModelById('veo3.1-text-to-video'), undefined);
+  assert.equal(tcModels.getI2VModelById('seedance-v2.0-i2v'), undefined);
+  assert.equal(tcModels.getLipSyncModelById('sync-lipsync')?.verification_status, 'disabled');
+  assert.equal(tcModels.getLipSyncModelById('sync-lipsync')?.enabled, false);
+  assert.equal(
+    tcModels.getV2VModelById('video-watermark-remover')?.verification_status,
+    'disabled'
+  );
+  assert.equal(tcModels.getV2VModelById('video-watermark-remover')?.enabled, false);
+  assert.ok(
+    tcModels.inheritedUpstreamCatalog.t2v.some(
+      (m) => m.id === 'veo3.1-text-to-video' && m.verification_status === 'catalog_only'
+    )
+  );
+  assert.ok(
+    tcModels.inheritedUpstreamCatalog.i2v.some(
+      (m) => m.id === 'seedance-v2.0-i2v' && m.verification_status === 'catalog_only'
+    )
+  );
 
   assert.equal(tcModels.getModelById('timecapsule.flux1-dev-t2i'), undefined);
   assert.equal(tcModels.getVideoModelById('timecapsule.wan2.1-t2v'), undefined);
@@ -614,7 +894,7 @@ test('Checkpoint 1 (Provider): Missing provider credentials and unverified GPU/V
         (err) => err.code === 'MODEL_WORKER_NOT_VERIFIED' && err.statusCode === 503
       );
 
-      // Managed Veo rejected before reservation until Checkpoint 3
+      // Unverified catalog-only model rejected before reservation
       await assert.rejects(
         () =>
           submitGenerationJob({
@@ -622,7 +902,7 @@ test('Checkpoint 1 (Provider): Missing provider credentials and unverified GPU/V
             body: {
               modality: 'video',
               model: 'veo3.1-text-to-video',
-              inputs: { prompt: 'Managed Veo must fail closed before reservation' },
+              inputs: { prompt: 'Unverified catalog_only model must fail closed before reservation' },
             },
           }),
         (err) => err.code === 'MANAGED_VEO_CONTRACT_UNVERIFIED' && err.statusCode === 501
@@ -821,7 +1101,7 @@ test('Checkpoint 2 (Normalization & Fingerprinting): Canonical request normaliza
   // Array order is preserved and affects fingerprint
   const arr1 = normalizeAndFingerprintGenerationRequest({
     modality: 'i2i',
-    model: 'seedream-4.5-i2i',
+    model: 'nano-banana-pro-edit',
     inputs: {
       prompt: 'blend',
       image_urls: ['https://cdn.example.com/1.png', 'https://cdn.example.com/2.png'],
@@ -829,7 +1109,7 @@ test('Checkpoint 2 (Normalization & Fingerprinting): Canonical request normaliza
   });
   const arr2 = normalizeAndFingerprintGenerationRequest({
     modality: 'i2i',
-    model: 'seedream-4.5-i2i',
+    model: 'nano-banana-pro-edit',
     inputs: {
       prompt: 'blend',
       image_urls: ['https://cdn.example.com/2.png', 'https://cdn.example.com/1.png'],
@@ -854,6 +1134,7 @@ test('Checkpoint 2 (Persistence & Multi-Process): Jobs, reservations, and idempo
       TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
       TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
       KIE_API_KEY: 'live-configured-kie-key',
+      TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
     },
     async () => {
       await resetStoreForTests(1000);
@@ -929,6 +1210,7 @@ test('Checkpoint 2 (Idempotency & Concurrency): Concurrent duplicate submissions
       TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
       TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
       KIE_API_KEY: 'live-configured-kie-key',
+      TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
     },
     async () => {
       await resetStoreForTests(1000);
@@ -1017,6 +1299,7 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
       TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
       TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
       KIE_API_KEY: 'live-configured-kie-key',
+      TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
     },
     async () => {
       // Balance = 400. Each job reserves 180. At most 2 of 6 concurrent submissions can succeed (2 * 180 = 360 <= 400).
@@ -1145,6 +1428,7 @@ test('Checkpoint 2 (Worker Leases & Fencing): Second worker recovers expired lea
         TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
         TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
         KIE_API_KEY: 'live-configured-kie-key',
+        TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
         TIMECAPSULE_KIE_BASE_URL: fakeProvider.baseUrl,
       },
       async () => {
@@ -1241,6 +1525,7 @@ test('Checkpoint 2 (Ambiguous Provider Submission): Crash after provider accepta
         TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
         TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
         KIE_API_KEY: 'live-configured-kie-key',
+        TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
         TIMECAPSULE_KIE_BASE_URL: fakeProvider.baseUrl,
       },
       async () => {
@@ -1400,6 +1685,7 @@ test('Checkpoint 2 (SSE Replay over HTTP): Last-Event-ID reconnect replays misse
         TIMECAPSULE_SESSION_SECRET: 'checkpoint2-secret-value-at-least-32-bytes',
         TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
         KIE_API_KEY: 'live-configured-kie-key',
+        TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
         TIMECAPSULE_KIE_BASE_URL: fakeProvider.baseUrl,
         TIMECAPSULE_SSE_POLL_MS: '25',
       },
@@ -1588,6 +1874,855 @@ test('Checkpoint 3A Pre-Flight: Settlement math (500 -> reserve 100 -> charge 70
   assert.equal(settleEntry.metadata.released_unused_credits, 30);
   assert.equal(settleEntry.metadata.provider_reported_cost, 4.25);
   assert.equal(settleEntry.metadata.provider_cost_unit, 'kie_credits');
+});
 
-  await closePool();
+// ─── Checkpoint 3A Verified Provider Contracts & Muapi Integration Tests ────
+
+test('Checkpoint 3A (Muapi Core Workflows): Muapi T2I, I2I, T2V, and I2V submission, polling, completion, and failure', async () => {
+  const fakeMuapi = await startFakeMuapiProviderServer({
+    pollsBeforeSuccess: 2,
+    providerCost: 0.15,
+  });
+
+  try {
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'muapi-secret-key-do-not-expose',
+        KIE_API_KEY: undefined,
+        TIMECAPSULE_DEFAULT_PROVIDER: undefined,
+        TIMECAPSULE_MUAPI_BASE_URL: fakeMuapi.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(2000);
+        const session = verifySessionToken(issuePreviewSessionToken());
+        const worker = createDurableWorker({
+          workerId: 'wrk_muapi_workflows',
+          providerPollDelayMs: 10,
+        });
+
+        // 1. Muapi T2I (`nano-banana-pro`)
+        const t2iSub = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_muapi_t2i',
+          body: {
+            modality: 'image',
+            model: 'nano-banana-pro',
+            inputs: {
+              prompt: 'Obsidian monolith on Europa',
+              aspect_ratio: '16:9',
+              resolution: '2k',
+            },
+          },
+        });
+        assert.equal(t2iSub.job.provider, 'muapi');
+        assert.equal(t2iSub.job.resolved_provider_model, 'nano-banana-pro');
+        assert.equal(t2iSub.job.execution_route, 'muapi:predictions/v1:nano-banana-pro');
+        assert.equal(t2iSub.job.pricing_policy_version, 'tc-pricing-v1');
+
+        // 2. Muapi I2I (`nano-banana-pro-edit`)
+        const i2iSub = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_muapi_i2i',
+          body: {
+            modality: 'i2i',
+            model: 'nano-banana-pro-edit',
+            inputs: {
+              prompt: 'Add aurora borealis in sky',
+              image_urls: ['https://cdn.timecapsule.studio/muapi-uploads/ref1.png'],
+              aspect_ratio: '16:9',
+              resolution: '1k',
+            },
+          },
+        });
+        assert.equal(i2iSub.job.provider, 'muapi');
+        assert.equal(i2iSub.job.resolved_provider_model, 'nano-banana-pro-edit');
+        assert.equal(i2iSub.job.execution_route, 'muapi:predictions/v1:nano-banana-pro-edit');
+
+        // 3. Muapi T2V (`seedance-pro-t2v`)
+        const t2vSub = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_muapi_t2v',
+          body: {
+            modality: 'video',
+            model: 'seedance-pro-t2v',
+            inputs: {
+              prompt: 'Slow dolly shot into bioluminescent cave',
+              aspect_ratio: '16:9',
+              resolution: '1080p',
+              duration_seconds: 5,
+            },
+          },
+        });
+        assert.equal(t2vSub.job.provider, 'muapi');
+        assert.equal(t2vSub.job.resolved_provider_model, 'seedance-pro-t2v');
+        assert.equal(t2vSub.job.execution_route, 'muapi:predictions/v1:seedance-pro-t2v');
+
+        // 4. Muapi I2V (`seedance-pro-i2v`)
+        const i2vSub = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_muapi_i2v',
+          body: {
+            modality: 'i2v',
+            model: 'seedance-pro-i2v',
+            inputs: {
+              prompt: 'Camera orbits subject in slow motion',
+              image_url: 'https://cdn.timecapsule.studio/muapi-uploads/start_frame.png',
+              aspect_ratio: '16:9',
+              resolution: '720p',
+              duration_seconds: 5,
+            },
+          },
+        });
+        assert.equal(i2vSub.job.provider, 'muapi');
+        assert.equal(i2vSub.job.resolved_provider_model, 'seedance-pro-i2v');
+        assert.equal(i2vSub.job.execution_route, 'muapi:predictions/v1:seedance-pro-i2v');
+
+        await worker.drainUntilSettled({ waitMs: 15, maxIterations: 50 });
+
+        // Verify exact Muapi endpoints and payloads
+        const endpointsCalled = fakeMuapi.submitRequests.map((r) => r.endpoint);
+        assert.deepEqual(endpointsCalled, [
+          'nano-banana-pro',
+          'nano-banana-pro-edit',
+          'seedance-pro-t2v',
+          'seedance-pro-i2v',
+        ]);
+        for (const req of fakeMuapi.submitRequests) {
+          assert.equal(req.headers['x-api-key'], 'muapi-secret-key-do-not-expose');
+        }
+        assert.equal(fakeMuapi.submitRequests[0].body.resolution, '2k');
+        assert.deepEqual(fakeMuapi.submitRequests[1].body.images_list, [
+          'https://cdn.timecapsule.studio/muapi-uploads/ref1.png',
+        ]);
+        assert.equal(fakeMuapi.submitRequests[2].body.quality, 'high');
+        assert.equal(
+          fakeMuapi.submitRequests[3].body.image_url,
+          'https://cdn.timecapsule.studio/muapi-uploads/start_frame.png'
+        );
+        assert.equal(fakeMuapi.submitRequests[3].body.quality, 'medium');
+
+        for (const sub of [t2iSub, i2iSub, t2vSub, i2vSub]) {
+          const done = await getJob(sub.job.job_id);
+          assert.equal(done.status, 'succeeded');
+          assert.equal(done.provider, 'muapi');
+          assert.equal(done.provider_reported_cost, 0.15);
+          assert.equal(done.provider_cost_unit, 'muapi_usd');
+          assert.equal(done.user_billed_credits, sub.job.estimated_cost);
+          assert.ok(done.output?.url?.startsWith('https://cdn.timecapsule.studio/muapi-outputs/'));
+        }
+
+        // 5. Verify Muapi terminal failure releases credits cleanly
+        const failMuapi = await startFakeMuapiProviderServer({
+          pollsBeforeSuccess: 1,
+          failOnPoll: true,
+          failMessage: 'Muapi content safety filter triggered',
+        });
+        try {
+          await withTestEnv({ TIMECAPSULE_MUAPI_BASE_URL: failMuapi.baseUrl }, async () => {
+            const creditsBeforeFail = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+            const failSub = await submitGenerationJob({
+              session,
+              idempotencyKey: 'idem_muapi_fail_1',
+              body: {
+                modality: 'image',
+                model: 'nano-banana-pro',
+                inputs: { prompt: 'Trigger failure on poll', resolution: '1k' },
+              },
+            });
+            await worker.drainUntilSettled({ waitMs: 15 });
+            const failedJob = await getJob(failSub.job.job_id);
+            assert.equal(failedJob.status, 'failed');
+            assert.match(failedJob.error, /Muapi content safety filter triggered/);
+            const creditsAfterFail = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+            assert.equal(creditsAfterFail.total_credits, creditsBeforeFail.total_credits);
+            assert.equal(creditsAfterFail.reserved_credits, 0);
+          });
+        } finally {
+          await failMuapi.close();
+        }
+      }
+    );
+  } finally {
+    await fakeMuapi.close();
+  }
+});
+
+test('Checkpoint 3A (Kie Alternative & Dedicated Veo Routes): Explicit Kie alternative execution for image/video and dedicated Kie Veo route', async () => {
+  const fakeKie = await startFakeKieProviderServer({
+    pollsBeforeSuccess: 2,
+  });
+
+  try {
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'muapi-key-present',
+        KIE_API_KEY: 'kie-explicit-alt-key',
+        TIMECAPSULE_KIE_BASE_URL: fakeKie.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(1500);
+        const session = verifySessionToken(issuePreviewSessionToken());
+        const worker = createDurableWorker({
+          workerId: 'wrk_kie_alt',
+          providerPollDelayMs: 10,
+        });
+
+        // 1. Explicit provider='kie' for image (`nano-banana-pro`)
+        const kieImg = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_kie_alt_img',
+          body: {
+            modality: 'image',
+            model: 'nano-banana-pro',
+            provider: 'kie',
+            inputs: { prompt: 'Kie alternative image', resolution: '2k', aspect_ratio: '1:1' },
+          },
+        });
+        assert.equal(kieImg.job.provider, 'kie');
+        assert.equal(kieImg.job.execution_route, 'kie:market-jobs/v1:nano-banana-pro');
+
+        // 2. Explicit provider='kie' for video (`seedance-pro-t2v`)
+        const kieVid = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_kie_alt_vid',
+          body: {
+            modality: 'video',
+            model: 'seedance-pro-t2v',
+            provider: 'kie',
+            inputs: { prompt: 'Kie alternative video', duration_seconds: 5, resolution: '1080p' },
+          },
+        });
+        assert.equal(kieVid.job.provider, 'kie');
+        assert.equal(kieVid.job.resolved_provider_model, 'bytedance/seedance-1.5-pro');
+        assert.equal(kieVid.job.execution_route, 'kie:market-jobs/v1:bytedance/seedance-1.5-pro');
+
+        // 3. Dedicated Kie Veo route (`veo3.1-fast-text-to-video` -> `kie:veo/v1:veo3_fast`)
+        const veoVid = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_kie_veo_fast',
+          body: {
+            modality: 'video',
+            model: 'veo3.1-fast-text-to-video',
+            inputs: { prompt: 'Veo fast aerial coastline', aspect_ratio: '16:9' },
+          },
+        });
+        assert.equal(veoVid.job.provider, 'kie');
+        assert.equal(veoVid.job.resolved_provider_model, 'veo3_fast');
+        assert.equal(veoVid.job.execution_route, 'kie:veo/v1:veo3_fast');
+
+        await worker.drainUntilSettled({ waitMs: 15, maxIterations: 50 });
+
+        assert.equal(fakeKie.createTaskRequests.length, 2);
+        assert.equal(fakeKie.createTaskRequests[0].body.model, 'nano-banana-pro');
+        assert.equal(fakeKie.createTaskRequests[0].body.input.resolution, '2K');
+        assert.equal(fakeKie.createTaskRequests[1].body.model, 'bytedance/seedance-1.5-pro');
+        assert.equal(fakeKie.veoGenerateRequests.length, 1);
+        assert.equal(fakeKie.veoGenerateRequests[0].body.model, 'veo3_fast');
+        assert.ok(fakeKie.veoRecordInfoRequests.length >= 2);
+
+        for (const sub of [kieImg, kieVid, veoVid]) {
+          const done = await getJob(sub.job.job_id);
+          assert.equal(done.status, 'succeeded');
+          assert.equal(done.provider, 'kie');
+        }
+      }
+    );
+  } finally {
+    await fakeKie.close();
+  }
+});
+
+test('Checkpoint 3A (Uploads): Input upload authentication, MIME/byte-size validation, and provider_hosted_upload registration for Muapi and Kie', async () => {
+  const fakeMuapi = await startFakeMuapiProviderServer();
+  const fakeKie = await startFakeKieProviderServer();
+
+  try {
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'muapi-upload-secret',
+        KIE_API_KEY: 'kie-upload-secret',
+        TIMECAPSULE_MUAPI_BASE_URL: fakeMuapi.baseUrl,
+        TIMECAPSULE_KIE_UPLOAD_BASE_URL: fakeKie.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(1000);
+        const token = issuePreviewSessionToken();
+
+        // 1. Unauthenticated upload rejected with 401
+        const unauthRes = await postUploadsRoute(
+          new Request('http://localhost:3000/api/v1/uploads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: 'http://localhost:3000',
+            },
+            body: JSON.stringify({
+              dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+              filename: 'dot.png',
+              contentType: 'image/png',
+            }),
+          })
+        );
+        assert.equal(unauthRes.status, 401);
+
+        // 2. Disallowed MIME type (`application/x-msdownload` or `text/html`) rejected with 415
+        const badMimeRes = await postUploadsRoute(
+          new Request('http://localhost:3000/api/v1/uploads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: 'http://localhost:3000',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              dataUrl: `data:text/html;base64,${Buffer.from('<script>alert(1)</script>').toString('base64')}`,
+              filename: 'evil.html',
+              contentType: 'text/html',
+            }),
+          })
+        );
+        assert.equal(badMimeRes.status, 415);
+        assert.equal((await badMimeRes.json()).code, 'UNSUPPORTED_MEDIA_TYPE');
+
+        // 3. Oversized image (> 10 MB) rejected with 413 PAYLOAD_TOO_LARGE
+        const oversizedBuf = Buffer.alloc(10 * 1024 * 1024 + 64, 0x41);
+        const formOversized = new FormData();
+        formOversized.append(
+          'file',
+          new Blob([oversizedBuf], { type: 'image/png' }),
+          'huge.png'
+        );
+        const oversizedRes = await postUploadsRoute(
+          new Request('http://localhost:3000/api/v1/uploads', {
+            method: 'POST',
+            headers: {
+              Origin: 'http://localhost:3000',
+              Authorization: `Bearer ${token}`,
+            },
+            body: formOversized,
+          })
+        );
+        assert.equal(oversizedRes.status, 413);
+        assert.equal((await oversizedRes.json()).code, 'PAYLOAD_TOO_LARGE');
+
+        // 4. Valid Muapi upload (default primary provider) registers provider_hosted_upload with durable=false
+        const validPngDataUrl =
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+        const muapiUploadRes = await postUploadsRoute(
+          new Request('http://localhost:3000/api/v1/uploads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: 'http://localhost:3000',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              dataUrl: validPngDataUrl,
+              filename: 'reference_frame.png',
+              contentType: 'image/png',
+            }),
+          })
+        );
+        assert.equal(muapiUploadRes.status, 200);
+        const muapiUploadData = await muapiUploadRes.json();
+        assert.equal(muapiUploadData.ok, true);
+        assert.equal(muapiUploadData.provider, 'muapi');
+        assert.equal(muapiUploadData.storage_type, 'provider_hosted_upload');
+        assert.equal(muapiUploadData.durable, false);
+        assert.equal(
+          muapiUploadData.url,
+          'https://cdn.timecapsule.studio/muapi-uploads/input_asset.png'
+        );
+        assert.equal(fakeMuapi.uploadRequests.length, 1);
+        assert.equal(fakeMuapi.uploadRequests[0].headers['x-api-key'], 'muapi-upload-secret');
+
+        // Confirm DB row records storage_type='provider_hosted_upload', durable=false, provider='muapi'
+        const dbAssetRes = await query('SELECT * FROM assets WHERE asset_id = $1', [
+          muapiUploadData.asset_id,
+        ]);
+        assert.equal(dbAssetRes.rows[0].storage_type, 'provider_hosted_upload');
+        assert.equal(dbAssetRes.rows[0].durable, false);
+        assert.equal(dbAssetRes.rows[0].provider, 'muapi');
+
+        // 5. Explicit Kie upload registers provider_hosted_upload with durable=false and provider='kie'
+        const kieUploadRes = await postUploadsRoute(
+          new Request('http://localhost:3000/api/v1/uploads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: 'http://localhost:3000',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              dataUrl: validPngDataUrl,
+              filename: 'kie_input.png',
+              contentType: 'image/png',
+              provider: 'kie',
+            }),
+          })
+        );
+        assert.equal(kieUploadRes.status, 200);
+        const kieUploadData = await kieUploadRes.json();
+        assert.equal(kieUploadData.provider, 'kie');
+        assert.equal(kieUploadData.storage_type, 'provider_hosted_upload');
+        assert.equal(kieUploadData.durable, false);
+        assert.equal(fakeKie.uploadRequests.length, 1);
+      }
+    );
+  } finally {
+    await fakeMuapi.close();
+    await fakeKie.close();
+  }
+});
+
+test('Checkpoint 3A (No Silent Fallback & Mid-Flight Immutability): Missing/failing provider never silently falls back, and in-flight jobs retain stored provider/route across config changes', async () => {
+  const fakeMuapi = await startFakeMuapiProviderServer({ pollsBeforeSuccess: 2 });
+  const fakeKie = await startFakeKieProviderServer();
+
+  try {
+    // 1. When Muapi is default/requested and MUAPI_API_KEY is missing, it MUST NOT fall back to KIE_API_KEY
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: undefined,
+        KIE_API_KEY: 'kie-key-is-present-but-must-not-be-used',
+        TIMECAPSULE_DEFAULT_PROVIDER: 'muapi',
+        TIMECAPSULE_KIE_BASE_URL: fakeKie.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(1000);
+        const session = verifySessionToken(issuePreviewSessionToken());
+
+        await assert.rejects(
+          () =>
+            submitGenerationJob({
+              session,
+              idempotencyKey: 'idem_no_fallback_1',
+              body: {
+                modality: 'image',
+                model: 'nano-banana-pro',
+                inputs: { prompt: 'Must fail closed, not fall back to Kie' },
+              },
+            }),
+          (err) => err.code === 'PROVIDER_CREDENTIALS_MISSING' && err.statusCode === 503
+        );
+        assert.equal(fakeKie.createTaskRequests.length, 0);
+        const credits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+        assert.equal(credits.reserved_credits, 0);
+      }
+    );
+
+    // 2. Submit job under Muapi, then switch TIMECAPSULE_DEFAULT_PROVIDER to 'kie' while job is queued/running
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'muapi-live-key',
+        KIE_API_KEY: 'kie-live-key',
+        TIMECAPSULE_DEFAULT_PROVIDER: 'muapi',
+        TIMECAPSULE_MUAPI_BASE_URL: fakeMuapi.baseUrl,
+        TIMECAPSULE_KIE_BASE_URL: fakeKie.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(1000);
+        const session = verifySessionToken(issuePreviewSessionToken());
+
+        const { job } = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_midflight_immutability',
+          body: {
+            modality: 'image',
+            model: 'nano-banana-pro',
+            inputs: { prompt: 'Submitted when Muapi was default', resolution: '1k' },
+          },
+        });
+        assert.equal(job.provider, 'muapi');
+        assert.equal(job.execution_route, 'muapi:predictions/v1:nano-banana-pro');
+
+        // Verify PostgreSQL trigger blocks mutating provider, resolved_provider_model, or execution_route
+        await assert.rejects(
+          () =>
+            query('UPDATE jobs SET provider = $1 WHERE job_id = $2', ['kie', job.job_id]),
+          /immutable after creation/
+        );
+        await assert.rejects(
+          () =>
+            query('UPDATE jobs SET execution_route = $1 WHERE job_id = $2', [
+              'kie:market-jobs/v1:nano-banana-pro',
+              job.job_id,
+            ]),
+          /immutable after creation/
+        );
+
+        // Now change TIMECAPSULE_DEFAULT_PROVIDER to 'kie' BEFORE worker claims and executes the queued job
+        await withTestEnv({ TIMECAPSULE_DEFAULT_PROVIDER: 'kie' }, async () => {
+          const worker = createDurableWorker({
+            workerId: 'wrk_midflight',
+            providerPollDelayMs: 10,
+          });
+          await worker.drainUntilSettled({ waitMs: 15 });
+        });
+
+        const completed = await getJob(job.job_id);
+        assert.equal(completed.status, 'succeeded');
+        assert.equal(completed.provider, 'muapi');
+        assert.equal(completed.execution_route, 'muapi:predictions/v1:nano-banana-pro');
+        assert.equal(fakeMuapi.submitRequests.length, 1, 'Must execute on stored provider Muapi');
+        assert.equal(fakeKie.createTaskRequests.length, 0, 'Must not switch in-flight job to Kie');
+      }
+    );
+  } finally {
+    await fakeMuapi.close();
+    await fakeKie.close();
+  }
+});
+
+test('Checkpoint 3A (Resilience & Redaction): Poll timeout retries safely without failing job, and 401/403/429/malformed JSON fail cleanly with secret redaction', async () => {
+  let pollAttemptCount = 0;
+  const fakeMuapiTimeoutThenSuccess = await startFakeMuapiProviderServer({
+    onPoll: async (requestId, req, res) => {
+      pollAttemptCount += 1;
+      if (pollAttemptCount === 1) {
+        // Delay longer than TIMECAPSULE_PROVIDER_TIMEOUT_MS (60ms) to trigger poll timeout on first poll
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return undefined; // fall through to normal success handler on 2nd poll
+    },
+  });
+
+  try {
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'super-secret-muapi-key-9999',
+        TIMECAPSULE_MUAPI_BASE_URL: fakeMuapiTimeoutThenSuccess.baseUrl,
+        TIMECAPSULE_PROVIDER_TIMEOUT_MS: '60',
+      },
+      async () => {
+        await resetStoreForTests(1000);
+        const session = verifySessionToken(issuePreviewSessionToken());
+        const worker = createDurableWorker({
+          workerId: 'wrk_poll_retry',
+          providerPollDelayMs: 15,
+        });
+
+        const { job } = await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_poll_timeout_retry',
+          body: {
+            modality: 'image',
+            model: 'nano-banana-pro',
+            inputs: { prompt: 'Survive transient poll timeout', resolution: '1k' },
+          },
+        });
+
+        // Step 1: Submit
+        const step1 = await worker.runOnce();
+        assert.equal(step1.action, 'submitted_and_scheduled_poll');
+
+        // Step 2: First poll times out -> must return 'scheduled_poll_retry' and keep job queued for next poll
+        await new Promise((r) => setTimeout(r, 20));
+        const step2 = await worker.runOnce();
+        assert.equal(step2.action, 'scheduled_poll_retry');
+        assert.equal(step2.job.status, 'queued');
+
+        // Step 3: Second poll succeeds -> job completes and settles credits
+        await worker.drainUntilSettled({ waitMs: 35 });
+        const finalJob = await getJob(job.job_id);
+        assert.equal(finalJob.status, 'succeeded');
+        assert.equal(
+          fakeMuapiTimeoutThenSuccess.submitRequests.length,
+          1,
+          'Poll timeout must never resubmit task'
+        );
+      }
+    );
+  } finally {
+    await fakeMuapiTimeoutThenSuccess.close();
+  }
+
+  // Test 401/403, 429, and Malformed JSON with secret redaction
+  for (const scenario of [
+    {
+      name: '401_unauthorized',
+      status: 401,
+      body: JSON.stringify({
+        error: 'Unauthorized x-api-key: super-secret-muapi-key-9999 rejected',
+      }),
+      expectedStatus: 'failed',
+      expectedReserved: 0,
+    },
+    {
+      name: '429_rate_limited',
+      status: 429,
+      body: JSON.stringify({
+        error: 'Rate limit exceeded for Bearer super-secret-muapi-key-9999',
+      }),
+      maxAttempts: 1,
+      expectedStatus: 'failed',
+      expectedReserved: 0,
+    },
+    {
+      name: '400_malformed_json',
+      status: 400,
+      body: '<<<NOT_VALID_JSON_AT_ALL x-api-key: super-secret-muapi-key-9999>>>',
+      expectedStatus: 'failed',
+      expectedReserved: 0,
+    },
+    {
+      name: '200_malformed_json_ambiguous',
+      status: 200,
+      body: '<<<200_NOT_VALID_JSON_AT_ALL>>>',
+      expectedStatus: 'reconciling_submission',
+      expectedReserved: 15,
+    },
+  ]) {
+    const errorServer = await startFakeMuapiProviderServer({
+      onSubmit: async (_endpoint, _parsed, _req, res) => {
+        res.writeHead(scenario.status, { 'Content-Type': 'application/json' });
+        res.end(scenario.body);
+        return true;
+      },
+    });
+
+    try {
+      await withTestEnv(
+        {
+          TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+          TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+          MUAPI_API_KEY: 'super-secret-muapi-key-9999',
+          TIMECAPSULE_MUAPI_BASE_URL: errorServer.baseUrl,
+          TIMECAPSULE_PROVIDER_TIMEOUT_MS: '2000',
+        },
+        async () => {
+          await resetStoreForTests(500);
+          const session = verifySessionToken(issuePreviewSessionToken());
+          const worker = createDurableWorker({
+            workerId: `wrk_${scenario.name}`,
+            providerPollDelayMs: 10,
+          });
+
+          const { job } = await submitGenerationJob({
+            session,
+            idempotencyKey: `idem_${scenario.name}`,
+            body: {
+              modality: 'image',
+              model: 'nano-banana-pro',
+              inputs: { prompt: `Test ${scenario.name}` },
+            },
+          });
+
+          if (scenario.maxAttempts) {
+            await query('UPDATE jobs SET max_submission_attempts = $1 WHERE job_id = $2', [
+              scenario.maxAttempts,
+              job.job_id,
+            ]);
+          }
+
+          await worker.drainUntilSettled({ waitMs: 15 });
+
+          const afterJob = await getJob(job.job_id);
+          assert.equal(afterJob.status, scenario.expectedStatus);
+          assert.ok(
+            !String(afterJob.error || '').includes('super-secret-muapi-key-9999'),
+            `Secret key must be redacted from job error in scenario ${scenario.name}`
+          );
+
+          const credits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+          assert.equal(credits.total_credits, 500);
+          assert.equal(credits.reserved_credits, scenario.expectedReserved);
+        }
+      );
+    } finally {
+      await errorServer.close();
+    }
+  }
+});
+
+test('Checkpoint 3A (Browser BFF Flow): Browser client executes upload, T2I, I2I, T2V, I2V, and models discovery through Timecapsule BFF without provider keys in browser context', async () => {
+  const fakeMuapi = await startFakeMuapiProviderServer({
+    pollsBeforeSuccess: 1,
+    providerCost: 0.09,
+  });
+
+  // Start a local HTTP server hosting the BFF routes (`/api/v1/models`, `/api/v1/uploads`, `/api/v1/generations`, `/api/v1/generations/:jobId`)
+  // and automatically running the durable worker in the background when a job is queued.
+  const worker = createDurableWorker({
+    workerId: 'wrk_bff_e2e',
+    providerPollDelayMs: 10,
+  });
+  const pendingWorkerDrains = [];
+
+  const bffServer = http.createServer(async (req, res) => {
+    try {
+      const urlObj = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const rawBody = Buffer.concat(chunks);
+
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (Array.isArray(v)) headers.set(k, v.join(', '));
+        else if (v !== undefined) headers.set(k, v);
+      }
+      if (!headers.has('origin')) {
+        headers.set('origin', urlObj.origin);
+      }
+
+      const webReq = new Request(urlObj.toString(), {
+        method: req.method,
+        headers,
+        body: req.method !== 'GET' && req.method !== 'HEAD' ? rawBody : undefined,
+      });
+
+      let webRes;
+      if (urlObj.pathname === '/api/v1/models' && req.method === 'GET') {
+        webRes = await getModelsRoute(webReq);
+      } else if (urlObj.pathname === '/api/v1/uploads' && req.method === 'POST') {
+        webRes = await postUploadsRoute(webReq);
+      } else if (urlObj.pathname === '/api/v1/generations' && req.method === 'POST') {
+        webRes = await postGenerationsRoute(webReq);
+        // Trigger worker asynchronously just like the separate worker process
+        pendingWorkerDrains.push(worker.drainUntilSettled({ waitMs: 10 }).catch(() => {}));
+      } else if (urlObj.pathname === '/api/v1/generations' && req.method === 'GET') {
+        webRes = await getGenerationsRoute(webReq);
+      } else {
+        const jobMatch = urlObj.pathname.match(/^\/api\/v1\/generations\/([^/]+)$/);
+        if (jobMatch && req.method === 'GET') {
+          webRes = await getJobDetailRoute(webReq, {
+            params: Promise.resolve({ jobId: decodeURIComponent(jobMatch[1]) }),
+          });
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found' }));
+          return;
+        }
+      }
+
+      res.writeHead(webRes.status, Object.fromEntries(webRes.headers.entries()));
+      const text = await webRes.text();
+      res.end(text);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+
+  await new Promise((r) => bffServer.listen(0, '127.0.0.1', r));
+  const bffBaseUrl = `http://127.0.0.1:${bffServer.address().port}/api/v1`;
+
+  try {
+    await withTestEnv(
+      {
+        TIMECAPSULE_SESSION_SECRET: 'checkpoint3a-secret-value-at-least-32-bytes',
+        TIMECAPSULE_PREVIEW_KEY: 'preview-operator-secret-key-2026',
+        MUAPI_API_KEY: 'server-only-muapi-key-never-in-browser',
+        KIE_API_KEY: undefined,
+        TIMECAPSULE_MUAPI_BASE_URL: fakeMuapi.baseUrl,
+      },
+      async () => {
+        await resetStoreForTests(2000);
+        const sessionToken = issuePreviewSessionToken();
+
+        // 1. Verify GET /api/v1/models exposes runtime availability and contract status without leaking keys
+        const modelsRes = await fetch(`${bffBaseUrl}/models`);
+        assert.equal(modelsRes.status, 200);
+        const modelsText = await modelsRes.text();
+        assert.ok(!modelsText.includes('server-only-muapi-key-never-in-browser'));
+        const modelsData = JSON.parse(modelsText);
+        assert.equal(modelsData.default_provider, 'muapi');
+        assert.equal(modelsData.providers.muapi.configured, true);
+        assert.equal(modelsData.providers.kie.configured, false);
+
+        const nanoProEntry = modelsData.models.image.find((m) => m.id === 'nano-banana-pro');
+        assert.ok(nanoProEntry);
+        assert.equal(nanoProEntry.available, true);
+        assert.equal(nanoProEntry.active_provider, 'muapi');
+        assert.equal(nanoProEntry.verification_status, 'contract_tested');
+
+        // Configure browser client to talk to our local BFF server using only the preview session token
+        tcClient.configureTimecapsuleClient({
+          mode: 'bff',
+          bffBaseUrl,
+          bffPollIntervalMs: 15,
+          EventSourceImpl: false,
+          fetchImpl: fetch,
+        });
+
+        // 2. Upload input image via browser client -> BFF -> Fake Muapi
+        const fakeBlob = new Blob(
+          [
+            Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+              'base64'
+            ),
+          ],
+          { type: 'image/png' }
+        );
+        fakeBlob.name = 'browser_input.png';
+        const uploadedUrl = await studioClient.uploadFile(sessionToken, fakeBlob);
+        assert.equal(
+          uploadedUrl,
+          'https://cdn.timecapsule.studio/muapi-uploads/input_asset.png'
+        );
+
+        // 3. Browser T2I (`nano-banana-pro`)
+        const imgOut = await studioClient.generateImage(sessionToken, {
+          model: 'nano-banana-pro',
+          prompt: 'Browser BFF T2I test',
+          aspect_ratio: '1:1',
+          resolution: '1k',
+        });
+        assert.equal(imgOut.provider, 'muapi');
+        assert.ok(imgOut.url.endsWith('.png'));
+
+        // 4. Browser I2I (`nano-banana-pro-edit`) using uploaded asset URL
+        const i2iOut = await studioClient.generateI2I(sessionToken, {
+          model: 'nano-banana-pro-edit',
+          prompt: 'Browser BFF I2I test',
+          image_url: uploadedUrl,
+          aspect_ratio: '1:1',
+          resolution: '1k',
+        });
+        assert.equal(i2iOut.provider, 'muapi');
+        assert.ok(i2iOut.url.endsWith('.png'));
+
+        // 5. Browser T2V (`seedance-pro-t2v`)
+        const t2vOut = await studioClient.generateVideo(sessionToken, {
+          model: 'seedance-pro-t2v',
+          prompt: 'Browser BFF T2V test',
+          aspect_ratio: '16:9',
+          resolution: '720p',
+          duration: 5,
+        });
+        assert.equal(t2vOut.provider, 'muapi');
+        assert.ok(t2vOut.url.endsWith('.mp4'));
+
+        // 6. Browser I2V (`seedance-pro-i2v`) using uploaded asset URL
+        const i2vOut = await studioClient.generateI2V(sessionToken, {
+          model: 'seedance-pro-i2v',
+          prompt: 'Browser BFF I2V test',
+          image_url: uploadedUrl,
+          aspect_ratio: '16:9',
+          resolution: '720p',
+          duration: 5,
+        });
+        assert.equal(i2vOut.provider, 'muapi');
+        assert.ok(i2vOut.url.endsWith('.mp4'));
+      }
+    );
+  } finally {
+    await Promise.allSettled(pendingWorkerDrains);
+    await new Promise((r) => bffServer.close(r));
+    await fakeMuapi.close();
+    await closePool();
+  }
 });

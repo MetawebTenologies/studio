@@ -63,13 +63,14 @@ export async function submitGenerationJob({
   const provider = selectProviderForJob({
     model: normalized.model,
     modality: normalized.modality,
-    preferredProvider: body.provider,
+    preferredProvider: normalized.provider || body.provider,
   });
 
   const readiness = assertProviderReadyForJob({
     model: normalized.model,
     modality: normalized.modality,
     provider,
+    inputs: normalized.inputs,
   });
 
   const estimatedCost = getEstimatedCreditsForModel(
@@ -91,6 +92,9 @@ export async function submitGenerationJob({
     model: normalized.model,
     resolvedProviderModel: readiness.resolvedModel,
     provider: readiness.provider,
+    executionRoute: readiness.executionRoute,
+    executionRouteVersion: readiness.executionRouteVersion,
+    pricingPolicyVersion: readiness.pricingPolicyVersion,
     inputs: normalized.inputs,
     workflow: normalized.workflow,
     delivery: normalized.delivery,

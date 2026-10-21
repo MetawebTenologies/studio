@@ -116,6 +116,7 @@ export function createDurableWorker(options = {}) {
             workerId,
             fencingToken,
             errorMessage: err.message || 'Provider task submission failed',
+            providerDetails: err.providerDetails || null,
           });
           return {
             processed: true,
@@ -137,6 +138,7 @@ export function createDurableWorker(options = {}) {
           workerId,
           fencingToken,
           providerJobId: submissionResult.providerJobId,
+          providerDetails: submissionResult.providerDetails || null,
         });
 
         if (submissionResult.immediateCompletion) {
@@ -147,9 +149,11 @@ export function createDurableWorker(options = {}) {
             fencingToken,
             providerJobId: submissionResult.providerJobId,
             sourceUrl: submissionResult.immediateCompletion.sourceUrl,
+            outputs: submissionResult.immediateCompletion.outputs || null,
             userBilledCredits: submissionResult.immediateCompletion.userBilledCredits ?? null,
             providerReportedCost: submissionResult.immediateCompletion.providerReportedCost ?? null,
             providerCostUnit: submissionResult.immediateCompletion.providerCostUnit ?? null,
+            providerDetails: submissionResult.providerDetails || null,
           });
           return {
             processed: true,
@@ -205,6 +209,7 @@ export function createDurableWorker(options = {}) {
           workerId,
           fencingToken,
           errorMessage: err.message || 'Provider status polling failed',
+          providerDetails: err.providerDetails || null,
         });
         return {
           processed: true,
@@ -221,9 +226,11 @@ export function createDurableWorker(options = {}) {
           fencingToken,
           providerJobId: claimedJob.provider_job_id,
           sourceUrl: pollResult.sourceUrl,
+          outputs: pollResult.outputs || null,
           userBilledCredits: pollResult.userBilledCredits ?? null,
           providerReportedCost: pollResult.providerReportedCost ?? null,
           providerCostUnit: pollResult.providerCostUnit ?? null,
+          providerDetails: pollResult.providerDetails || null,
         });
         return {
           processed: true,
@@ -239,6 +246,7 @@ export function createDurableWorker(options = {}) {
           workerId,
           fencingToken,
           errorMessage: pollResult.error || 'Provider reported generation failure',
+          providerDetails: pollResult.providerDetails || null,
         });
         return {
           processed: true,

@@ -177,6 +177,11 @@ export function normalizeAndFingerprintGenerationRequest(rawBody = {}) {
       ? rawBody.delivery
       : {};
 
+  const explicitProvider =
+    rawBody.provider !== undefined && rawBody.provider !== null && String(rawBody.provider).trim()
+      ? String(rawBody.provider).trim().toLowerCase()
+      : undefined;
+
   const defaultFormats = isVideoLike ? ['mp4'] : ['png'];
   const normalizedDelivery = {
     ...rawDelivery,
@@ -190,6 +195,7 @@ export function normalizeAndFingerprintGenerationRequest(rawBody = {}) {
     project_id: projectId,
     modality,
     model,
+    provider: explicitProvider,
     inputs: normalizedInputs,
     workflow: rawWorkflow,
     delivery: normalizedDelivery,
@@ -202,6 +208,7 @@ export function normalizeAndFingerprintGenerationRequest(rawBody = {}) {
     projectId: canonicalPayload.project_id,
     modality: canonicalPayload.modality,
     model: canonicalPayload.model,
+    provider: canonicalPayload.provider || null,
     inputs: canonicalPayload.inputs,
     workflow: canonicalPayload.workflow,
     delivery: canonicalPayload.delivery,

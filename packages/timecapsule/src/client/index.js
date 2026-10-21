@@ -222,7 +222,7 @@ function sleep(ms) {
 
 // ─── Timecapsule BFF Execution Path ──────────────────────────────────────────
 
-async function runViaTimecapsuleBff({ apiKey, modality, model, inputs, workflow, delivery }) {
+async function runViaTimecapsuleBff({ apiKey, modality, model, provider, inputs, workflow, delivery }) {
   if (!model || typeof model !== 'string' || !model.trim()) {
     const err = new Error(`Explicit model identifier is required for modality "${modality}"`);
     err.status = 400;
@@ -253,6 +253,7 @@ async function runViaTimecapsuleBff({ apiKey, modality, model, inputs, workflow,
       project_id: inputs?.project_id || 'prj_default',
       modality,
       model,
+      ...(provider ? { provider } : {}),
       inputs,
       workflow: workflow || {},
       delivery: delivery || { formats: modality === 'video' ? ['mp4'] : ['png'], thumbnail: true },
@@ -460,6 +461,7 @@ export async function generateImage(apiKey, params = {}) {
       apiKey,
       modality: 'image',
       model: params.model,
+      provider: params.provider,
       inputs: {
         prompt: params.prompt,
         aspect_ratio: params.aspect_ratio || '1:1',
@@ -496,6 +498,7 @@ export async function generateI2I(apiKey, params = {}) {
       apiKey,
       modality: 'i2i',
       model: params.model,
+      provider: params.provider,
       inputs: {
         prompt: params.prompt || '',
         image_url: params.image_url,
@@ -553,6 +556,7 @@ export async function generateVideo(apiKey, params = {}) {
       apiKey,
       modality: 'video',
       model: params.model,
+      provider: params.provider,
       inputs: {
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
@@ -610,6 +614,7 @@ export async function generateI2V(apiKey, params = {}) {
       apiKey,
       modality: 'i2v',
       model: params.model,
+      provider: params.provider,
       inputs: {
         prompt: params.prompt || '',
         image_url: params.image_url,
@@ -699,13 +704,14 @@ export async function processLipSync(apiKey, params = {}) {
   return pollDirectKieResult(apiKey, taskId, false);
 }
 
-export async function uploadFile(apiKey, file, onProgress) {
+export async function uploadFile(apiKey, file, onProgress, options = {}) {
   const mode = resolveTransportMode(apiKey, '');
   if (mode === 'bff') {
     const fetchFn = getFetch();
     const token = getSessionToken(apiKey);
     const baseUrl = clientConfig.bffBaseUrl.replace(/\/$/, '');
-    const dataUrl = await fileToDataUrl(file);
+    const inferredMime = file?.type || inferMimeFromFilename(file?.name || 'upload.png');
+    const dataUrl = await fileToDataUrl(file, inferredMime);
     const headers = {
       'Content-Type': 'application/json',
       'X-Timecapsule-CSRF': '1',
@@ -719,8 +725,9 @@ export async function uploadFile(apiKey, file, onProgress) {
       headers,
       body: JSON.stringify({
         dataUrl,
-        filename: file?.name || 'upload.bin',
-        contentType: file?.type || 'application/octet-stream',
+        filename: file?.name || 'upload.png',
+        contentType: inferredMime,
+        ...(options?.provider ? { provider: options.provider } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -768,7 +775,20 @@ export async function uploadFile(apiKey, file, onProgress) {
   });
 }
 
-function fileToDataUrl(file) {
+function inferMimeFromFilename(filename = '') {
+  const lower = String(filename).toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  return 'image/png';
+}
+
+function fileToDataUrl(file, defaultMime = 'image/png') {
   if (typeof file === 'string' && file.startsWith('data:')) {
     return Promise.resolve(file);
   }
@@ -783,11 +803,11 @@ function fileToDataUrl(file) {
   if (file && typeof file.arrayBuffer === 'function') {
     return file.arrayBuffer().then((buf) => {
       const base64 = Buffer.from(buf).toString('base64');
-      const mime = file.type || 'application/octet-stream';
+      const mime = file.type || defaultMime;
       return `data:${mime};base64,${base64}`;
     });
   }
-  return Promise.resolve(`data:application/octet-stream;base64,${Buffer.from(String(file || '')).toString('base64')}`);
+  return Promise.resolve(`data:${defaultMime};base64,${Buffer.from(String(file || '')).toString('base64')}`);
 }
 
 // ─── KieClient Class & Singleton (src/lib/kie.js Contract) ───────────────────

@@ -1,8 +1,37 @@
-import { resolveKieModelForModality } from '../client/index.js';
 import {
   getProviderForModel,
   getUnconfiguredNativeModelById,
+  getSupportedReleaseModel,
+  resolveReleaseRoute,
+  getInheritedUpstreamModelById,
+  PRICING_POLICY_VERSION,
+  EXECUTION_ROUTE_VERSION,
 } from '../models/index.js';
+import {
+  getMuapiBaseV1Url,
+  isMuapiConfigured,
+  buildMuapiSubmissionPayload,
+  submitMuapiTask,
+  pollMuapiTaskStatus,
+} from './adapters/muapi.js';
+import {
+  getKieServerBaseUrl,
+  getKieUploadBaseUrl,
+  isKieConfigured,
+  buildKieTaskPayload,
+  submitKieTask,
+  pollKieTaskStatus,
+} from './adapters/kie.js';
+
+export {
+  getMuapiBaseV1Url,
+  isMuapiConfigured,
+  buildMuapiSubmissionPayload,
+  getKieServerBaseUrl,
+  getKieUploadBaseUrl,
+  isKieConfigured,
+  buildKieTaskPayload,
+};
 
 const customAdapters = new Map();
 
@@ -40,20 +69,62 @@ export function hasTestProviderAdapter(providerName) {
   return isTestAdapterAllowed() && customAdapters.has(providerName);
 }
 
-export function selectProviderForJob({ model, modality, preferredProvider }) {
-  if (preferredProvider && hasTestProviderAdapter(preferredProvider)) {
-    return preferredProvider;
+/**
+ * Selects the target provider for a new job.
+ * - Uses explicit `preferredProvider` when requested by the caller.
+ * - Uses `TIMECAPSULE_DEFAULT_PROVIDER` only when explicitly configured on the server and
+ *   supported by the release model's verified routes.
+ * - Defaults to the release model's `primary_provider` (`muapi` for the 4 core workflows).
+ * - Never silently falls back from Muapi to Kie or from Kie to Muapi based on which API key is set.
+ */
+export function selectProviderForJob({ model, preferredProvider }) {
+  if (preferredProvider && typeof preferredProvider === 'string' && preferredProvider.trim()) {
+    return preferredProvider.trim().toLowerCase();
+  }
+  if (String(model || '').startsWith('timecapsule.')) {
+    return 'timecapsule-gpu';
+  }
+  const explicitDefault = process.env.TIMECAPSULE_DEFAULT_PROVIDER;
+  if (explicitDefault && typeof explicitDefault === 'string' && explicitDefault.trim()) {
+    const candidate = explicitDefault.trim().toLowerCase();
+    const releaseModel = getSupportedReleaseModel(model);
+    if (
+      releaseModel &&
+      (releaseModel.primary_provider === candidate ||
+        Boolean(releaseModel.alternative_providers?.[candidate]))
+    ) {
+      return candidate;
+    }
   }
   const detected = getProviderForModel(model);
   if (detected) return detected;
-  return 'kie';
+  return 'muapi';
 }
 
-export function getKieServerBaseUrl() {
-  return (process.env.TIMECAPSULE_KIE_BASE_URL || 'https://api.kie.ai').replace(/\/$/, '');
+function validateRequiredInputsForReleaseRoute(route, inputs = {}) {
+  const required = route.required_inputs || [];
+  if (required.includes('image_urls')) {
+    const urls = Array.isArray(inputs.image_urls)
+      ? inputs.image_urls
+      : Array.isArray(inputs.images_list)
+        ? inputs.images_list
+        : inputs.image_url
+          ? [inputs.image_url]
+          : [];
+    const validUrls = urls.filter((u) => typeof u === 'string' && u.trim().length > 0);
+    if (validUrls.length === 0) {
+      const err = new Error(
+        `Model "${route.timecapsule_model_id}" (${route.modality}) requires at least one input image URL in inputs.image_urls or inputs.image_url`
+      );
+      err.code = 'MISSING_REQUIRED_INPUT_IMAGE';
+      err.status = 400;
+      err.statusCode = 400;
+      throw err;
+    }
+  }
 }
 
-export function assertProviderReadyForJob({ model, modality, provider }) {
+export function assertProviderReadyForJob({ model, modality, provider, inputs = {} }) {
   if (!model || typeof model !== 'string' || !model.trim()) {
     const err = new Error('model is required');
     err.code = 'MISSING_MODEL';
@@ -65,11 +136,19 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
   // Self-hosted GPU models are disabled unless an explicit test adapter is registered in non-prod test mode.
   // Presence of TIMECAPSULE_GPU_WORKER_URL alone is NOT sufficient to mark a worker verified.
   const unconfiguredNative = getUnconfiguredNativeModelById(model);
-  if (unconfiguredNative || String(model).startsWith('timecapsule.') || provider === 'timecapsule-gpu') {
+  if (
+    unconfiguredNative ||
+    String(model).startsWith('timecapsule.') ||
+    provider === 'timecapsule-gpu'
+  ) {
     if (hasTestProviderAdapter('timecapsule-gpu')) {
       return {
         provider: 'timecapsule-gpu',
         resolvedModel: model,
+        executionRoute: `timecapsule-gpu:test/v1:${model}`,
+        executionRouteVersion: EXECUTION_ROUTE_VERSION,
+        pricingPolicyVersion: PRICING_POLICY_VERSION,
+        verificationStatus: 'contract_tested',
         isTestSimulation: true,
       };
     }
@@ -82,34 +161,109 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
     throw err;
   }
 
-  if (provider === 'kie') {
-    // Validate explicit model mapping first; rejects unknown/unmapped models with 400 UNSUPPORTED_MODEL.
-    const resolvedModel = resolveKieModelForModality(modality, model);
-
-    // Managed Veo routes must be rejected before credit reservation until their managed contract
-    // (/api/v1/veo/generate + /api/v1/veo/record-info) is implemented and verified in Checkpoint 3.
-    if (resolvedModel.startsWith('veo3') || String(model).startsWith('veo3')) {
+  // Check if the model is in the Checkpoint 3A Supported Release Catalog
+  const releaseModel = getSupportedReleaseModel(model);
+  if (!releaseModel) {
+    const inherited = getInheritedUpstreamModelById(model);
+    if (inherited) {
+      if (String(model).startsWith('veo3')) {
+        const err = new Error(
+          `Model "${model}" has verification_status="${inherited.verification_status}" and is not enabled in the supported release catalog (use verified route "veo3.1-fast-text-to-video" or "veo3.1-fast-image-to-video").`
+        );
+        err.code = 'MANAGED_VEO_CONTRACT_UNVERIFIED';
+        err.verificationStatus = inherited.verification_status;
+        err.status = 501;
+        err.statusCode = 501;
+        throw err;
+      }
       const err = new Error(
-        `Managed BFF execution for Veo model "${model}" (${resolvedModel}) is disabled until the managed Veo provider contract is verified.`
+        `Model "${model}" has verification_status="${inherited.verification_status}" and is not enabled for managed execution in the Checkpoint 3A release catalog.`
       );
-      err.code = 'MANAGED_VEO_CONTRACT_UNVERIFIED';
-      err.status = 501;
-      err.statusCode = 501;
+      err.code =
+        inherited.verification_status === 'disabled'
+          ? 'MODEL_DISABLED'
+          : 'MODEL_NOT_IN_RELEASE_CATALOG';
+      err.verificationStatus = inherited.verification_status;
+      err.status = 400;
+      err.statusCode = 400;
       throw err;
     }
 
-    if (hasTestProviderAdapter('kie')) {
+    const err = new Error(
+      `Unsupported or unmapped model "${model}" for modality "${modality}". Silent default model substitution is disabled.`
+    );
+    err.code = 'UNSUPPORTED_MODEL';
+    err.status = 400;
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const route = resolveReleaseRoute(model, modality, provider);
+  if (
+    route.verification_status !== 'contract_tested' &&
+    route.verification_status !== 'live_verified'
+  ) {
+    const err = new Error(
+      `Model "${model}" on provider "${route.provider}" has verification_status="${route.verification_status}" and cannot be executed.`
+    );
+    err.code = 'MODEL_ROUTE_NOT_VERIFIED';
+    err.status = 501;
+    err.statusCode = 501;
+    throw err;
+  }
+
+  validateRequiredInputsForReleaseRoute(route, inputs);
+
+  if (route.provider === 'muapi') {
+    if (hasTestProviderAdapter('muapi')) {
       return {
-        provider: 'kie',
-        resolvedModel,
+        provider: 'muapi',
+        resolvedModel: route.provider_model_id,
+        executionRoute: route.execution_route,
+        executionRouteVersion: route.execution_route_version,
+        pricingPolicyVersion: route.pricing_policy_version,
+        verificationStatus: route.verification_status,
         isTestSimulation: true,
       };
     }
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey || !apiKey.trim()) {
+    if (!isMuapiConfigured()) {
       const err = new Error(
-        'Provider credentials (KIE_API_KEY) are not configured on the server; refusing to reserve credits or dispatch job.'
+        'Provider credentials (MUAPI_API_KEY) are not configured on the server; refusing to reserve credits or dispatch job. Silent fallback to Kie is disabled.'
+      );
+      err.code = 'PROVIDER_CREDENTIALS_MISSING';
+      err.status = 503;
+      err.statusCode = 503;
+      throw err;
+    }
+
+    return {
+      provider: 'muapi',
+      resolvedModel: route.provider_model_id,
+      executionRoute: route.execution_route,
+      executionRouteVersion: route.execution_route_version,
+      pricingPolicyVersion: route.pricing_policy_version,
+      verificationStatus: route.verification_status,
+      isTestSimulation: false,
+    };
+  }
+
+  if (route.provider === 'kie') {
+    if (hasTestProviderAdapter('kie')) {
+      return {
+        provider: 'kie',
+        resolvedModel: route.provider_model_id,
+        executionRoute: route.execution_route,
+        executionRouteVersion: route.execution_route_version,
+        pricingPolicyVersion: route.pricing_policy_version,
+        verificationStatus: route.verification_status,
+        isTestSimulation: true,
+      };
+    }
+
+    if (!isKieConfigured()) {
+      const err = new Error(
+        'Provider credentials (KIE_API_KEY) are not configured on the server; refusing to reserve credits or dispatch job. Silent fallback to Muapi is disabled.'
       );
       err.code = 'PROVIDER_CREDENTIALS_MISSING';
       err.status = 503;
@@ -119,91 +273,39 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
 
     return {
       provider: 'kie',
-      resolvedModel,
+      resolvedModel: route.provider_model_id,
+      executionRoute: route.execution_route,
+      executionRouteVersion: route.execution_route_version,
+      pricingPolicyVersion: route.pricing_policy_version,
+      verificationStatus: route.verification_status,
       isTestSimulation: false,
     };
   }
 
-  if (hasTestProviderAdapter(provider)) {
+  if (hasTestProviderAdapter(route.provider)) {
     return {
-      provider,
-      resolvedModel: model,
+      provider: route.provider,
+      resolvedModel: route.provider_model_id,
+      executionRoute: route.execution_route,
+      executionRouteVersion: route.execution_route_version,
+      pricingPolicyVersion: route.pricing_policy_version,
+      verificationStatus: route.verification_status,
       isTestSimulation: true,
     };
   }
 
-  const err = new Error(`Provider "${provider}" is not supported or configured for model "${model}"`);
+  const err = new Error(
+    `Provider "${route.provider}" is not supported or configured for model "${model}"`
+  );
   err.code = 'UNSUPPORTED_PROVIDER';
   err.status = 400;
   err.statusCode = 400;
   throw err;
 }
 
-export function buildKieTaskPayload(job) {
-  const inputs = job.inputs || {};
-  const kieModel = job.resolved_provider_model || resolveKieModelForModality(job.modality, job.model);
-  if (kieModel.startsWith('veo3')) {
-    const err = new Error(`Managed Veo execution is disabled for model "${job.model}"`);
-    err.code = 'MANAGED_VEO_CONTRACT_UNVERIFIED';
-    err.status = 501;
-    err.statusCode = 501;
-    throw err;
-  }
-
-  let payloadInput = { prompt: inputs.prompt || '' };
-
-  if (job.modality === 'image') {
-    if (inputs.aspect_ratio) payloadInput.aspect_ratio = inputs.aspect_ratio;
-    if (kieModel.startsWith('nano-banana')) {
-      payloadInput.resolution = String(inputs.resolution || '1K').toUpperCase();
-      payloadInput.output_format = 'png';
-      if (inputs.image_urls?.length) payloadInput.image_input = inputs.image_urls;
-    }
-  } else if (job.modality === 'i2i') {
-    const urls = inputs.image_urls || (inputs.image_url ? [inputs.image_url] : []);
-    payloadInput = {
-      prompt: inputs.prompt || '',
-      image_input: urls,
-      image_urls: urls,
-      image_url: urls[0],
-      aspect_ratio: inputs.aspect_ratio || '1:1',
-    };
-  } else if (job.modality === 'video') {
-    if (inputs.aspect_ratio) payloadInput.aspect_ratio = inputs.aspect_ratio;
-    if (inputs.resolution) payloadInput.resolution = inputs.resolution;
-    if (inputs.duration_seconds || inputs.duration) {
-      payloadInput.duration = Number(inputs.duration_seconds || inputs.duration || 5);
-    }
-  } else if (job.modality === 'i2v') {
-    const urls = inputs.image_urls || (inputs.image_url ? [inputs.image_url] : []);
-    payloadInput = {
-      prompt: inputs.prompt || '',
-      input_urls: urls,
-      image_url: urls[0],
-      aspect_ratio: inputs.aspect_ratio || '16:9',
-      resolution: inputs.resolution || '720p',
-      duration: Number(inputs.duration_seconds || inputs.duration || 5),
-    };
-  } else if (job.modality === 'lipsync') {
-    payloadInput = {
-      image_url: inputs.image_url,
-      video_url: inputs.video_url,
-      audio_url: inputs.audio_url,
-    };
-  } else {
-    const err = new Error(`Unsupported modality "${job.modality}" for Kie adapter`);
-    err.code = 'INVALID_MODALITY';
-    err.status = 400;
-    err.statusCode = 400;
-    throw err;
-  }
-
-  return { kieModel, payloadInput };
-}
-
 /**
- * Step 1 of durable worker execution: submits the task to the provider and returns
- * the providerJobId immediately so the worker can persist it before polling.
+ * Step 1 of durable worker execution: submits the task to the provider recorded on the job
+ * (`job.provider`) and returns `providerJobId` immediately so the worker can persist it before polling.
  */
 export async function submitTaskToProvider(job, options = {}) {
   if (hasTestProviderAdapter(job.provider)) {
@@ -223,6 +325,7 @@ export async function submitTaskToProvider(job, options = {}) {
               providerCostUnit: res.providerCostUnit ?? null,
             }
           : null,
+        providerDetails: res.providerDetails || { adapter: 'test', provider: job.provider },
       };
     }
     if (custom && typeof custom.submit === 'function') {
@@ -241,81 +344,25 @@ export async function submitTaskToProvider(job, options = {}) {
     throw err;
   }
 
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey || !apiKey.trim()) {
-    const err = new Error('Server KIE_API_KEY is not configured');
-    err.code = 'PROVIDER_CREDENTIALS_MISSING';
-    err.status = 503;
-    err.statusCode = 503;
-    throw err;
+  if (job.provider === 'muapi') {
+    return submitMuapiTask(job, options);
   }
 
-  const { kieModel, payloadInput } = buildKieTaskPayload(job);
-  const fetchFn = options.fetchImpl || globalThis.fetch.bind(globalThis);
-  const baseUrl = getKieServerBaseUrl();
-
-  let createRes;
-  try {
-    createRes = await fetchFn(`${baseUrl}/api/v1/jobs/createTask`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        ...(job.submission_attempt_id
-          ? { 'X-Submission-Attempt-Id': job.submission_attempt_id }
-          : {}),
-      },
-      body: JSON.stringify({ model: kieModel, input: payloadInput }),
-    });
-  } catch (networkErr) {
-    // A transport error during or after POST transmission leaves provider acceptance ambiguous
-    // unless explicitly marked as a pre-send connection refusal in controlled environments.
-    const err = new Error(`Provider submission transport error: ${networkErr.message}`);
-    err.code = networkErr.code || 'PROVIDER_SUBMISSION_TRANSPORT_ERROR';
-    err.ambiguousSubmission = networkErr.code !== 'ECONNREFUSED';
-    err.retryableSubmission = networkErr.code === 'ECONNREFUSED';
-    throw err;
+  if (job.provider === 'kie') {
+    return submitKieTask(job, options);
   }
 
-  const createData = await createRes.json().catch(() => ({}));
-
-  if (createRes.status >= 500 || createRes.status === 408 || createRes.status === 429) {
-    const err = new Error(
-      createData.msg || createData.error || `Kie.ai HTTP ${createRes.status} during submission`
-    );
-    err.statusCode = createRes.status;
-    // 429 rate-limit before task creation is retryable; 502/504 gateway timeouts are ambiguous
-    err.retryableSubmission = createRes.status === 429 || createRes.status === 503;
-    err.ambiguousSubmission = createRes.status === 502 || createRes.status === 504 || createRes.status === 408;
-    throw err;
-  }
-
-  if (!createRes.ok || (createData.code && createData.code !== 200)) {
-    const err = new Error(
-      createData.msg || createData.error || `Kie.ai rejected task submission (HTTP ${createRes.status})`
-    );
-    err.statusCode = createRes.status || 400;
-    err.deterministicFailure = true;
-    throw err;
-  }
-
-  const taskId = createData.data?.taskId;
-  if (!taskId) {
-    const err = new Error('Kie.ai response reached 200 OK without a taskId; submission outcome is ambiguous');
-    err.code = 'AMBIGUOUS_PROVIDER_RESPONSE';
-    err.ambiguousSubmission = true;
-    throw err;
-  }
-
-  return {
-    providerJobId: String(taskId),
-    immediateCompletion: null,
-  };
+  const err = new Error(`Unsupported job provider "${job.provider}" during task submission`);
+  err.code = 'UNSUPPORTED_PROVIDER';
+  err.statusCode = 400;
+  err.deterministicFailure = true;
+  throw err;
 }
 
 /**
- * Step 2 of durable worker execution: polls an already-persisted provider_job_id once.
- * Never resubmits the task.
+ * Step 2 of durable worker execution: polls an already-persisted `provider_job_id` once
+ * using the original provider adapter recorded on the job (`job.provider`).
+ * Never resubmits the task and never switches providers mid-flight.
  */
 export async function pollProviderTaskStatus(job, options = {}) {
   if (!job.provider_job_id) {
@@ -331,75 +378,18 @@ export async function pollProviderTaskStatus(job, options = {}) {
     }
   }
 
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey || !apiKey.trim()) {
-    const err = new Error('Server KIE_API_KEY is not configured for status polling');
-    err.code = 'PROVIDER_CREDENTIALS_MISSING';
-    err.retryablePoll = true;
-    throw err;
+  if (job.provider === 'muapi') {
+    return pollMuapiTaskStatus(job, options);
   }
 
-  const fetchFn = options.fetchImpl || globalThis.fetch.bind(globalThis);
-  const baseUrl = getKieServerBaseUrl();
-
-  const pollRes = await fetchFn(
-    `${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(job.provider_job_id)}`,
-    {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    }
-  );
-
-  if (!pollRes.ok) {
-    const err = new Error(`Kie.ai recordInfo HTTP ${pollRes.status}`);
-    err.statusCode = pollRes.status;
-    err.retryablePoll = pollRes.status >= 500 || pollRes.status === 429 || pollRes.status === 408;
-    throw err;
+  if (job.provider === 'kie') {
+    return pollKieTaskStatus(job, options);
   }
 
-  const pollData = await pollRes.json().catch(() => ({}));
-  const d = pollData.data || {};
-
-  if (d.state === 'success') {
-    let urls = [];
-    try {
-      urls = JSON.parse(d.resultJson || '{}').resultUrls || [];
-    } catch {
-      urls = [];
-    }
-    if (!urls.length) {
-      const err = new Error('Kie.ai task succeeded without output URL');
-      err.deterministicFailure = true;
-      throw err;
-    }
-    return {
-      status: 'succeeded',
-      providerJobId: job.provider_job_id,
-      sourceUrl: urls[0],
-      providerReportedCost:
-        d.creditsConsumed !== undefined && Number.isFinite(Number(d.creditsConsumed))
-          ? Number(d.creditsConsumed)
-          : null,
-      providerCostUnit:
-        d.creditsConsumed !== undefined && Number.isFinite(Number(d.creditsConsumed))
-          ? 'kie_credits'
-          : null,
-    };
-  }
-
-  if (d.state === 'fail') {
-    return {
-      status: 'failed',
-      providerJobId: job.provider_job_id,
-      error: d.failMsg || 'Kie.ai generation failed',
-    };
-  }
-
-  return {
-    status: 'running',
-    providerJobId: job.provider_job_id,
-    stage: d.state || 'generating',
-    progress: typeof d.progress === 'number' ? d.progress : null,
-  };
+  const err = new Error(`Unsupported job provider "${job.provider}" during status polling`);
+  err.code = 'UNSUPPORTED_PROVIDER';
+  err.retryablePoll = false;
+  throw err;
 }
 
 export async function dispatchToProvider(job, options = {}) {
@@ -408,10 +398,16 @@ export async function dispatchToProvider(job, options = {}) {
     return {
       providerJobId: submitted.providerJobId,
       sourceUrl: submitted.immediateCompletion.sourceUrl,
-      actualCredits: submitted.immediateCompletion.actualCredits,
+      userBilledCredits: submitted.immediateCompletion.userBilledCredits,
+      providerReportedCost: submitted.immediateCompletion.providerReportedCost,
+      providerCostUnit: submitted.immediateCompletion.providerCostUnit,
     };
   }
-  const pollIntervalMs = Number(process.env.TIMECAPSULE_KIE_POLL_INTERVAL_MS || 50);
+  const pollIntervalMs = Number(
+    process.env.TIMECAPSULE_PROVIDER_POLL_INTERVAL_MS ||
+      process.env.TIMECAPSULE_KIE_POLL_INTERVAL_MS ||
+      50
+  );
   const jobWithProviderId = { ...job, provider_job_id: submitted.providerJobId };
   for (let i = 0; i < 180; i++) {
     const status = await pollProviderTaskStatus(jobWithProviderId, options);
@@ -419,9 +415,9 @@ export async function dispatchToProvider(job, options = {}) {
       return status;
     }
     if (status.status === 'failed') {
-      throw new Error(status.error || 'Kie.ai generation failed');
+      throw new Error(status.error || `${job.provider} generation failed`);
     }
     await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
-  throw new Error('Kie.ai generation timed out');
+  throw new Error(`${job.provider} generation timed out`);
 }

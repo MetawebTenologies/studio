@@ -6,17 +6,40 @@ import {
   v2vModels as upstreamV2VModels,
   lipsyncModels as upstreamLipsyncModels,
 } from './upstream-catalog.js';
+import {
+  SUPPORTED_RELEASE_MODELS,
+  CONTRACT_VERIFICATION_STATUSES,
+  PRICING_POLICY_VERSION,
+  EXECUTION_ROUTE_VERSION,
+  PROVIDER_DOCUMENTATION_REGISTRY,
+  getSupportedReleaseModel,
+  resolveReleaseRoute,
+} from './release-catalog.js';
+
+export {
+  SUPPORTED_RELEASE_MODELS,
+  CONTRACT_VERIFICATION_STATUSES,
+  PRICING_POLICY_VERSION,
+  EXECUTION_ROUTE_VERSION,
+  PROVIDER_DOCUMENTATION_REGISTRY,
+  getSupportedReleaseModel,
+  resolveReleaseRoute,
+};
 
 export const timecapsuleNativeModels = {
   t2i: [
     {
       id: 'timecapsule.flux1-dev-t2i',
+      timecapsule_model_id: 'timecapsule.flux1-dev-t2i',
       name: 'Timecapsule Flux.1 Dev (Self-Hosted)',
       endpoint: 'timecapsule.flux1-dev-t2i',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      primary_provider: 'timecapsule-gpu',
       availability: 'not_configured',
       enabled: false,
+      managed_supported: false,
+      verification_status: 'disabled',
       verified_worker: false,
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       estimatedCredits: 25,
@@ -47,12 +70,16 @@ export const timecapsuleNativeModels = {
   t2v: [
     {
       id: 'timecapsule.wan2.1-t2v',
+      timecapsule_model_id: 'timecapsule.wan2.1-t2v',
       name: 'Timecapsule Wan 2.1 T2V (Self-Hosted)',
       endpoint: 'timecapsule.wan2.1-t2v',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      primary_provider: 'timecapsule-gpu',
       availability: 'not_configured',
       enabled: false,
+      managed_supported: false,
+      verification_status: 'disabled',
       verified_worker: false,
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       estimatedCredits: 240,
@@ -90,12 +117,16 @@ export const timecapsuleNativeModels = {
   i2v: [
     {
       id: 'timecapsule.wan2.1-i2v',
+      timecapsule_model_id: 'timecapsule.wan2.1-i2v',
       name: 'Timecapsule Wan 2.1 I2V (Self-Hosted)',
       endpoint: 'timecapsule.wan2.1-i2v',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      primary_provider: 'timecapsule-gpu',
       availability: 'not_configured',
       enabled: false,
+      managed_supported: false,
+      verification_status: 'disabled',
       verified_worker: false,
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       imageField: 'image_url',
@@ -134,25 +165,63 @@ export const timecapsuleNativeModels = {
   ],
 };
 
-const filterEnabledModels = (list) =>
-  list.filter((m) => m.enabled !== false && m.availability !== 'not_configured');
+function annotateUpstreamEntry(item, modality, forceDisabled = false) {
+  const releaseMatch = getSupportedReleaseModel(item.id);
+  if (releaseMatch && !forceDisabled) {
+    return {
+      ...item,
+      timecapsule_model_id: releaseMatch.timecapsule_model_id,
+      modality: releaseMatch.modality,
+      enabled: true,
+      managed_supported: true,
+      verification_status: releaseMatch.verification_status,
+      primary_provider: releaseMatch.primary_provider,
+      provider_model_id: releaseMatch.provider_model_id,
+      execution_route: releaseMatch.execution_route,
+      execution_route_version: releaseMatch.execution_route_version,
+      pricing_policy_version: releaseMatch.pricing_policy_version,
+    };
+  }
+  return {
+    ...item,
+    timecapsule_model_id: item.id,
+    modality,
+    enabled: false,
+    managed_supported: false,
+    verification_status: forceDisabled ? 'disabled' : 'catalog_only',
+    availability: forceDisabled ? 'disabled' : 'catalog_only',
+    status_reason: forceDisabled
+      ? 'Disabled in Checkpoint 3A release catalog (workflow not enabled for managed execution).'
+      : 'Inherited upstream reference model (catalog_only; not verified in Checkpoint 3A release catalog).',
+  };
+}
 
-// Unconfigured self-hosted models are hidden from active picker lists until a verified worker is registered.
-export const t2iModels = [
-  ...upstreamT2IModels,
-  ...filterEnabledModels(timecapsuleNativeModels.t2i),
-];
-export const t2vModels = [
-  ...upstreamT2VModels,
-  ...filterEnabledModels(timecapsuleNativeModels.t2v),
-];
-export const i2iModels = [...upstreamI2IModels];
-export const i2vModels = [
-  ...upstreamI2VModels,
-  ...filterEnabledModels(timecapsuleNativeModels.i2v),
-];
-export const v2vModels = [...upstreamV2VModels];
-export const lipsyncModels = [...upstreamLipsyncModels];
+/**
+ * Inherited upstream catalog preserved separately for reference and comparison.
+ */
+export const inheritedUpstreamCatalog = Object.freeze({
+  t2i: upstreamT2IModels.map((m) => annotateUpstreamEntry(m, 'image')),
+  i2i: upstreamI2IModels.map((m) => annotateUpstreamEntry(m, 'i2i')),
+  t2v: upstreamT2VModels.map((m) => annotateUpstreamEntry(m, 'video')),
+  i2v: upstreamI2VModels.map((m) => annotateUpstreamEntry(m, 'i2v')),
+  v2v: upstreamV2VModels.map((m) => annotateUpstreamEntry(m, 'v2v', true)),
+  lipsync: upstreamLipsyncModels.map((m) => annotateUpstreamEntry(m, 'lipsync', true)),
+});
+
+// Active UI picker lists expose ONLY the verified supported release catalog for T2I, I2I, T2V, and I2V.
+export const t2iModels = SUPPORTED_RELEASE_MODELS.filter((m) => m.category === 't2i');
+export const i2iModels = SUPPORTED_RELEASE_MODELS.filter((m) => m.category === 'i2i');
+export const t2vModels = SUPPORTED_RELEASE_MODELS.filter((m) => m.category === 't2v');
+export const i2vModels = SUPPORTED_RELEASE_MODELS.filter((m) => m.category === 'i2v');
+
+// V2V and LipSync retain their catalog entries marked explicitly disabled (`enabled: false`, `verification_status: 'disabled'`)
+// so legacy UI components that read `imageLipSyncModels[0]` at mount time do not crash, while `/api/v1/models` and
+// `/api/v1/generations` report and enforce them as disabled.
+export const v2vModels = inheritedUpstreamCatalog.v2v;
+export const lipsyncModels = inheritedUpstreamCatalog.lipsync.map((m) => ({
+  ...m,
+  name: `${m.name} (Disabled in Managed Release)`,
+}));
 
 export const getUnconfiguredNativeModelById = (id) => {
   const allNative = [
@@ -160,19 +229,28 @@ export const getUnconfiguredNativeModelById = (id) => {
     ...timecapsuleNativeModels.t2v,
     ...timecapsuleNativeModels.i2v,
   ];
-  return allNative.find((m) => m.id === id && (m.enabled === false || m.availability === 'not_configured')) || null;
+  return (
+    allNative.find((m) => m.id === id && (m.enabled === false || m.availability === 'not_configured')) ||
+    null
+  );
+};
+
+export const getInheritedUpstreamModelById = (id) => {
+  const allInherited = [
+    ...inheritedUpstreamCatalog.t2i,
+    ...inheritedUpstreamCatalog.i2i,
+    ...inheritedUpstreamCatalog.t2v,
+    ...inheritedUpstreamCatalog.i2v,
+    ...inheritedUpstreamCatalog.v2v,
+    ...inheritedUpstreamCatalog.lipsync,
+  ];
+  return allInherited.find((m) => m.id === id) || null;
 };
 
 export const getCatalogModelById = (id) => {
-  const allActive = [
-    ...t2iModels,
-    ...t2vModels,
-    ...i2iModels,
-    ...i2vModels,
-    ...v2vModels,
-    ...lipsyncModels,
-  ];
-  return allActive.find((m) => m.id === id) || null;
+  const release = getSupportedReleaseModel(id);
+  if (release) return release;
+  return getInheritedUpstreamModelById(id);
 };
 
 export const getModelById = (id) => t2iModels.find((m) => m.id === id);
@@ -320,13 +398,38 @@ export const getV2VModelById = (id) => v2vModels.find((m) => m.id === id);
 // ─── Timecapsule Registry & Routing Helpers ──────────────────────────────────
 
 export const getProviderForModel = (modelId = '') => {
-  const id = String(modelId || '');
+  const id = String(modelId || '').trim();
   if (id.startsWith('timecapsule.')) return 'timecapsule-gpu';
   if (id.startsWith('fal-ai/')) return 'fal';
-  return 'kie';
+  const releaseModel = getSupportedReleaseModel(id);
+  if (releaseModel) {
+    return releaseModel.primary_provider;
+  }
+  return 'muapi';
 };
 
 export const getEstimatedCreditsForModel = (modelId = '', modality = 'image', params = {}) => {
+  const releaseModel = getSupportedReleaseModel(modelId);
+  const res = String(params.resolution || '1k').toLowerCase();
+
+  if (releaseModel?.credit_estimate_policy) {
+    const policy = releaseModel.credit_estimate_policy;
+    if (policy.by_resolution && policy.by_resolution[res] !== undefined) {
+      return policy.by_resolution[res];
+    }
+    if (policy.policy_id === 'tier_video_duration_resolution_v1') {
+      const duration = Number(params.duration || params.duration_seconds || 5);
+      const base =
+        res === '1080p' || res === '4k'
+          ? policy.base_credits_5s_1080p || 180
+          : policy.base_credits_5s_720p || 120;
+      return Math.max(60, Math.round(base * (duration / 5)));
+    }
+    if (Number.isFinite(policy.base_credits)) {
+      return policy.base_credits;
+    }
+  }
+
   const all = [...t2iModels, ...t2vModels, ...i2iModels, ...i2vModels, ...v2vModels, ...lipsyncModels];
   const found = all.find((m) => m.id === modelId);
   if (found && Number.isFinite(found.estimatedCredits)) {
@@ -334,11 +437,9 @@ export const getEstimatedCreditsForModel = (modelId = '', modality = 'image', pa
   }
   if (modality === 'video' || modality === 'i2v' || modality === 'v2v' || modality === 'lipsync') {
     const duration = Number(params.duration || params.duration_seconds || 5);
-    const res = String(params.resolution || '720p').toLowerCase();
     const base = res === '1080p' || res === '4k' ? 180 : 120;
     return Math.max(60, Math.round(base * (duration / 5)));
   }
-  const res = String(params.resolution || '1k').toLowerCase();
   if (res === '4k') return 40;
   if (res === '2k') return 25;
   return 15;
@@ -378,4 +479,6 @@ export const models = {
   lipsyncModels,
   imageLipSyncModels,
   videoLipSyncModels,
+  inheritedUpstreamCatalog,
+  SUPPORTED_RELEASE_MODELS,
 };
