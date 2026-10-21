@@ -15,12 +15,54 @@ const TABS = [
 
 const STORAGE_KEY = TIMECAPSULE_BRAND.storageKeys.legacyApiKey;
 
-function LibraryStudioView({ onNavigateTab }) {
+export const SAMPLE_LIBRARY_ITEMS = [
+  {
+    id: 'sample_video_cinema_1',
+    url: '/samples/demo.mp4',
+    prompt: 'Cinematic wide shot of an astronaut navigating a misty glowing neon nebula, anamorphic lens 35mm f/1.4, volumetric lighting, photorealistic 8k',
+    model: 'Veo 3.1 Cinema',
+    kind: 'video',
+    timestamp: '2026-10-21T18:00:00.000Z',
+    provider: 'veo-sample',
+  },
+  {
+    id: 'sample_image_nano_1',
+    url: '/samples/sample_image_1.webp',
+    prompt: 'High-fashion editorial portrait of a woman with bioluminescent crystal accents, ultra-sharp studio rim lighting, 85mm prime, dark aesthetic',
+    model: 'Nano Banana Pro',
+    kind: 'image',
+    timestamp: '2026-10-21T17:30:00.000Z',
+    provider: 'muapi-sample',
+  },
+  {
+    id: 'sample_image_nano_2',
+    url: '/samples/sample_image_2.webp',
+    prompt: 'Hyper-detailed futuristic architectural pavilion with curving chrome pillars and reflecting pools at dusk',
+    model: 'Seedream v4.5',
+    kind: 'image',
+    timestamp: '2026-10-21T16:45:00.000Z',
+    provider: 'kie-sample',
+  },
+  {
+    id: 'sample_image_banner_1',
+    url: '/samples/sample_banner.png',
+    prompt: 'Timecapsule Studio generative landscape concept art with glowing neon accents and cyberpunk horizon',
+    model: 'Flux Schnell',
+    kind: 'image',
+    timestamp: '2026-10-21T15:00:00.000Z',
+    provider: 'muapi-sample',
+  },
+];
+
+function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
 
   const loadItems = useCallback(async () => {
     const collected = [];
+    if (isPreviewMode) {
+      collected.push(...SAMPLE_LIBRARY_ITEMS);
+    }
     const localSources = [
       { key: 'studio_image_outputs', kind: 'image' },
       { key: 'studio_video_outputs', kind: 'video' },
@@ -79,7 +121,7 @@ function LibraryStudioView({ onNavigateTab }) {
       String(a.timestamp) < String(b.timestamp) ? 1 : -1
     );
     setItems(sorted);
-  }, []);
+  }, [isPreviewMode]);
 
   useEffect(() => {
     loadItems();
@@ -184,13 +226,18 @@ export default function StandaloneShell() {
       localStorage.getItem(STORAGE_KEY);
     if (mode === 'bff') {
       setApiKey('TIMECAPSULE_BFF');
+    } else if (mode === 'preview') {
+      setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
     } else if (stored) {
       setApiKey(stored);
     }
   }, []);
 
+  const isPreviewMode = apiKey === 'TIMECAPSULE_OFFLINE_PREVIEW';
+  const isManagedBff = apiKey === 'TIMECAPSULE_BFF';
+
   useEffect(() => {
-    if (!hasMounted || !apiKey) return;
+    if (!hasMounted || !apiKey || isPreviewMode) return;
     fetch('/api/v1/session')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -199,10 +246,10 @@ export default function StandaloneShell() {
         }
       })
       .catch(() => {});
-  }, [hasMounted, apiKey, activeTab]);
+  }, [hasMounted, apiKey, activeTab, isPreviewMode]);
 
   const handleKeySave = useCallback((key) => {
-    if (key !== 'TIMECAPSULE_BFF') {
+    if (key !== 'TIMECAPSULE_BFF' && key !== 'TIMECAPSULE_OFFLINE_PREVIEW') {
       localStorage.setItem(STORAGE_KEY, key);
       localStorage.setItem(TIMECAPSULE_BRAND.storageKeys.apiKey, key);
     }
@@ -228,8 +275,6 @@ export default function StandaloneShell() {
   if (!apiKey) {
     return <ApiKeyModal onSave={handleKeySave} />;
   }
-
-  const isManagedBff = apiKey === 'TIMECAPSULE_BFF';
 
   return (
     <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden">
@@ -266,8 +311,14 @@ export default function StandaloneShell() {
               {credits} cr
             </span>
           )}
-          <span className="hidden md:inline-block px-2.5 py-1 rounded-md bg-[#00e5ff]/10 text-[#00e5ff] text-[11px] font-bold uppercase tracking-wider">
-            {isManagedBff ? 'Managed BFF' : 'Direct Key'}
+          <span
+            className={`hidden md:inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+              isPreviewMode
+                ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
+                : 'bg-[#00e5ff]/10 text-[#00e5ff]'
+            }`}
+          >
+            {isPreviewMode ? 'UI Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
           </span>
           <button
             onClick={() => setShowSettings(true)}
@@ -278,8 +329,27 @@ export default function StandaloneShell() {
         </div>
       </header>
 
+      {isPreviewMode && (
+        <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 flex items-center justify-between text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>
+              <strong>Safe UI Preview Mode:</strong> Exploring studio interfaces and sample media offline. Live provider calls and private keys are disabled.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="underline hover:text-white font-medium ml-4 cursor-pointer"
+          >
+            Switch to Live Key
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'library' && <LibraryStudioView onNavigateTab={setActiveTab} />}
+        {activeTab === 'library' && (
+          <LibraryStudioView onNavigateTab={setActiveTab} isPreviewMode={isPreviewMode} />
+        )}
         {activeTab === 'image' && <ImageStudio apiKey={apiKey} />}
         {activeTab === 'video' && <VideoStudio apiKey={apiKey} />}
         {activeTab === 'lipsync' && <LipSyncStudio apiKey={apiKey} />}
@@ -293,10 +363,14 @@ export default function StandaloneShell() {
             <p className="text-white/60 text-sm mb-2">
               Mode:{' '}
               <span className="text-[#00e5ff] font-semibold">
-                {isManagedBff ? 'Timecapsule Managed BFF (/api/v1)' : 'Direct Provider Key'}
+                {isPreviewMode
+                  ? 'Offline UI Preview (Zero Quota / Sample Media)'
+                  : isManagedBff
+                  ? 'Timecapsule Managed BFF (/api/v1)'
+                  : 'Direct Provider Key'}
               </span>
             </p>
-            {!isManagedBff && (
+            {!isManagedBff && !isPreviewMode && (
               <p className="text-white/50 text-sm mb-6">
                 Current Key: <span className="text-white/80 font-mono">{apiKey.slice(0, 6)}••••••••</span>
               </p>
