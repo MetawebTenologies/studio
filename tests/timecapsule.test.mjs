@@ -19,6 +19,7 @@ import {
   query,
   closePool,
   seedDevelopmentTenant,
+  assertDisposableTestDatabase,
 } from '../packages/timecapsule/src/server/db.js';
 import {
   resetStoreForTests,
@@ -29,6 +30,7 @@ import {
   getTenantLedger,
   getCreditReservation,
   registerAsset,
+  createSubmissionTransaction,
   claimNextRunnableJob,
   completeJobSuccess,
   completeJobFailure,
@@ -61,8 +63,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
 const TEST_DB_URL =
-  process.env.DATABASE_URL || 'postgresql://localhost:5432/timecapsule_test';
+  process.env.TEST_DATABASE_URL || 'postgresql://localhost:5432/timecapsule_test';
 process.env.DATABASE_URL = TEST_DB_URL;
+process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB = '1';
 
 function withTestEnv(envOverrides, fn) {
   const previous = {};
@@ -1060,10 +1063,15 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token1,
         providerJobId: 'prov_task_1',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/1.mp4',
-        actualCredits: 9999, // Exceeds reserved 180 -> must cap at 180
+        userBilledCredits: 9999, // Exceeds reserved 180 -> must cap at 180
+        providerReportedCost: 14.5,
+        providerCostUnit: 'kie_credits',
       });
       assert.equal(settled1.alreadyTerminal, false);
+      assert.equal(settled1.job.user_billed_credits, 180);
       assert.equal(settled1.job.actual_cost, 180);
+      assert.equal(settled1.job.provider_reported_cost, 14.5);
+      assert.equal(settled1.job.provider_cost_unit, 'kie_credits');
 
       // Duplicate completion event is a no-op
       const duplicateSettle = await completeJobSuccess({
@@ -1073,7 +1081,7 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token1,
         providerJobId: 'prov_task_1',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/1.mp4',
-        actualCredits: 180,
+        userBilledCredits: 180,
       });
       assert.equal(duplicateSettle.alreadyTerminal, true);
 
@@ -1106,7 +1114,9 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token2,
         providerJobId: 'prov_task_2',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/2.mp4',
-        actualCredits: 150,
+        userBilledCredits: 150,
+        providerReportedCost: 0.25,
+        providerCostUnit: 'muapi_usd',
       });
 
       const creditsFinal = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
@@ -1479,5 +1489,105 @@ test('Checkpoint 2 (Test Mode Separation): Test adapters and test tokens are for
       );
     }
   );
+  await closePool();
+});
+
+test('Checkpoint 3A Pre-Flight: Settlement math (500 -> reserve 100 -> charge 70 => 430), separate provider cost vs user credits, and disposable test DB guard', async () => {
+  // 1. Destructive test DB guard refuses application DB (`timecapsule`, `postgres`) or missing TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB
+  assert.throws(
+    () => assertDisposableTestDatabase('postgresql://localhost:5432/timecapsule'),
+    (err) => err.code === 'NON_DISPOSABLE_DATABASE_REFUSED' && err.statusCode === 403
+  );
+  assert.throws(
+    () => assertDisposableTestDatabase('postgresql://localhost:5432/postgres'),
+    (err) => err.code === 'NON_DISPOSABLE_DATABASE_REFUSED' && err.statusCode === 403
+  );
+  await withTestEnv({ TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB: undefined }, async () => {
+    await assert.rejects(
+      () => resetStoreForTests(500),
+      (err) => err.code === 'DESTRUCTIVE_TEST_DB_NOT_DESIGNATED' && err.statusCode === 403
+    );
+  });
+  await withTestEnv(
+    { DATABASE_URL: 'postgresql://localhost:5432/timecapsule' },
+    async () => {
+      await assert.rejects(
+        () => resetStoreForTests(500),
+        (err) => err.code === 'NON_DISPOSABLE_DATABASE_REFUSED' && err.statusCode === 403
+      );
+    }
+  );
+
+  // 2. Settlement math: initial balance 500, reservation 100, final user charge 70 -> final balance 430, reserved 0
+  await resetStoreForTests(500);
+  const initialCredits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+  assert.equal(initialCredits.total_credits, 500);
+  assert.equal(initialCredits.reserved_credits, 0);
+  assert.equal(initialCredits.available_credits, 500);
+
+  const sub = await createSubmissionTransaction({
+    tenantId: PREVIEW_IDENTITY.tenant_id,
+    userId: PREVIEW_IDENTITY.user_id,
+    projectId: 'prj_preflight',
+    idempotencyKey: 'idem_preflight_500_100_70',
+    requestFingerprint: 'fp_preflight_500_100_70',
+    canonicalPayload: { model: 'nano-banana-pro', modality: 'image' },
+    modality: 'image',
+    model: 'nano-banana-pro',
+    resolvedProviderModel: 'nano-banana-pro',
+    provider: 'kie',
+    inputs: { prompt: 'Pre-flight 500 -> 100 -> 70 check' },
+    workflow: {},
+    delivery: {},
+    estimatedCost: 100,
+  });
+
+  const reservedCredits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+  assert.equal(reservedCredits.total_credits, 500);
+  assert.equal(reservedCredits.reserved_credits, 100);
+  assert.equal(reservedCredits.available_credits, 400);
+
+  const claimed = await claimNextRunnableJob({ workerId: 'wrk_preflight' });
+  assert.equal(claimed.job.job_id, sub.job.job_id);
+
+  // Provider reports cost = 4.25 in 'kie_credits' while Timecapsule final user charge = 70
+  const settled = await completeJobSuccess({
+    jobId: sub.job.job_id,
+    tenantId: PREVIEW_IDENTITY.tenant_id,
+    workerId: 'wrk_preflight',
+    fencingToken: claimed.job.fencing_token,
+    providerJobId: 'prov_preflight_1',
+    sourceUrl: 'https://cdn.timecapsule.studio/outputs/preflight.png',
+    userBilledCredits: 70,
+    providerReportedCost: 4.25,
+    providerCostUnit: 'kie_credits',
+  });
+
+  const afterCredits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
+  assert.equal(afterCredits.total_credits, 430, 'Expected final balance 430');
+  assert.equal(afterCredits.reserved_credits, 0, 'Expected reserved credits 0');
+  assert.equal(afterCredits.available_credits, 430, 'Expected available credits 430');
+
+  assert.equal(settled.job.user_billed_credits, 70);
+  assert.equal(settled.job.actual_cost, 70);
+  assert.equal(settled.job.provider_reported_cost, 4.25);
+  assert.equal(settled.job.provider_cost_unit, 'kie_credits');
+
+  const resv = await getCreditReservation(sub.job.job_id);
+  assert.equal(resv.status, 'settled');
+  assert.equal(resv.amount, 100);
+  assert.equal(resv.settled_amount, 70);
+
+  const ledger = await getTenantLedger(PREVIEW_IDENTITY.tenant_id);
+  const settleEntry = ledger.find((e) => e.entry_type === 'settle' && e.job_id === sub.job.job_id);
+  assert.ok(settleEntry);
+  assert.equal(settleEntry.amount, 70);
+  assert.equal(settleEntry.balance_after, 430);
+  assert.equal(settleEntry.reserved_after, 0);
+  assert.equal(settleEntry.metadata.user_billed_credits, 70);
+  assert.equal(settleEntry.metadata.released_unused_credits, 30);
+  assert.equal(settleEntry.metadata.provider_reported_cost, 4.25);
+  assert.equal(settleEntry.metadata.provider_cost_unit, 'kie_credits');
+
   await closePool();
 });

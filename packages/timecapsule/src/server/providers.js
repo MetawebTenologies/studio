@@ -218,7 +218,9 @@ export async function submitTaskToProvider(job, options = {}) {
         immediateCompletion: res.sourceUrl
           ? {
               sourceUrl: res.sourceUrl,
-              actualCredits: res.actualCredits ?? job.estimated_cost,
+              userBilledCredits: res.userBilledCredits ?? null,
+              providerReportedCost: res.providerReportedCost ?? null,
+              providerCostUnit: res.providerCostUnit ?? null,
             }
           : null,
       };
@@ -373,10 +375,14 @@ export async function pollProviderTaskStatus(job, options = {}) {
       status: 'succeeded',
       providerJobId: job.provider_job_id,
       sourceUrl: urls[0],
-      actualCredits:
+      providerReportedCost:
         d.creditsConsumed !== undefined && Number.isFinite(Number(d.creditsConsumed))
           ? Number(d.creditsConsumed)
-          : job.estimated_cost,
+          : null,
+      providerCostUnit:
+        d.creditsConsumed !== undefined && Number.isFinite(Number(d.creditsConsumed))
+          ? 'kie_credits'
+          : null,
     };
   }
 

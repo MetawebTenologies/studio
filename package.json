@@ -12,7 +12,7 @@
     "build": "npm run build:studio && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} node --test tests/timecapsule.test.mjs",
+    "test": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test tests/timecapsule.test.mjs",
     "db:migrate": "node packages/timecapsule/src/scripts/db-cli.js migrate",
     "db:status": "node packages/timecapsule/src/scripts/db-cli.js status",
     "db:seed": "node packages/timecapsule/src/scripts/db-cli.js seed",

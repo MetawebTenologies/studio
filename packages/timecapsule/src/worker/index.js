@@ -147,7 +147,9 @@ export function createDurableWorker(options = {}) {
             fencingToken,
             providerJobId: submissionResult.providerJobId,
             sourceUrl: submissionResult.immediateCompletion.sourceUrl,
-            actualCredits: submissionResult.immediateCompletion.actualCredits,
+            userBilledCredits: submissionResult.immediateCompletion.userBilledCredits ?? null,
+            providerReportedCost: submissionResult.immediateCompletion.providerReportedCost ?? null,
+            providerCostUnit: submissionResult.immediateCompletion.providerCostUnit ?? null,
           });
           return {
             processed: true,
@@ -219,7 +221,9 @@ export function createDurableWorker(options = {}) {
           fencingToken,
           providerJobId: claimedJob.provider_job_id,
           sourceUrl: pollResult.sourceUrl,
-          actualCredits: pollResult.actualCredits,
+          userBilledCredits: pollResult.userBilledCredits ?? null,
+          providerReportedCost: pollResult.providerReportedCost ?? null,
+          providerCostUnit: pollResult.providerCostUnit ?? null,
         });
         return {
           processed: true,

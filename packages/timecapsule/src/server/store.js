@@ -4,6 +4,7 @@ import {
   withTransaction,
   parseSafeCreditBigInt,
   assertValidCreditUnits,
+  assertDisposableTestDatabase,
   runMigrations,
   seedDevelopmentTenant,
 } from './db.js';
@@ -11,6 +12,17 @@ import { validateExternalMediaUrl } from './media-validator.js';
 
 function formatJobRow(row) {
   if (!row) return null;
+  const userBilledCredits =
+    row.user_billed_credits !== null && row.user_billed_credits !== undefined
+      ? parseSafeCreditBigInt(row.user_billed_credits, 'user_billed_credits')
+      : row.actual_cost !== null && row.actual_cost !== undefined
+        ? parseSafeCreditBigInt(row.actual_cost, 'actual_cost')
+        : null;
+  const providerReportedCost =
+    row.provider_reported_cost !== null && row.provider_reported_cost !== undefined
+      ? Number(row.provider_reported_cost)
+      : null;
+
   return {
     job_id: row.job_id,
     tenant_id: row.tenant_id,
@@ -39,10 +51,10 @@ function formatJobRow(row) {
     provider_job_id: row.provider_job_id,
     credits_reserved: parseSafeCreditBigInt(row.credits_reserved, 'credits_reserved'),
     estimated_cost: parseSafeCreditBigInt(row.estimated_cost, 'estimated_cost'),
-    actual_cost:
-      row.actual_cost !== null && row.actual_cost !== undefined
-        ? parseSafeCreditBigInt(row.actual_cost, 'actual_cost')
-        : null,
+    user_billed_credits: userBilledCredits,
+    actual_cost: userBilledCredits,
+    provider_reported_cost: providerReportedCost,
+    provider_cost_unit: row.provider_cost_unit || null,
     last_event_version: Number(row.last_event_version || 0),
     events_url: row.events_url,
     output: row.output_json || null,
@@ -93,17 +105,31 @@ function formatAssetRow(row) {
 
 /**
  * Resets the PostgreSQL tables and seeds explicit test tenants.
- * Restricted strictly to non-production test environments.
+ * Restricted strictly to non-production test environments and explicitly
+ * designated disposable *_test databases. Refuses to run against the application DB.
  */
 export async function resetStoreForTests(
   initialCredits = 5000,
   tenantIds = ['org_preview_default', 'org_default']
 ) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('resetStoreForTests is forbidden in production');
-  }
+  const expectedTestDb = assertDisposableTestDatabase();
   await runMigrations();
   await withTransaction(async (client) => {
+    const dbCheck = await client.query('SELECT current_database() AS db_name');
+    const actualDbName = String(dbCheck.rows[0]?.db_name || '').trim();
+    if (
+      !actualDbName ||
+      actualDbName.toLowerCase() !== expectedTestDb.toLowerCase() ||
+      !actualDbName.toLowerCase().endsWith('_test')
+    ) {
+      const err = new Error(
+        `Refusing to TRUNCATE non-test database "${actualDbName}". Expected disposable test database "${expectedTestDb}".`
+      );
+      err.code = 'NON_DISPOSABLE_DATABASE_REFUSED';
+      err.statusCode = 403;
+      throw err;
+    }
+
     await client.query(
       'TRUNCATE TABLE job_events, assets, credit_ledger, credit_reservations, idempotency_keys, jobs, tenants RESTART IDENTITY CASCADE'
     );
@@ -898,7 +924,9 @@ export async function completeJobSuccess({
   fencingToken = null,
   providerJobId = null,
   sourceUrl,
-  actualCredits = null,
+  userBilledCredits = null,
+  providerReportedCost = null,
+  providerCostUnit = null,
 }) {
   const validatedMedia = validateExternalMediaUrl(sourceUrl);
 
@@ -990,15 +1018,32 @@ export async function completeJobSuccess({
     const currentBalance = parseSafeCreditBigInt(tenantRow.credits_balance, 'credits_balance');
     const currentReserved = parseSafeCreditBigInt(tenantRow.credits_reserved, 'credits_reserved');
 
-    // Never silently overdraft: cap settled amount at the reserved amount (fixed-price reservation cap)
-    let settledCost = reservedAmount;
-    if (actualCredits !== null && actualCredits !== undefined && Number.isFinite(Number(actualCredits))) {
-      const requestedActual = Math.max(0, Math.round(Number(actualCredits)));
-      settledCost = Math.min(reservedAmount, requestedActual);
+    // Timecapsule user-billed credits are strictly separate from provider-reported cost.
+    // Default user charge is the Timecapsule reserved amount; if an explicit Timecapsule
+    // userBilledCredits charge is provided, cap it at reservedAmount so it never overdrafts.
+    let settledUserCredits = reservedAmount;
+    if (
+      userBilledCredits !== null &&
+      userBilledCredits !== undefined &&
+      Number.isFinite(Number(userBilledCredits))
+    ) {
+      const requestedUserCredits = Math.max(0, Math.round(Number(userBilledCredits)));
+      settledUserCredits = Math.min(reservedAmount, requestedUserCredits);
     }
 
+    let normalizedProviderCost = null;
+    if (
+      providerReportedCost !== null &&
+      providerReportedCost !== undefined &&
+      Number.isFinite(Number(providerReportedCost)) &&
+      Number(providerReportedCost) >= 0
+    ) {
+      normalizedProviderCost = Number(providerReportedCost);
+    }
+    const normalizedProviderCostUnit = providerCostUnit ? String(providerCostUnit).trim() : null;
+
     const newReserved = currentReserved - reservedAmount;
-    const newBalance = currentBalance - settledCost;
+    const newBalance = currentBalance - settledUserCredits;
 
     // 1. Transition reservation: reserved -> settled
     await client.query(
@@ -1008,7 +1053,7 @@ export async function completeJobSuccess({
            settled_at = NOW(),
            updated_at = NOW()
        WHERE job_id = $1 AND status = 'reserved'`,
-      [jobId, settledCost]
+      [jobId, settledUserCredits]
     );
 
     // 2. Update tenant balances
@@ -1031,13 +1076,17 @@ export async function completeJobSuccess({
         ledgerEntryId,
         resolvedTenantId,
         jobId,
-        settledCost,
+        settledUserCredits,
         newBalance,
         newReserved,
         JSON.stringify({
           reserved_amount: reservedAmount,
-          provider_reported_credits: actualCredits,
-          capped_to_reservation: actualCredits !== null && Number(actualCredits) > reservedAmount,
+          user_billed_credits: settledUserCredits,
+          released_unused_credits: reservedAmount - settledUserCredits,
+          provider_reported_cost: normalizedProviderCost,
+          provider_cost_unit: normalizedProviderCostUnit,
+          capped_to_reservation:
+            userBilledCredits !== null && Number(userBilledCredits) > reservedAmount,
         }),
       ]
     );
@@ -1085,12 +1134,15 @@ export async function completeJobSuccess({
            submission_state = 'submitted',
            provider_job_id = COALESCE($2, provider_job_id),
            progress = 1,
+           user_billed_credits = $3,
            actual_cost = $3,
-           output_json = $4::jsonb,
-           outputs_json = $5::jsonb,
+           provider_reported_cost = $4,
+           provider_cost_unit = $5,
+           output_json = $6::jsonb,
+           outputs_json = $7::jsonb,
            lease_owner = NULL,
            lease_expires_at = NULL,
-           last_event_version = $6,
+           last_event_version = $8,
            error = NULL,
            updated_at = NOW(),
            completed_at = NOW()
@@ -1099,7 +1151,9 @@ export async function completeJobSuccess({
       [
         jobId,
         finalProviderJobId ? String(finalProviderJobId) : null,
-        settledCost,
+        settledUserCredits,
+        normalizedProviderCost,
+        normalizedProviderCostUnit,
         JSON.stringify(outputPayload),
         JSON.stringify([outputPayload]),
         nextEventVersion,
@@ -1124,7 +1178,10 @@ export async function completeJobSuccess({
           asset_id: outputPayload.asset_id,
           storage_type: outputPayload.storage_type,
           durable: false,
-          credits_settled: settledCost,
+          credits_settled: settledUserCredits,
+          user_billed_credits: settledUserCredits,
+          provider_reported_cost: normalizedProviderCost,
+          provider_cost_unit: normalizedProviderCostUnit,
         }),
       ]
     );

@@ -28,6 +28,67 @@ export function getDatabaseUrl() {
   return url.trim();
 }
 
+const FORBIDDEN_TEST_DB_NAMES = new Set([
+  'timecapsule',
+  'timecapsule_prod',
+  'timecapsule_production',
+  'timecapsule_dev',
+  'postgres',
+  'template0',
+  'template1',
+]);
+
+/**
+ * Verifies that destructive test operations (such as TRUNCATE in resetStoreForTests)
+ * only execute against an explicitly designated disposable *_test database and
+ * refuse to run against the application database (`timecapsule`) or without
+ * `TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1`.
+ */
+export function assertDisposableTestDatabase(connectionString = null) {
+  if (process.env.NODE_ENV === 'production') {
+    const err = new Error('Destructive test database operations are forbidden in production');
+    err.code = 'DESTRUCTIVE_TEST_DB_FORBIDDEN';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB !== '1') {
+    const err = new Error(
+      'Destructive test database operations require TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1'
+    );
+    err.code = 'DESTRUCTIVE_TEST_DB_NOT_DESIGNATED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const rawUrl = connectionString || getDatabaseUrl();
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    const err = new Error('Invalid DATABASE_URL for disposable test database check');
+    err.code = 'DESTRUCTIVE_TEST_DB_INVALID_URL';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const dbName = decodeURIComponent((parsed.pathname || '').replace(/^\/+/, '')).trim();
+  if (
+    !dbName ||
+    FORBIDDEN_TEST_DB_NAMES.has(dbName.toLowerCase()) ||
+    !dbName.toLowerCase().endsWith('_test')
+  ) {
+    const err = new Error(
+      `Refusing to run destructive test operation against database "${dbName || '<empty>'}". Destructive tests require an explicitly designated disposable *_test database (e.g., timecapsule_test) and refuse to run against the application database.`
+    );
+    err.code = 'NON_DISPOSABLE_DATABASE_REFUSED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return dbName;
+}
+
 export function getPool() {
   const url = getDatabaseUrl();
   if (activePool && activePoolUrl === url) {
