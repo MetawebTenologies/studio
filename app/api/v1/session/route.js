@@ -1,68 +1,119 @@
-import { NextResponse } from 'next/server';
 import {
   requireSession,
-  issueSessionToken,
+  authenticatePreviewCredential,
+  issuePreviewSessionToken,
+  verifyMutationOrigin,
 } from '../../../../packages/timecapsule/src/server/auth.js';
 import { getTenantCredits } from '../../../../packages/timecapsule/src/server/store.js';
+
+const SESSION_MAX_AGE_SECONDS = 8 * 3600;
 
 export async function GET(request) {
   try {
     const session = await requireSession(request);
     const credits = getTenantCredits(session.tenant_id);
-    return NextResponse.json({
-      ok: true,
-      authenticated: true,
-      session,
-      credits,
-    });
+    return Response.json(
+      {
+        ok: true,
+        authenticated: true,
+        auth_mode: 'private_preview',
+        notice: 'Single-tenant private-preview access only (not multi-tenant authentication).',
+        session,
+        credits,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      }
+    );
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, authenticated: false, error: err.message },
-      { status: err.statusCode || 401 }
+    return Response.json(
+      {
+        ok: false,
+        authenticated: false,
+        code: err.code || 'UNAUTHORIZED',
+        error: err.message || 'Authentication required',
+      },
+      {
+        status: err.statusCode || 401,
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      }
     );
   }
 }
 
 export async function POST(request) {
   try {
+    verifyMutationOrigin(request);
     const body = await request.json().catch(() => ({}));
-    const name = String(body.name || 'Timecapsule Creator').trim();
-    const tenantId = String(body.tenant_id || 'org_default').trim();
-    const userId = String(body.user_id || `usr_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`).trim();
+    const submittedCredential = String(
+      body.access_key || body.preview_key || body.access_code || ''
+    );
 
-    const token = issueSessionToken({ userId, tenantId, name });
-    const credits = getTenantCredits(tenantId);
+    // Authenticate credential and derive identity strictly server-side.
+    // Client-supplied tenant_id, user_id, and role fields are ignored.
+    const identity = authenticatePreviewCredential(submittedCredential);
+    const token = issuePreviewSessionToken({ ttlSeconds: SESSION_MAX_AGE_SECONDS });
+    const credits = getTenantCredits(identity.tenant_id);
 
-    const response = NextResponse.json({
-      ok: true,
-      token,
-      session: { user_id: userId, tenant_id: tenantId, name },
-      credits,
-    });
+    const cookieValue = `timecapsule_session=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; HttpOnly; Secure; SameSite=Strict`;
 
-    response.cookies.set('tc_session', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 3600,
-    });
-
-    return response;
+    return Response.json(
+      {
+        ok: true,
+        auth_mode: 'private_preview',
+        notice: 'Single-tenant private-preview access only (not multi-tenant authentication).',
+        session: identity,
+        credits,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          'Set-Cookie': cookieValue,
+        },
+      }
+    );
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err.message || 'Could not create session' },
-      { status: 400 }
+    return Response.json(
+      {
+        ok: false,
+        code: err.code || 'AUTH_FAILED',
+        error: err.message || 'Could not establish private-preview session',
+      },
+      {
+        status: err.statusCode || 401,
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      }
     );
   }
 }
 
-export async function DELETE() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set('tc_session', '', {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-  });
-  return response;
+export async function DELETE(request) {
+  try {
+    verifyMutationOrigin(request);
+    const clearCookie =
+      'timecapsule_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict';
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          'Set-Cookie': clearCookie,
+        },
+      }
+    );
+  } catch (err) {
+    return Response.json(
+      { ok: false, code: err.code || 'CSRF_ERROR', error: err.message },
+      {
+        status: err.statusCode || 403,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
+    );
+  }
 }

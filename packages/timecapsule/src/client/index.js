@@ -5,22 +5,17 @@ export const IMAGE_MODEL_MAP = {
   'nano-banana-pro': 'nano-banana-pro',
   'nano-banana-2': 'nano-banana-2',
   'nano-banana': 'nano-banana',
-  'flux-kontext-pro': 'nano-banana-pro',
-  'flux-dev': 'nano-banana-2',
-  'midjourney-v7-text-to-image': 'nano-banana-pro',
-  'gpt-image-1.5': 'nano-banana-pro',
   'grok-imagine-text-to-image': 'grok-imagine/text-to-image',
-  'bytedance-seedream-v4.5': 'nano-banana-pro',
-  'wan2.1-text-to-image': 'nano-banana-2',
-  'qwen-image': 'nano-banana-2',
+  'gpt-image-1.5': 'gpt-image/1.5-text-to-image',
+  'bytedance-seedream-v4.5': 'seedream/4.5-text-to-image',
+  'qwen-image': 'qwen/text-to-image',
 };
 
 export const I2I_MODEL_MAP = {
   'nano-banana-pro-edit': 'nano-banana-pro',
   'nano-banana-edit': 'nano-banana-edit',
-  'flux-kontext-pro-i2i': 'qwen/image-to-image',
-  'gpt-image-1.5-edit': 'gpt-image-2-image-to-image',
-  'midjourney-v7-image-to-image': 'qwen/image-to-image',
+  'gpt-image-1.5-edit': 'gpt-image/1.5-image-to-image',
+  'qwen-image-edit': 'qwen/image-to-image',
 };
 
 export const VIDEO_MODEL_MAP = {
@@ -52,10 +47,44 @@ export const I2V_MODEL_MAP = {
 export const LIPSYNC_MODEL_MAP = {
   'sync-lipsync': 'volcengine/video-to-video-lip-sync',
   'latent-sync': 'volcengine/video-to-video-lip-sync',
-  'creatify-lipsync': 'volcengine/video-to-video-lip-sync',
-  'veed-lipsync': 'volcengine/video-to-video-lip-sync',
-  'infinitetalk-video-to-video': 'volcengine/video-to-video-lip-sync',
+  'creatify-lipsync': 'omnihuman-1-5',
+  'omnihuman-1-5': 'omnihuman-1-5',
 };
+
+export function resolveKieModelForModality(modality, modelId) {
+  if (!modelId || typeof modelId !== 'string' || !modelId.trim()) {
+    const err = new Error(`Explicit model identifier is required for modality "${modality}"`);
+    err.status = 400;
+    err.statusCode = 400;
+    err.code = 'UNSUPPORTED_MODEL';
+    throw err;
+  }
+
+  let mapped = null;
+  if (modality === 'image' || modality === 't2i') {
+    mapped = IMAGE_MODEL_MAP[modelId] || null;
+  } else if (modality === 'i2i') {
+    mapped = I2I_MODEL_MAP[modelId] || null;
+  } else if (modality === 'video' || modality === 't2v') {
+    mapped = VIDEO_MODEL_MAP[modelId] || null;
+  } else if (modality === 'i2v') {
+    mapped = I2V_MODEL_MAP[modelId] || null;
+  } else if (modality === 'lipsync') {
+    mapped = LIPSYNC_MODEL_MAP[modelId] || null;
+  }
+
+  if (!mapped) {
+    const err = new Error(
+      `Unsupported or unmapped model "${modelId}" for modality "${modality}". Silent default model substitution is disabled.`
+    );
+    err.status = 400;
+    err.statusCode = 400;
+    err.code = 'UNSUPPORTED_MODEL';
+    throw err;
+  }
+
+  return mapped;
+}
 
 export const BACKEND_IMAGE_MODEL_MAP = {
   'nano-banana-pro': 'nano-banana-pro',
@@ -183,7 +212,7 @@ function getSessionToken(apiKey) {
   return (
     getStorageItem(TIMECAPSULE_BRAND.storageKeys.sessionToken) ||
     getStorageItem(TIMECAPSULE_BRAND.storageKeys.apiKey) ||
-    'tc_dev_session'
+    ''
   );
 }
 
@@ -194,18 +223,32 @@ function sleep(ms) {
 // ─── Timecapsule BFF Execution Path ──────────────────────────────────────────
 
 async function runViaTimecapsuleBff({ apiKey, modality, model, inputs, workflow, delivery }) {
+  if (!model || typeof model !== 'string' || !model.trim()) {
+    const err = new Error(`Explicit model identifier is required for modality "${modality}"`);
+    err.status = 400;
+    err.statusCode = 400;
+    err.code = 'UNSUPPORTED_MODEL';
+    throw err;
+  }
+
   const fetchFn = getFetch();
   const token = getSessionToken(apiKey);
   const idempotencyKey = generateIdempotencyKey();
   const baseUrl = clientConfig.bffBaseUrl.replace(/\/$/, '');
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'Idempotency-Key': idempotencyKey,
+    'X-Timecapsule-CSRF': '1',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetchFn(`${baseUrl}/generations`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey,
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: 'same-origin',
+    headers,
     body: JSON.stringify({
       project_id: inputs?.project_id || 'prj_default',
       modality,
@@ -299,12 +342,16 @@ async function pollTimecapsuleBffJob(jobId, token) {
   const interval = clientConfig.bffPollIntervalMs;
   const maxAttempts = clientConfig.maxPollAttempts;
 
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   for (let i = 0; i < maxAttempts; i++) {
     if (i > 0) await sleep(interval);
     const res = await fetchFn(`${baseUrl}/generations/${encodeURIComponent(jobId)}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'same-origin',
+      headers,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -412,7 +459,7 @@ export async function generateImage(apiKey, params = {}) {
     return runViaTimecapsuleBff({
       apiKey,
       modality: 'image',
-      model: params.model || 'nano-banana-pro',
+      model: params.model,
       inputs: {
         prompt: params.prompt,
         aspect_ratio: params.aspect_ratio || '1:1',
@@ -423,7 +470,7 @@ export async function generateImage(apiKey, params = {}) {
     });
   }
 
-  const kieModel = IMAGE_MODEL_MAP[params.model] || 'nano-banana-pro';
+  const kieModel = resolveKieModelForModality('image', params.model);
   const input = { prompt: params.prompt };
   if (params.aspect_ratio) input.aspect_ratio = params.aspect_ratio;
   if (kieModel.startsWith('nano-banana')) {
@@ -448,7 +495,7 @@ export async function generateI2I(apiKey, params = {}) {
     return runViaTimecapsuleBff({
       apiKey,
       modality: 'i2i',
-      model: params.model || 'nano-banana-pro-edit',
+      model: params.model,
       inputs: {
         prompt: params.prompt || '',
         image_url: params.image_url,
@@ -459,7 +506,7 @@ export async function generateI2I(apiKey, params = {}) {
     });
   }
 
-  const kieModel = I2I_MODEL_MAP[params.model] || 'qwen/image-to-image';
+  const kieModel = resolveKieModelForModality('i2i', params.model);
   const urls = params.image_urls || (params.image_url ? [params.image_url] : []);
 
   let input;
@@ -478,7 +525,7 @@ export async function generateI2I(apiKey, params = {}) {
       image_size: params.aspect_ratio || '1:1',
       output_format: 'png',
     };
-  } else if (kieModel === 'gpt-image-2-image-to-image') {
+  } else if (kieModel === 'gpt-image/1.5-image-to-image' || kieModel === 'gpt-image-2-image-to-image') {
     input = {
       prompt: params.prompt || '',
       image_urls: urls,
@@ -505,7 +552,7 @@ export async function generateVideo(apiKey, params = {}) {
     return runViaTimecapsuleBff({
       apiKey,
       modality: 'video',
-      model: params.model || 'seedance-pro-t2v',
+      model: params.model,
       inputs: {
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
@@ -517,7 +564,7 @@ export async function generateVideo(apiKey, params = {}) {
     });
   }
 
-  const kieModel = VIDEO_MODEL_MAP[params.model] || 'bytedance/seedance-1.5-pro';
+  const kieModel = resolveKieModelForModality('video', params.model);
 
   if (kieModel.startsWith('veo3')) {
     const body = {
@@ -562,7 +609,7 @@ export async function generateI2V(apiKey, params = {}) {
     return runViaTimecapsuleBff({
       apiKey,
       modality: 'i2v',
-      model: params.model || 'seedance-pro-i2v',
+      model: params.model,
       inputs: {
         prompt: params.prompt || '',
         image_url: params.image_url,
@@ -574,7 +621,7 @@ export async function generateI2V(apiKey, params = {}) {
     });
   }
 
-  const kieModel = I2V_MODEL_MAP[params.model] || 'bytedance/seedance-1.5-pro';
+  const kieModel = resolveKieModelForModality('i2v', params.model);
   const urls = params.image_urls || (params.image_url ? [params.image_url] : []);
 
   if (kieModel.startsWith('veo3')) {
@@ -626,7 +673,7 @@ export async function processLipSync(apiKey, params = {}) {
     return runViaTimecapsuleBff({
       apiKey,
       modality: 'lipsync',
-      model: params.model || 'sync-lipsync',
+      model: params.model,
       inputs: {
         prompt: params.prompt || '',
         image_url: params.image_url,
@@ -637,15 +684,10 @@ export async function processLipSync(apiKey, params = {}) {
     });
   }
 
-  let kieModel = LIPSYNC_MODEL_MAP[params.model];
-  let input;
-
-  if (!kieModel || params.image_url) {
-    kieModel = 'omnihuman-1-5';
-    input = { image_url: params.image_url, audio_url: params.audio_url };
-  } else {
-    input = { video_url: params.video_url, audio_url: params.audio_url };
-  }
+  const kieModel = resolveKieModelForModality('lipsync', params.model);
+  const input = params.image_url
+    ? { image_url: params.image_url, audio_url: params.audio_url }
+    : { video_url: params.video_url, audio_url: params.audio_url };
 
   const submitRes = await kieRequest(apiKey, '/api/v1/jobs/createTask', 'POST', {
     model: kieModel,
@@ -664,12 +706,17 @@ export async function uploadFile(apiKey, file, onProgress) {
     const token = getSessionToken(apiKey);
     const baseUrl = clientConfig.bffBaseUrl.replace(/\/$/, '');
     const dataUrl = await fileToDataUrl(file);
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Timecapsule-CSRF': '1',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const res = await fetchFn(`${baseUrl}/uploads`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'same-origin',
+      headers,
       body: JSON.stringify({
         dataUrl,
         filename: file?.name || 'upload.bin',

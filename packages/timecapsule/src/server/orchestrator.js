@@ -7,8 +7,12 @@ import {
   emitJobEvent,
   updateJob,
 } from './store.js';
-import { selectProviderForJob, dispatchToProvider } from './providers.js';
-import { ingestCompletedMedia } from './media.js';
+import {
+  selectProviderForJob,
+  assertProviderReadyForJob,
+  dispatchToProvider,
+} from './providers.js';
+import { registerExternalMediaReference } from './media.js';
 import { getEstimatedCreditsForModel } from '../models/index.js';
 
 const ALLOWED_MODALITIES = new Set(['image', 'i2i', 'video', 'i2v', 'v2v', 'lipsync']);
@@ -18,6 +22,7 @@ export function validateGenerationRequest(body = {}) {
   if (!ALLOWED_MODALITIES.has(modality)) {
     const err = new Error(`Unsupported modality: ${modality}`);
     err.code = 'INVALID_MODALITY';
+    err.status = 400;
     err.statusCode = 400;
     throw err;
   }
@@ -26,6 +31,7 @@ export function validateGenerationRequest(body = {}) {
   if (!model) {
     const err = new Error('model is required');
     err.code = 'MISSING_MODEL';
+    err.status = 400;
     err.statusCode = 400;
     throw err;
   }
@@ -34,6 +40,7 @@ export function validateGenerationRequest(body = {}) {
   if ((modality === 'image' || modality === 'video') && !String(inputs.prompt || '').trim()) {
     const err = new Error('inputs.prompt is required for text-to-media generation');
     err.code = 'MISSING_PROMPT';
+    err.status = 400;
     err.statusCode = 400;
     throw err;
   }
@@ -53,9 +60,26 @@ export async function submitGenerationJob({
   idempotencyKey = null,
   body = {},
   awaitCompletion = false,
+  simulationMode = false,
 }) {
-  const tenantId = session?.tenant_id || 'org_default';
-  const userId = session?.user_id || 'usr_default';
+  if (!session || !session.tenant_id || !session.user_id) {
+    const err = new Error('Authenticated server session is required to submit a generation job');
+    err.code = 'UNAUTHORIZED';
+    err.status = 401;
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (simulationMode && process.env.TIMECAPSULE_TEST_MODE !== '1') {
+    const err = new Error('Simulation mode requires TIMECAPSULE_TEST_MODE=1');
+    err.code = 'TEST_MODE_REQUIRED';
+    err.status = 403;
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const tenantId = session.tenant_id;
+  const userId = session.user_id;
 
   if (idempotencyKey) {
     const existing = getIdempotentJob(tenantId, idempotencyKey);
@@ -70,11 +94,18 @@ export async function submitGenerationJob({
     modality: validated.modality,
     preferredProvider: body.provider,
   });
-  const estimatedCost = getEstimatedCreditsForModel(
-    validated.model,
-    validated.modality,
-    validated.inputs
-  );
+
+  // Fail closed BEFORE job creation or credit reservation if model is unknown,
+  // GPU worker is unverified, or provider credentials are missing.
+  assertProviderReadyForJob({
+    model: validated.model,
+    modality: validated.modality,
+    provider,
+  });
+
+  const estimatedCost = simulationMode
+    ? 0
+    : getEstimatedCreditsForModel(validated.model, validated.modality, validated.inputs);
 
   const { job, deduplicated } = createJobRecord({
     tenantId,
@@ -89,17 +120,20 @@ export async function submitGenerationJob({
     provider,
     creditsReserved: estimatedCost,
     estimatedCost,
+    simulationMode,
   });
 
   if (deduplicated) {
     return { job, deduplicated: true };
   }
 
-  try {
-    reserveCredits(tenantId, job.job_id, estimatedCost);
-  } catch (err) {
-    updateJob(job.job_id, { status: 'failed', error: err.message, credits_reserved: 0 });
-    throw err;
+  if (!simulationMode) {
+    try {
+      reserveCredits(tenantId, job.job_id, estimatedCost);
+    } catch (err) {
+      updateJob(job.job_id, { status: 'failed', error: err.message, credits_reserved: 0 });
+      throw err;
+    }
   }
 
   emitJobEvent(job.job_id, {
@@ -109,6 +143,7 @@ export async function submitGenerationJob({
     data: {
       credits_reserved: estimatedCost,
       estimated_cost: estimatedCost,
+      simulation: Boolean(simulationMode),
     },
   });
 
@@ -149,24 +184,28 @@ async function runJobExecution(job) {
       },
     });
 
-    const ingested = await ingestCompletedMedia({
+    const registeredMedia = await registerExternalMediaReference({
       jobId: job.job_id,
       tenantId: job.tenant_id,
       sourceUrl: result.sourceUrl,
       modality: job.modality,
     });
 
-    const settledCost = settleCredits(
-      job.tenant_id,
-      job.job_id,
-      result.actualCredits ?? job.estimated_cost
-    );
+    const settledCost = job.simulation
+      ? 0
+      : settleCredits(
+          job.tenant_id,
+          job.job_id,
+          result.actualCredits ?? job.estimated_cost
+        );
 
     const outputPayload = {
-      asset_id: ingested.asset_id,
-      url: ingested.source_url,
-      delivery_url: ingested.url,
-      content_type: ingested.content_type,
+      asset_id: registeredMedia.asset_id,
+      url: registeredMedia.source_url,
+      delivery_url: registeredMedia.url,
+      content_type: registeredMedia.content_type,
+      storage_type: registeredMedia.storage_type,
+      durable: registeredMedia.durable,
     };
 
     updateJob(job.job_id, {
@@ -187,11 +226,15 @@ async function runJobExecution(job) {
         url: outputPayload.url,
         delivery_url: outputPayload.delivery_url,
         asset_id: outputPayload.asset_id,
+        storage_type: outputPayload.storage_type,
+        durable: outputPayload.durable,
         credits_settled: settledCost,
       },
     });
   } catch (err) {
-    releaseCredits(job.tenant_id, job.job_id);
+    if (!job.simulation) {
+      releaseCredits(job.tenant_id, job.job_id);
+    }
     updateJob(job.job_id, {
       status: 'failed',
       error: err.message || 'Generation failed',

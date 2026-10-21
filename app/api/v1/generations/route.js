@@ -1,5 +1,7 @@
-import { NextResponse } from 'next/server';
-import { requireSession } from '../../../../packages/timecapsule/src/server/auth.js';
+import {
+  requireSession,
+  verifyMutationOrigin,
+} from '../../../../packages/timecapsule/src/server/auth.js';
 import { submitGenerationJob } from '../../../../packages/timecapsule/src/server/orchestrator.js';
 import { listJobs } from '../../../../packages/timecapsule/src/server/store.js';
 
@@ -9,20 +11,29 @@ export async function GET(request) {
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50));
     const jobs = listJobs(session.tenant_id, limit);
-    return NextResponse.json({
-      ok: true,
-      items: jobs,
-    });
+    return Response.json(
+      {
+        ok: true,
+        items: jobs,
+      },
+      {
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
+    );
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err.message },
-      { status: err.statusCode || 500 }
+    return Response.json(
+      { ok: false, error: err.message, code: err.code || 'UNAUTHORIZED' },
+      {
+        status: err.statusCode || err.status || 500,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
     );
   }
 }
 
 export async function POST(request) {
   try {
+    verifyMutationOrigin(request);
     const session = await requireSession(request);
     const idempotencyKey =
       request.headers.get('idempotency-key') || request.headers.get('Idempotency-Key') || null;
@@ -34,7 +45,7 @@ export async function POST(request) {
       body,
     });
 
-    return NextResponse.json(
+    return Response.json(
       {
         job_id: job.job_id,
         status: job.status,
@@ -45,12 +56,18 @@ export async function POST(request) {
         created_at: job.created_at,
         deduplicated,
       },
-      { status: deduplicated ? 200 : 202 }
+      {
+        status: deduplicated ? 200 : 202,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
     );
   } catch (err) {
-    return NextResponse.json(
+    return Response.json(
       { error: err.message || 'Generation submission failed', code: err.code || 'SUBMISSION_ERROR' },
-      { status: err.statusCode || 400 }
+      {
+        status: err.statusCode || err.status || 400,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
     );
   }
 }

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import {
   t2iModels,
   t2vModels,
@@ -12,6 +11,7 @@ import {
 } from '../../../../packages/timecapsule/src/models/index.js';
 
 export async function GET() {
+  const kieConfigured = Boolean(process.env.KIE_API_KEY && process.env.KIE_API_KEY.trim());
   const summarize = (list, modality) =>
     list.map((m) => ({
       id: m.id,
@@ -19,11 +19,23 @@ export async function GET() {
       family: m.family || null,
       modality,
       provider: getProviderForModel(m.id),
+      availability: kieConfigured ? 'available' : 'credentials_missing',
+      enabled: m.enabled !== false,
       estimated_credits: getEstimatedCreditsForModel(m.id, modality),
     }));
 
-  return NextResponse.json({
+  return Response.json({
     ok: true,
+    providers: {
+      kie: {
+        configured: kieConfigured,
+      },
+      'timecapsule-gpu': {
+        configured: false,
+        verified_worker: false,
+        reason: 'Self-hosted GPU worker adapter is not verified in this checkpoint.',
+      },
+    },
     native_models: timecapsuleNativeModels,
     counts: {
       t2i: t2iModels.length,

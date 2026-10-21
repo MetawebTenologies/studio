@@ -15,6 +15,10 @@ export const timecapsuleNativeModels = {
       endpoint: 'timecapsule.flux1-dev-t2i',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      availability: 'not_configured',
+      enabled: false,
+      verified_worker: false,
+      status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       estimatedCredits: 25,
       inputs: {
         prompt: {
@@ -47,6 +51,10 @@ export const timecapsuleNativeModels = {
       endpoint: 'timecapsule.wan2.1-t2v',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      availability: 'not_configured',
+      enabled: false,
+      verified_worker: false,
+      status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       estimatedCredits: 240,
       inputs: {
         prompt: {
@@ -86,6 +94,10 @@ export const timecapsuleNativeModels = {
       endpoint: 'timecapsule.wan2.1-i2v',
       family: 'timecapsule',
       provider: 'timecapsule-gpu',
+      availability: 'not_configured',
+      enabled: false,
+      verified_worker: false,
+      status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       imageField: 'image_url',
       hasPrompt: true,
       estimatedCredits: 240,
@@ -122,12 +134,46 @@ export const timecapsuleNativeModels = {
   ],
 };
 
-export const t2iModels = [...upstreamT2IModels, ...timecapsuleNativeModels.t2i];
-export const t2vModels = [...upstreamT2VModels, ...timecapsuleNativeModels.t2v];
+const filterEnabledModels = (list) =>
+  list.filter((m) => m.enabled !== false && m.availability !== 'not_configured');
+
+// Unconfigured self-hosted models are hidden from active picker lists until a verified worker is registered.
+export const t2iModels = [
+  ...upstreamT2IModels,
+  ...filterEnabledModels(timecapsuleNativeModels.t2i),
+];
+export const t2vModels = [
+  ...upstreamT2VModels,
+  ...filterEnabledModels(timecapsuleNativeModels.t2v),
+];
 export const i2iModels = [...upstreamI2IModels];
-export const i2vModels = [...upstreamI2VModels, ...timecapsuleNativeModels.i2v];
+export const i2vModels = [
+  ...upstreamI2VModels,
+  ...filterEnabledModels(timecapsuleNativeModels.i2v),
+];
 export const v2vModels = [...upstreamV2VModels];
 export const lipsyncModels = [...upstreamLipsyncModels];
+
+export const getUnconfiguredNativeModelById = (id) => {
+  const allNative = [
+    ...timecapsuleNativeModels.t2i,
+    ...timecapsuleNativeModels.t2v,
+    ...timecapsuleNativeModels.i2v,
+  ];
+  return allNative.find((m) => m.id === id && (m.enabled === false || m.availability === 'not_configured')) || null;
+};
+
+export const getCatalogModelById = (id) => {
+  const allActive = [
+    ...t2iModels,
+    ...t2vModels,
+    ...i2iModels,
+    ...i2vModels,
+    ...v2vModels,
+    ...lipsyncModels,
+  ];
+  return allActive.find((m) => m.id === id) || null;
+};
 
 export const getModelById = (id) => t2iModels.find((m) => m.id === id);
 

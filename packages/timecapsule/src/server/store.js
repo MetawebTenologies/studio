@@ -3,18 +3,29 @@ import crypto from 'crypto';
 
 const globalStoreKey = '__TIMECAPSULE_AUTHORITATIVE_STORE__';
 
-function createInitialState() {
+function createInitialState(initialCredits = 5000) {
   const emitter = new EventEmitter();
   emitter.setMaxListeners(200);
   return {
     jobs: new Map(),
+    simulationJobs: new Map(),
     idempotencyIndex: new Map(),
     tenants: new Map([
+      [
+        'org_preview_default',
+        {
+          tenant_id: 'org_preview_default',
+          credits_balance: initialCredits,
+          credits_reserved: 0,
+          reservations: new Map(),
+          ledger: [],
+        },
+      ],
       [
         'org_default',
         {
           tenant_id: 'org_default',
-          credits_balance: 5000,
+          credits_balance: initialCredits,
           credits_reserved: 0,
           reservations: new Map(),
           ledger: [],
@@ -34,9 +45,7 @@ function getState() {
 }
 
 export function resetStoreForTests(initialCredits = 5000) {
-  globalThis[globalStoreKey] = createInitialState();
-  const tenant = globalThis[globalStoreKey].tenants.get('org_default');
-  tenant.credits_balance = initialCredits;
+  globalThis[globalStoreKey] = createInitialState(initialCredits);
   return globalThis[globalStoreKey];
 }
 
@@ -142,7 +151,7 @@ export function getIdempotentJob(tenantId, idempotencyKey) {
   const compositeKey = `${tenantId}:${idempotencyKey}`;
   const jobId = state.idempotencyIndex.get(compositeKey);
   if (!jobId) return null;
-  return state.jobs.get(jobId) || null;
+  return state.jobs.get(jobId) || state.simulationJobs.get(jobId) || null;
 }
 
 export function createJobRecord({
@@ -158,6 +167,7 @@ export function createJobRecord({
   provider = 'kie',
   creditsReserved = 0,
   estimatedCost = 0,
+  simulationMode = false,
 }) {
   const state = getState();
   if (idempotencyKey) {
@@ -165,7 +175,7 @@ export function createJobRecord({
     if (existing) return { job: existing, deduplicated: true };
   }
 
-  const jobId = `job_${crypto.randomBytes(8).toString('hex')}`;
+  const jobId = `${simulationMode ? 'sim_job' : 'job'}_${crypto.randomBytes(8).toString('hex')}`;
   const now = new Date().toISOString();
 
   const job = {
@@ -183,8 +193,10 @@ export function createJobRecord({
     progress: 0,
     provider,
     provider_job_id: null,
-    credits_reserved: creditsReserved,
-    estimated_cost: estimatedCost,
+    simulation: Boolean(simulationMode),
+    billable: !simulationMode,
+    credits_reserved: simulationMode ? 0 : creditsReserved,
+    estimated_cost: simulationMode ? 0 : estimatedCost,
     actual_cost: null,
     events_url: `/api/v1/generations/${jobId}/events`,
     output: null,
@@ -195,7 +207,11 @@ export function createJobRecord({
     updated_at: now,
   };
 
-  state.jobs.set(jobId, job);
+  if (simulationMode) {
+    state.simulationJobs.set(jobId, job);
+  } else {
+    state.jobs.set(jobId, job);
+  }
   if (idempotencyKey) {
     state.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, jobId);
   }
@@ -204,7 +220,8 @@ export function createJobRecord({
 }
 
 export function getJob(jobId) {
-  return getState().jobs.get(jobId) || null;
+  const state = getState();
+  return state.jobs.get(jobId) || state.simulationJobs.get(jobId) || null;
 }
 
 export function updateJob(jobId, patch = {}) {
@@ -228,7 +245,7 @@ export function listJobs(tenantId = 'org_default', limit = 50) {
 
 export function emitJobEvent(jobId, { type, status, progress, providerJobId, data = {} }) {
   const state = getState();
-  const job = state.jobs.get(jobId);
+  const job = state.jobs.get(jobId) || state.simulationJobs.get(jobId);
   if (!job) return null;
 
   if (status) job.status = status;
