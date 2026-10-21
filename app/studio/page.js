@@ -8,7 +8,7 @@ export default function StudioPage() {
     <div className="h-screen flex flex-col bg-[#09090b] overflow-hidden">
       <PlatformNav activeModule="studio" />
       <div className="flex-1 overflow-hidden">
-        <StandaloneShell />
+        <StandaloneShell hideHeader={true} />
       </div>
     </div>
   );

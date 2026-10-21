@@ -272,7 +272,7 @@ function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
   );
 }
 
-export default function StandaloneShell() {
+export default function StandaloneShell({ hideHeader = false }) {
   const [apiKey, setApiKey] = useState(null);
   const [activeTab, setActiveTab] = useState('image');
   const [showSettings, setShowSettings] = useState(false);
@@ -344,57 +344,97 @@ export default function StandaloneShell() {
   }
 
   return (
-    <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden">
-      <header className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 bg-[#09090b]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#00e5ff]/15 border border-[#00e5ff]/40 flex items-center justify-center text-[#00e5ff] font-black text-sm">
-            TC
+    <div className="h-full bg-[#09090b] flex flex-col overflow-hidden">
+      {!hideHeader && (
+        <header className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 bg-[#09090b]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#00e5ff]/15 border border-[#00e5ff]/40 flex items-center justify-center text-[#00e5ff] font-black text-sm">
+              TC
+            </div>
+            <span className="text-white font-black text-lg tracking-wider uppercase">
+              {TIMECAPSULE_BRAND.name}
+            </span>
           </div>
-          <span className="text-white font-black text-lg tracking-wider uppercase">
-            {TIMECAPSULE_BRAND.name}
-          </span>
-        </div>
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-[#00e5ff] text-black'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-[#00e5ff] text-black'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {credits !== null && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/80 font-mono">
+                <span className="w-2 h-2 rounded-full bg-[#00e5ff]" />
+                {credits} cr
+              </span>
+            )}
+            <span
+              className={`hidden md:inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                isPreviewMode
+                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
+                  : 'bg-[#00e5ff]/10 text-[#00e5ff]'
               }`}
             >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          {credits !== null && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/80 font-mono">
-              <span className="w-2 h-2 rounded-full bg-[#00e5ff]" />
-              {credits} cr
+              {isPreviewMode ? 'UI Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
             </span>
-          )}
-          <span
-            className={`hidden md:inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-              isPreviewMode
-                ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
-                : 'bg-[#00e5ff]/10 text-[#00e5ff]'
-            }`}
-          >
-            {isPreviewMode ? 'UI Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
-          </span>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer"
-          >
-            ⚙ Settings
-          </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer"
+            >
+              ⚙ Settings
+            </button>
+          </div>
+        </header>
+      )}
+
+      {hideHeader && (
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-2.5 border-b border-white/5 bg-[#09090b]">
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-[#00e5ff] text-black'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3 text-xs">
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                isPreviewMode
+                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
+                  : 'bg-[#00e5ff]/10 text-[#00e5ff]'
+              }`}
+            >
+              {isPreviewMode ? 'Safe Offline Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
+            </span>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-white/50 hover:text-white transition-colors cursor-pointer"
+            >
+              ⚙ Settings
+            </button>
+          </div>
         </div>
-      </header>
+      )}
 
       {isPreviewMode && (
         <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 flex items-center justify-between text-xs text-amber-200">
