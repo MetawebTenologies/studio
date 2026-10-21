@@ -78,15 +78,21 @@ export function issuePreviewSessionToken({ ttlSeconds = 8 * 3600 } = {}) {
   return `${encoded}.${sig}`;
 }
 
-// Explicitly gated test-only helper for multi-tenant isolation assertions
+// Explicitly gated test-only helper for multi-tenant isolation assertions.
+// Never enableable when NODE_ENV === 'production', even if TIMECAPSULE_TEST_MODE=1 is set.
 export function issueSessionTokenForTest({
   userId = PREVIEW_IDENTITY.user_id,
   tenantId = PREVIEW_IDENTITY.tenant_id,
   name = PREVIEW_IDENTITY.name,
   ttlSeconds = 3600,
 } = {}) {
-  if (process.env.TIMECAPSULE_TEST_MODE !== '1') {
-    throw new Error('issueSessionTokenForTest is restricted to TIMECAPSULE_TEST_MODE=1');
+  if (process.env.NODE_ENV === 'production' || process.env.TIMECAPSULE_TEST_MODE !== '1') {
+    const err = new Error(
+      'issueSessionTokenForTest is restricted to non-production environments with TIMECAPSULE_TEST_MODE=1'
+    );
+    err.code = 'TEST_MODE_FORBIDDEN_IN_PRODUCTION';
+    err.statusCode = 403;
+    throw err;
   }
   const payload = {
     sub: userId,
@@ -244,7 +250,7 @@ export async function requireSession(request) {
 }
 
 export async function authorizeJobAccess(session, jobId) {
-  const job = getJob(jobId);
+  const job = await getJob(jobId);
   if (!job) {
     const err = new Error(`Job not found: ${jobId}`);
     err.code = 'JOB_NOT_FOUND';

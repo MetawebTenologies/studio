@@ -10,7 +10,7 @@ export async function GET(request) {
     const session = await requireSession(request);
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50));
-    const jobs = listJobs(session.tenant_id, limit);
+    const jobs = await listJobs(session.tenant_id, limit);
     return Response.json(
       {
         ok: true,

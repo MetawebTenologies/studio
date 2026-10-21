@@ -11,7 +11,7 @@ const SESSION_MAX_AGE_SECONDS = 8 * 3600;
 export async function GET(request) {
   try {
     const session = await requireSession(request);
-    const credits = getTenantCredits(session.tenant_id);
+    const credits = await getTenantCredits(session.tenant_id);
     return Response.json(
       {
         ok: true,
@@ -57,7 +57,7 @@ export async function POST(request) {
     // Client-supplied tenant_id, user_id, and role fields are ignored.
     const identity = authenticatePreviewCredential(submittedCredential);
     const token = issuePreviewSessionToken({ ttlSeconds: SESSION_MAX_AGE_SECONDS });
-    const credits = getTenantCredits(identity.tenant_id);
+    const credits = await getTenantCredits(identity.tenant_id);
 
     const cookieValue = `timecapsule_session=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; HttpOnly; Secure; SameSite=Strict`;
 

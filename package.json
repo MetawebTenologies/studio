@@ -12,7 +12,12 @@
     "build": "npm run build:studio && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/timecapsule.test.mjs",
+    "test": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} node --test tests/timecapsule.test.mjs",
+    "db:migrate": "node packages/timecapsule/src/scripts/db-cli.js migrate",
+    "db:status": "node packages/timecapsule/src/scripts/db-cli.js status",
+    "db:seed": "node packages/timecapsule/src/scripts/db-cli.js seed",
+    "db:reconcile": "node packages/timecapsule/src/scripts/reconcile-cli.js",
+    "worker": "node packages/timecapsule/src/scripts/worker-cli.js",
     "build:studio": "cd packages/studio && npm run build",
     "setup": "npm install && npm run build:studio",
     "vite:dev": "vite",
@@ -25,30 +30,53 @@
     "appId": "studio.timecapsule.app",
     "productName": "Timecapsule Studio",
     "copyright": "Copyright © 2026 Timecapsule",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "afterPack": "./afterPack.js",
-    "files": ["dist/**/*", "electron/**/*"],
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
     "mac": {
       "category": "public.app-category.graphics-design",
       "icon": "public/banner.png",
       "gatekeeperAssess": false,
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
       "icon": "public/banner.png",
-      "target": [{ "target": "nsis", "arch": ["x64", "arm64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     }
   },
   "dependencies": {
+    "axios": "^1.7.0",
     "next": "^15.0.0",
+    "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "studio": "*",
-    "axios": "^1.7.0",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "studio": "*"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@tailwindcss/vite": "^4.1.18",
     "autoprefixer": "^10.4.24",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
@@ -56,7 +84,6 @@
     "eslint-config-next": "^15.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
-    "vite": "^5.4.0",
-    "@tailwindcss/vite": "^4.1.18"
+    "vite": "^5.4.0"
   }
 }

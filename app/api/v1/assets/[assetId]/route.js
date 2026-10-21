@@ -5,7 +5,7 @@ export async function GET(request, context) {
   try {
     const session = await requireSession(request);
     const resolvedParams = await context.params;
-    const asset = getAsset(resolvedParams.assetId);
+    const asset = await getAsset(resolvedParams.assetId);
     if (!asset) {
       return Response.json(
         { error: 'Asset not found', code: 'ASSET_NOT_FOUND' },

@@ -38,7 +38,7 @@ export async function POST(request) {
         );
       }
 
-      const asset = registerAsset({
+      const asset = await registerAsset({
         tenant_id: session.tenant_id,
         source_url: dataUrl,
         modality: 'upload',
@@ -90,7 +90,7 @@ export async function POST(request) {
       );
     }
 
-    const asset = registerAsset({
+    const asset = await registerAsset({
       tenant_id: session.tenant_id,
       source_url: remoteUrl,
       modality: 'upload',

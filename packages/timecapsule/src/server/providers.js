@@ -6,12 +6,26 @@ import {
 
 const customAdapters = new Map();
 
+export function isTestAdapterAllowed() {
+  return process.env.NODE_ENV !== 'production' && process.env.TIMECAPSULE_TEST_MODE === '1';
+}
+
 export function registerProviderAdapter(providerName, adapter) {
+  if (process.env.NODE_ENV === 'production') {
+    const err = new Error(
+      'Test provider adapters are strictly forbidden when NODE_ENV=production, even if TIMECAPSULE_TEST_MODE=1'
+    );
+    err.code = 'TEST_MODE_FORBIDDEN_IN_PRODUCTION';
+    err.status = 403;
+    err.statusCode = 403;
+    throw err;
+  }
   if (process.env.TIMECAPSULE_TEST_MODE !== '1') {
     const err = new Error(
-      'Custom provider adapters may only be registered when TIMECAPSULE_TEST_MODE=1'
+      'Custom provider adapters may only be registered when TIMECAPSULE_TEST_MODE=1 in non-production environments'
     );
     err.code = 'TEST_MODE_REQUIRED';
+    err.status = 403;
     err.statusCode = 403;
     throw err;
   }
@@ -23,7 +37,7 @@ export function resetProviderAdapters() {
 }
 
 export function hasTestProviderAdapter(providerName) {
-  return process.env.TIMECAPSULE_TEST_MODE === '1' && customAdapters.has(providerName);
+  return isTestAdapterAllowed() && customAdapters.has(providerName);
 }
 
 export function selectProviderForJob({ model, modality, preferredProvider }) {
@@ -35,6 +49,10 @@ export function selectProviderForJob({ model, modality, preferredProvider }) {
   return 'kie';
 }
 
+export function getKieServerBaseUrl() {
+  return (process.env.TIMECAPSULE_KIE_BASE_URL || 'https://api.kie.ai').replace(/\/$/, '');
+}
+
 export function assertProviderReadyForJob({ model, modality, provider }) {
   if (!model || typeof model !== 'string' || !model.trim()) {
     const err = new Error('model is required');
@@ -44,7 +62,7 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
     throw err;
   }
 
-  // Self-hosted GPU models are disabled unless an explicit test adapter is registered in test mode.
+  // Self-hosted GPU models are disabled unless an explicit test adapter is registered in non-prod test mode.
   // Presence of TIMECAPSULE_GPU_WORKER_URL alone is NOT sufficient to mark a worker verified.
   const unconfiguredNative = getUnconfiguredNativeModelById(model);
   if (unconfiguredNative || String(model).startsWith('timecapsule.') || provider === 'timecapsule-gpu') {
@@ -67,6 +85,18 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
   if (provider === 'kie') {
     // Validate explicit model mapping first; rejects unknown/unmapped models with 400 UNSUPPORTED_MODEL.
     const resolvedModel = resolveKieModelForModality(modality, model);
+
+    // Managed Veo routes must be rejected before credit reservation until their managed contract
+    // (/api/v1/veo/generate + /api/v1/veo/record-info) is implemented and verified in Checkpoint 3.
+    if (resolvedModel.startsWith('veo3') || String(model).startsWith('veo3')) {
+      const err = new Error(
+        `Managed BFF execution for Veo model "${model}" (${resolvedModel}) is disabled until the managed Veo provider contract is verified.`
+      );
+      err.code = 'MANAGED_VEO_CONTRACT_UNVERIFIED';
+      err.status = 501;
+      err.statusCode = 501;
+      throw err;
+    }
 
     if (hasTestProviderAdapter('kie')) {
       return {
@@ -109,19 +139,17 @@ export function assertProviderReadyForJob({ model, modality, provider }) {
   throw err;
 }
 
-async function executeKieServerAdapter(job, { onProgress, fetchImpl }) {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey || !apiKey.trim()) {
-    const err = new Error('Server KIE_API_KEY is not configured');
-    err.code = 'PROVIDER_CREDENTIALS_MISSING';
-    err.status = 503;
-    err.statusCode = 503;
+export function buildKieTaskPayload(job) {
+  const inputs = job.inputs || {};
+  const kieModel = job.resolved_provider_model || resolveKieModelForModality(job.modality, job.model);
+  if (kieModel.startsWith('veo3')) {
+    const err = new Error(`Managed Veo execution is disabled for model "${job.model}"`);
+    err.code = 'MANAGED_VEO_CONTRACT_UNVERIFIED';
+    err.status = 501;
+    err.statusCode = 501;
     throw err;
   }
 
-  const fetchFn = fetchImpl || globalThis.fetch.bind(globalThis);
-  const inputs = job.inputs || {};
-  const kieModel = resolveKieModelForModality(job.modality, job.model);
   let payloadInput = { prompt: inputs.prompt || '' };
 
   if (job.modality === 'image') {
@@ -170,80 +198,224 @@ async function executeKieServerAdapter(job, { onProgress, fetchImpl }) {
     throw err;
   }
 
-  const createRes = await fetchFn('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ model: kieModel, input: payloadInput }),
-  });
-  const createData = await createRes.json().catch(() => ({}));
-  if (!createRes.ok || (createData.code && createData.code !== 200)) {
-    throw new Error(createData.msg || createData.error || `Kie.ai HTTP ${createRes.status}`);
-  }
-  const taskId = createData.data?.taskId;
-  if (!taskId) throw new Error('Kie.ai did not return a taskId');
-
-  if (onProgress) {
-    onProgress({ stage: 'queued_at_provider', progress: 0.15, providerJobId: taskId });
-  }
-
-  for (let i = 0; i < 120; i++) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const pollRes = await fetchFn(
-      `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      }
-    );
-    const pollData = await pollRes.json().catch(() => ({}));
-    const d = pollData.data || {};
-    if (d.state === 'success') {
-      let urls = [];
-      try {
-        urls = JSON.parse(d.resultJson || '{}').resultUrls || [];
-      } catch {
-        urls = [];
-      }
-      if (!urls.length) throw new Error('Kie.ai task succeeded without output URL');
-      return {
-        providerJobId: taskId,
-        sourceUrl: urls[0],
-        actualCredits: Number(d.creditsConsumed) || job.estimated_cost,
-      };
-    }
-    if (d.state === 'fail') {
-      throw new Error(d.failMsg || 'Kie.ai generation failed');
-    }
-    if (onProgress) {
-      onProgress({
-        stage: 'generating',
-        progress: Math.min(0.9, 0.2 + i * 0.05),
-        providerJobId: taskId,
-      });
-    }
-  }
-  throw new Error('Kie.ai generation timed out');
+  return { kieModel, payloadInput };
 }
 
-async function executeTimecapsuleGpuAdapter(job) {
-  const err = new Error(
-    `Self-hosted GPU worker for "${job.model}" is not verified. Automatic fake GPU execution is disabled.`
+/**
+ * Step 1 of durable worker execution: submits the task to the provider and returns
+ * the providerJobId immediately so the worker can persist it before polling.
+ */
+export async function submitTaskToProvider(job, options = {}) {
+  if (hasTestProviderAdapter(job.provider)) {
+    const custom = customAdapters.get(job.provider);
+    if (typeof custom === 'function') {
+      const res = await custom(job, {
+        ...options,
+        onProgress: options.onProgress || (() => {}),
+      });
+      return {
+        providerJobId: res.providerJobId || `test_${job.job_id}`,
+        immediateCompletion: res.sourceUrl
+          ? {
+              sourceUrl: res.sourceUrl,
+              actualCredits: res.actualCredits ?? job.estimated_cost,
+            }
+          : null,
+      };
+    }
+    if (custom && typeof custom.submit === 'function') {
+      return custom.submit(job, options);
+    }
+  }
+
+  if (job.provider === 'timecapsule-gpu') {
+    const err = new Error(
+      `Self-hosted GPU worker for "${job.model}" is not verified. Automatic fake GPU execution is disabled.`
+    );
+    err.code = 'MODEL_WORKER_NOT_VERIFIED';
+    err.status = 503;
+    err.statusCode = 503;
+    err.deterministicFailure = true;
+    throw err;
+  }
+
+  const apiKey = process.env.KIE_API_KEY;
+  if (!apiKey || !apiKey.trim()) {
+    const err = new Error('Server KIE_API_KEY is not configured');
+    err.code = 'PROVIDER_CREDENTIALS_MISSING';
+    err.status = 503;
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const { kieModel, payloadInput } = buildKieTaskPayload(job);
+  const fetchFn = options.fetchImpl || globalThis.fetch.bind(globalThis);
+  const baseUrl = getKieServerBaseUrl();
+
+  let createRes;
+  try {
+    createRes = await fetchFn(`${baseUrl}/api/v1/jobs/createTask`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        ...(job.submission_attempt_id
+          ? { 'X-Submission-Attempt-Id': job.submission_attempt_id }
+          : {}),
+      },
+      body: JSON.stringify({ model: kieModel, input: payloadInput }),
+    });
+  } catch (networkErr) {
+    // A transport error during or after POST transmission leaves provider acceptance ambiguous
+    // unless explicitly marked as a pre-send connection refusal in controlled environments.
+    const err = new Error(`Provider submission transport error: ${networkErr.message}`);
+    err.code = networkErr.code || 'PROVIDER_SUBMISSION_TRANSPORT_ERROR';
+    err.ambiguousSubmission = networkErr.code !== 'ECONNREFUSED';
+    err.retryableSubmission = networkErr.code === 'ECONNREFUSED';
+    throw err;
+  }
+
+  const createData = await createRes.json().catch(() => ({}));
+
+  if (createRes.status >= 500 || createRes.status === 408 || createRes.status === 429) {
+    const err = new Error(
+      createData.msg || createData.error || `Kie.ai HTTP ${createRes.status} during submission`
+    );
+    err.statusCode = createRes.status;
+    // 429 rate-limit before task creation is retryable; 502/504 gateway timeouts are ambiguous
+    err.retryableSubmission = createRes.status === 429 || createRes.status === 503;
+    err.ambiguousSubmission = createRes.status === 502 || createRes.status === 504 || createRes.status === 408;
+    throw err;
+  }
+
+  if (!createRes.ok || (createData.code && createData.code !== 200)) {
+    const err = new Error(
+      createData.msg || createData.error || `Kie.ai rejected task submission (HTTP ${createRes.status})`
+    );
+    err.statusCode = createRes.status || 400;
+    err.deterministicFailure = true;
+    throw err;
+  }
+
+  const taskId = createData.data?.taskId;
+  if (!taskId) {
+    const err = new Error('Kie.ai response reached 200 OK without a taskId; submission outcome is ambiguous');
+    err.code = 'AMBIGUOUS_PROVIDER_RESPONSE';
+    err.ambiguousSubmission = true;
+    throw err;
+  }
+
+  return {
+    providerJobId: String(taskId),
+    immediateCompletion: null,
+  };
+}
+
+/**
+ * Step 2 of durable worker execution: polls an already-persisted provider_job_id once.
+ * Never resubmits the task.
+ */
+export async function pollProviderTaskStatus(job, options = {}) {
+  if (!job.provider_job_id) {
+    const err = new Error(`Cannot poll job ${job.job_id} without a persisted provider_job_id`);
+    err.code = 'MISSING_PROVIDER_JOB_ID';
+    throw err;
+  }
+
+  if (hasTestProviderAdapter(job.provider)) {
+    const custom = customAdapters.get(job.provider);
+    if (custom && typeof custom.poll === 'function') {
+      return custom.poll(job, options);
+    }
+  }
+
+  const apiKey = process.env.KIE_API_KEY;
+  if (!apiKey || !apiKey.trim()) {
+    const err = new Error('Server KIE_API_KEY is not configured for status polling');
+    err.code = 'PROVIDER_CREDENTIALS_MISSING';
+    err.retryablePoll = true;
+    throw err;
+  }
+
+  const fetchFn = options.fetchImpl || globalThis.fetch.bind(globalThis);
+  const baseUrl = getKieServerBaseUrl();
+
+  const pollRes = await fetchFn(
+    `${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(job.provider_job_id)}`,
+    {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    }
   );
-  err.code = 'MODEL_WORKER_NOT_VERIFIED';
-  err.status = 503;
-  err.statusCode = 503;
-  throw err;
+
+  if (!pollRes.ok) {
+    const err = new Error(`Kie.ai recordInfo HTTP ${pollRes.status}`);
+    err.statusCode = pollRes.status;
+    err.retryablePoll = pollRes.status >= 500 || pollRes.status === 429 || pollRes.status === 408;
+    throw err;
+  }
+
+  const pollData = await pollRes.json().catch(() => ({}));
+  const d = pollData.data || {};
+
+  if (d.state === 'success') {
+    let urls = [];
+    try {
+      urls = JSON.parse(d.resultJson || '{}').resultUrls || [];
+    } catch {
+      urls = [];
+    }
+    if (!urls.length) {
+      const err = new Error('Kie.ai task succeeded without output URL');
+      err.deterministicFailure = true;
+      throw err;
+    }
+    return {
+      status: 'succeeded',
+      providerJobId: job.provider_job_id,
+      sourceUrl: urls[0],
+      actualCredits:
+        d.creditsConsumed !== undefined && Number.isFinite(Number(d.creditsConsumed))
+          ? Number(d.creditsConsumed)
+          : job.estimated_cost,
+    };
+  }
+
+  if (d.state === 'fail') {
+    return {
+      status: 'failed',
+      providerJobId: job.provider_job_id,
+      error: d.failMsg || 'Kie.ai generation failed',
+    };
+  }
+
+  return {
+    status: 'running',
+    providerJobId: job.provider_job_id,
+    stage: d.state || 'generating',
+    progress: typeof d.progress === 'number' ? d.progress : null,
+  };
 }
 
 export async function dispatchToProvider(job, options = {}) {
-  if (hasTestProviderAdapter(job.provider)) {
-    const custom = customAdapters.get(job.provider);
-    return custom(job, options);
+  const submitted = await submitTaskToProvider(job, options);
+  if (submitted.immediateCompletion) {
+    return {
+      providerJobId: submitted.providerJobId,
+      sourceUrl: submitted.immediateCompletion.sourceUrl,
+      actualCredits: submitted.immediateCompletion.actualCredits,
+    };
   }
-  if (job.provider === 'timecapsule-gpu') {
-    return executeTimecapsuleGpuAdapter(job, options);
+  const pollIntervalMs = Number(process.env.TIMECAPSULE_KIE_POLL_INTERVAL_MS || 50);
+  const jobWithProviderId = { ...job, provider_job_id: submitted.providerJobId };
+  for (let i = 0; i < 180; i++) {
+    const status = await pollProviderTaskStatus(jobWithProviderId, options);
+    if (status.status === 'succeeded') {
+      return status;
+    }
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'Kie.ai generation failed');
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
-  return executeKieServerAdapter(job, options);
+  throw new Error('Kie.ai generation timed out');
 }

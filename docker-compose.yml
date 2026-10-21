@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: timecapsule-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-timecapsule}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-timecapsule_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-timecapsule}
+    # Bind strictly to loopback interface (127.0.0.1) so the database is never exposed publicly.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - timecapsule_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-timecapsule} -d $${POSTGRES_DB:-timecapsule}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  timecapsule_pgdata:
+    name: timecapsule_pgdata

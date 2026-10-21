@@ -1,321 +1,1464 @@
-import { EventEmitter } from 'events';
 import crypto from 'crypto';
+import {
+  query,
+  withTransaction,
+  parseSafeCreditBigInt,
+  assertValidCreditUnits,
+  runMigrations,
+  seedDevelopmentTenant,
+} from './db.js';
+import { validateExternalMediaUrl } from './media-validator.js';
 
-const globalStoreKey = '__TIMECAPSULE_AUTHORITATIVE_STORE__';
-
-function createInitialState(initialCredits = 5000) {
-  const emitter = new EventEmitter();
-  emitter.setMaxListeners(200);
+function formatJobRow(row) {
+  if (!row) return null;
   return {
-    jobs: new Map(),
-    simulationJobs: new Map(),
-    idempotencyIndex: new Map(),
-    tenants: new Map([
-      [
-        'org_preview_default',
-        {
-          tenant_id: 'org_preview_default',
-          credits_balance: initialCredits,
-          credits_reserved: 0,
-          reservations: new Map(),
-          ledger: [],
-        },
-      ],
-      [
-        'org_default',
-        {
-          tenant_id: 'org_default',
-          credits_balance: initialCredits,
-          credits_reserved: 0,
-          reservations: new Map(),
-          ledger: [],
-        },
-      ],
-    ]),
-    assets: new Map(),
-    emitter,
+    job_id: row.job_id,
+    tenant_id: row.tenant_id,
+    user_id: row.user_id,
+    project_id: row.project_id,
+    idempotency_key: row.idempotency_key,
+    modality: row.modality,
+    model: row.model,
+    resolved_provider_model: row.resolved_provider_model,
+    inputs: row.inputs_json || {},
+    workflow: row.workflow_json || {},
+    delivery: row.delivery_json || {},
+    status: row.status,
+    submission_state: row.submission_state,
+    submission_attempt_id: row.submission_attempt_id,
+    submission_attempts: Number(row.submission_attempts || 0),
+    poll_attempts: Number(row.poll_attempts || 0),
+    max_submission_attempts: Number(row.max_submission_attempts || 3),
+    max_poll_attempts: Number(row.max_poll_attempts || 180),
+    next_run_at: row.next_run_at ? new Date(row.next_run_at).toISOString() : null,
+    lease_owner: row.lease_owner,
+    lease_expires_at: row.lease_expires_at ? new Date(row.lease_expires_at).toISOString() : null,
+    fencing_token: Number(row.fencing_token || 0),
+    progress: Number(row.progress || 0),
+    provider: row.provider,
+    provider_job_id: row.provider_job_id,
+    credits_reserved: parseSafeCreditBigInt(row.credits_reserved, 'credits_reserved'),
+    estimated_cost: parseSafeCreditBigInt(row.estimated_cost, 'estimated_cost'),
+    actual_cost:
+      row.actual_cost !== null && row.actual_cost !== undefined
+        ? parseSafeCreditBigInt(row.actual_cost, 'actual_cost')
+        : null,
+    last_event_version: Number(row.last_event_version || 0),
+    events_url: row.events_url,
+    output: row.output_json || null,
+    outputs: row.outputs_json || [],
+    error: row.error || null,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,
   };
 }
 
-function getState() {
-  if (!globalThis[globalStoreKey]) {
-    globalThis[globalStoreKey] = createInitialState();
-  }
-  return globalThis[globalStoreKey];
-}
-
-export function resetStoreForTests(initialCredits = 5000) {
-  globalThis[globalStoreKey] = createInitialState(initialCredits);
-  return globalThis[globalStoreKey];
-}
-
-export function ensureTenant(tenantId = 'org_default', defaultCredits = 5000) {
-  const state = getState();
-  if (!state.tenants.has(tenantId)) {
-    state.tenants.set(tenantId, {
-      tenant_id: tenantId,
-      credits_balance: defaultCredits,
-      credits_reserved: 0,
-      reservations: new Map(),
-      ledger: [],
-    });
-  }
-  return state.tenants.get(tenantId);
-}
-
-export function getTenantCredits(tenantId = 'org_default') {
-  const tenant = ensureTenant(tenantId);
+function formatEventRow(row) {
+  if (!row) return null;
   return {
-    tenant_id: tenant.tenant_id,
-    available_credits: tenant.credits_balance - tenant.credits_reserved,
-    total_credits: tenant.credits_balance,
-    reserved_credits: tenant.credits_reserved,
+    seq_id: Number(row.seq_id),
+    event_id: row.event_id,
+    event_version: Number(row.event_version),
+    job_id: row.job_id,
+    tenant_id: row.tenant_id,
+    type: row.type,
+    status: row.status,
+    progress: Number(row.progress || 0),
+    provider: row.provider,
+    provider_job_id: row.provider_job_id,
+    occurred_at: row.occurred_at ? new Date(row.occurred_at).toISOString() : null,
+    data: row.data_json || {},
   };
 }
 
-export function reserveCredits(tenantId, jobId, amount) {
-  const tenant = ensureTenant(tenantId);
-  const numericAmount = Math.max(0, Math.round(Number(amount) || 0));
-  const available = tenant.credits_balance - tenant.credits_reserved;
-  if (available < numericAmount) {
-    const err = new Error(`Insufficient credits: required ${numericAmount}, available ${available}`);
-    err.code = 'INSUFFICIENT_CREDITS';
-    err.statusCode = 402;
+function formatAssetRow(row) {
+  if (!row) return null;
+  return {
+    asset_id: row.asset_id,
+    tenant_id: row.tenant_id,
+    job_id: row.job_id,
+    modality: row.modality,
+    content_type: row.content_type,
+    storage_type: row.storage_type,
+    durable: Boolean(row.durable),
+    private: Boolean(row.private),
+    source_url: row.source_url,
+    filename: row.filename,
+    status: row.status,
+    url: row.url,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+  };
+}
+
+/**
+ * Resets the PostgreSQL tables and seeds explicit test tenants.
+ * Restricted strictly to non-production test environments.
+ */
+export async function resetStoreForTests(
+  initialCredits = 5000,
+  tenantIds = ['org_preview_default', 'org_default']
+) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('resetStoreForTests is forbidden in production');
+  }
+  await runMigrations();
+  await withTransaction(async (client) => {
+    await client.query(
+      'TRUNCATE TABLE job_events, assets, credit_ledger, credit_reservations, idempotency_keys, jobs, tenants RESTART IDENTITY CASCADE'
+    );
+  });
+  for (const tenantId of tenantIds) {
+    await seedDevelopmentTenant({ tenantId, targetCredits: initialCredits });
+  }
+}
+
+/**
+ * Reads tenant credit balances from PostgreSQL without auto-creating free credits on boot.
+ */
+export async function getTenantCredits(tenantId) {
+  if (!tenantId) {
+    const err = new Error('tenantId is required');
+    err.code = 'MISSING_TENANT_ID';
+    err.statusCode = 400;
     throw err;
   }
-  tenant.credits_reserved += numericAmount;
-  tenant.reservations.set(jobId, {
-    job_id: jobId,
-    amount: numericAmount,
-    status: 'reserved',
-    reserved_at: new Date().toISOString(),
-  });
-  tenant.ledger.push({
-    entry_id: `led_${crypto.randomBytes(6).toString('hex')}`,
-    job_id: jobId,
-    type: 'reserve',
-    amount: numericAmount,
-    occurred_at: new Date().toISOString(),
-  });
-  return numericAmount;
-}
-
-export function settleCredits(tenantId, jobId, actualCost = null) {
-  const tenant = ensureTenant(tenantId);
-  const reservation = tenant.reservations.get(jobId);
-  if (!reservation || reservation.status !== 'reserved') return 0;
-
-  const cost =
-    actualCost !== null && Number.isFinite(Number(actualCost))
-      ? Math.max(0, Math.round(Number(actualCost)))
-      : reservation.amount;
-
-  tenant.credits_reserved = Math.max(0, tenant.credits_reserved - reservation.amount);
-  tenant.credits_balance = Math.max(0, tenant.credits_balance - cost);
-  reservation.status = 'settled';
-  reservation.settled_amount = cost;
-  reservation.settled_at = new Date().toISOString();
-
-  tenant.ledger.push({
-    entry_id: `led_${crypto.randomBytes(6).toString('hex')}`,
-    job_id: jobId,
-    type: 'settle',
-    amount: cost,
-    occurred_at: reservation.settled_at,
-  });
-  return cost;
-}
-
-export function releaseCredits(tenantId, jobId) {
-  const tenant = ensureTenant(tenantId);
-  const reservation = tenant.reservations.get(jobId);
-  if (!reservation || reservation.status !== 'reserved') return 0;
-
-  tenant.credits_reserved = Math.max(0, tenant.credits_reserved - reservation.amount);
-  reservation.status = 'released';
-  reservation.released_at = new Date().toISOString();
-
-  tenant.ledger.push({
-    entry_id: `led_${crypto.randomBytes(6).toString('hex')}`,
-    job_id: jobId,
-    type: 'release',
-    amount: reservation.amount,
-    occurred_at: reservation.released_at,
-  });
-  return reservation.amount;
-}
-
-export function getIdempotentJob(tenantId, idempotencyKey) {
-  if (!idempotencyKey) return null;
-  const state = getState();
-  const compositeKey = `${tenantId}:${idempotencyKey}`;
-  const jobId = state.idempotencyIndex.get(compositeKey);
-  if (!jobId) return null;
-  return state.jobs.get(jobId) || state.simulationJobs.get(jobId) || null;
-}
-
-export function createJobRecord({
-  tenantId = 'org_default',
-  userId = 'usr_default',
-  projectId = 'prj_default',
-  idempotencyKey = null,
-  modality = 'image',
-  model,
-  inputs = {},
-  workflow = {},
-  delivery = {},
-  provider = 'kie',
-  creditsReserved = 0,
-  estimatedCost = 0,
-  simulationMode = false,
-}) {
-  const state = getState();
-  if (idempotencyKey) {
-    const existing = getIdempotentJob(tenantId, idempotencyKey);
-    if (existing) return { job: existing, deduplicated: true };
+  const res = await query(
+    `SELECT tenant_id, credits_balance, credits_reserved
+     FROM tenants
+     WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  if (res.rowCount === 0) {
+    return {
+      tenant_id: tenantId,
+      available_credits: 0,
+      total_credits: 0,
+      reserved_credits: 0,
+    };
   }
-
-  const jobId = `${simulationMode ? 'sim_job' : 'job'}_${crypto.randomBytes(8).toString('hex')}`;
-  const now = new Date().toISOString();
-
-  const job = {
-    job_id: jobId,
-    tenant_id: tenantId,
-    user_id: userId,
-    project_id: projectId,
-    idempotency_key: idempotencyKey,
-    modality,
-    model,
-    inputs,
-    workflow,
-    delivery,
-    status: 'queued',
-    progress: 0,
-    provider,
-    provider_job_id: null,
-    simulation: Boolean(simulationMode),
-    billable: !simulationMode,
-    credits_reserved: simulationMode ? 0 : creditsReserved,
-    estimated_cost: simulationMode ? 0 : estimatedCost,
-    actual_cost: null,
-    events_url: `/api/v1/generations/${jobId}/events`,
-    output: null,
-    outputs: [],
-    error: null,
-    events: [],
-    created_at: now,
-    updated_at: now,
+  const row = res.rows[0];
+  const balance = parseSafeCreditBigInt(row.credits_balance, 'credits_balance');
+  const reserved = parseSafeCreditBigInt(row.credits_reserved, 'credits_reserved');
+  return {
+    tenant_id: row.tenant_id,
+    available_credits: balance - reserved,
+    total_credits: balance,
+    reserved_credits: reserved,
   };
+}
 
-  if (simulationMode) {
-    state.simulationJobs.set(jobId, job);
-  } else {
-    state.jobs.set(jobId, job);
+export async function getTenantLedger(tenantId) {
+  const res = await query(
+    `SELECT entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json, occurred_at
+     FROM credit_ledger
+     WHERE tenant_id = $1
+     ORDER BY occurred_at ASC, entry_id ASC`,
+    [tenantId]
+  );
+  return res.rows.map((r) => ({
+    entry_id: r.entry_id,
+    tenant_id: r.tenant_id,
+    job_id: r.job_id,
+    entry_type: r.entry_type,
+    amount: parseSafeCreditBigInt(r.amount, 'amount'),
+    balance_after: parseSafeCreditBigInt(r.balance_after, 'balance_after'),
+    reserved_after: parseSafeCreditBigInt(r.reserved_after, 'reserved_after'),
+    metadata: r.metadata_json || {},
+    occurred_at: new Date(r.occurred_at).toISOString(),
+  }));
+}
+
+export async function getCreditReservation(jobId) {
+  const res = await query(
+    `SELECT job_id, tenant_id, amount, status, settled_amount, reserved_at, settled_at, released_at, updated_at
+     FROM credit_reservations
+     WHERE job_id = $1`,
+    [jobId]
+  );
+  if (res.rowCount === 0) return null;
+  const r = res.rows[0];
+  return {
+    job_id: r.job_id,
+    tenant_id: r.tenant_id,
+    amount: parseSafeCreditBigInt(r.amount, 'amount'),
+    status: r.status,
+    settled_amount:
+      r.settled_amount !== null && r.settled_amount !== undefined
+        ? parseSafeCreditBigInt(r.settled_amount, 'settled_amount')
+        : null,
+    reserved_at: new Date(r.reserved_at).toISOString(),
+    settled_at: r.settled_at ? new Date(r.settled_at).toISOString() : null,
+    released_at: r.released_at ? new Date(r.released_at).toISOString() : null,
+  };
+}
+
+/**
+ * Checks if an idempotency key already exists for a tenant BEFORE checking current provider
+ * credentials, so an already-accepted idempotent request can still be replayed even if
+ * provider configuration later becomes unavailable.
+ */
+export async function checkExistingIdempotentJob(tenantId, idempotencyKey, requestFingerprint) {
+  if (!idempotencyKey) return null;
+  const res = await query(
+    `SELECT ik.request_fingerprint, j.*
+     FROM idempotency_keys ik
+     JOIN jobs j ON j.tenant_id = ik.tenant_id AND j.job_id = ik.job_id
+     WHERE ik.tenant_id = $1 AND ik.idempotency_key = $2`,
+    [tenantId, idempotencyKey]
+  );
+  if (res.rowCount === 0) return null;
+  const row = res.rows[0];
+  if (requestFingerprint && row.request_fingerprint !== requestFingerprint) {
+    const err = new Error(
+      `Idempotency-Key "${idempotencyKey}" has already been used with a different request payload`
+    );
+    err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
+    err.status = 409;
+    err.statusCode = 409;
+    throw err;
   }
-  if (idempotencyKey) {
-    state.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, jobId);
+  return formatJobRow(row);
+}
+
+/**
+ * Creates the job, reservation, ledger entry, idempotency binding, initial job event,
+ * and durable worker dispatch eligibility in a single ACID PostgreSQL transaction.
+ *
+ * Lock order:
+ *   1. tenants (FOR UPDATE)
+ *   2. jobs (INSERT)
+ *   3. credit_reservations (INSERT)
+ *   4. credit_ledger (INSERT)
+ *   5. idempotency_keys (INSERT)
+ *   6. job_events (INSERT)
+ */
+export async function createSubmissionTransaction({
+  tenantId,
+  userId,
+  projectId,
+  idempotencyKey = null,
+  requestFingerprint,
+  canonicalPayload,
+  modality,
+  model,
+  resolvedProviderModel,
+  provider,
+  inputs,
+  workflow,
+  delivery,
+  estimatedCost,
+}) {
+  const validCost = assertValidCreditUnits(estimatedCost, {
+    allowZero: false,
+    fieldName: 'estimatedCost',
+  });
+
+  return withTransaction(async (client) => {
+    // Ensure a 0-balance tenant row exists if never seeded, then acquire row lock (Lock #1: tenants)
+    await client.query(
+      `INSERT INTO tenants (tenant_id, credits_balance, credits_reserved)
+       VALUES ($1, 0, 0)
+       ON CONFLICT (tenant_id) DO NOTHING`,
+      [tenantId]
+    );
+
+    const tenantRes = await client.query(
+      `SELECT tenant_id, credits_balance, credits_reserved
+       FROM tenants
+       WHERE tenant_id = $1
+       FOR UPDATE`,
+      [tenantId]
+    );
+    const tenantRow = tenantRes.rows[0];
+
+    // Re-check idempotency under the tenant row lock so concurrent duplicate requests serialize cleanly
+    if (idempotencyKey) {
+      const idemRes = await client.query(
+        `SELECT ik.request_fingerprint, j.*
+         FROM idempotency_keys ik
+         JOIN jobs j ON j.tenant_id = ik.tenant_id AND j.job_id = ik.job_id
+         WHERE ik.tenant_id = $1 AND ik.idempotency_key = $2`,
+        [tenantId, idempotencyKey]
+      );
+      if (idemRes.rowCount > 0) {
+        const existingRow = idemRes.rows[0];
+        if (existingRow.request_fingerprint !== requestFingerprint) {
+          const err = new Error(
+            `Idempotency-Key "${idempotencyKey}" has already been used with a different request payload`
+          );
+          err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
+          err.status = 409;
+          err.statusCode = 409;
+          throw err;
+        }
+        return {
+          job: formatJobRow(existingRow),
+          deduplicated: true,
+        };
+      }
+    }
+
+    const currentBalance = parseSafeCreditBigInt(tenantRow.credits_balance, 'credits_balance');
+    const currentReserved = parseSafeCreditBigInt(tenantRow.credits_reserved, 'credits_reserved');
+    const available = currentBalance - currentReserved;
+
+    if (available < validCost) {
+      const err = new Error(
+        `Insufficient credits: required ${validCost}, available ${available}`
+      );
+      err.code = 'INSUFFICIENT_CREDITS';
+      err.status = 402;
+      err.statusCode = 402;
+      throw err;
+    }
+
+    const newReserved = currentReserved + validCost;
+    await client.query(
+      `UPDATE tenants
+       SET credits_reserved = $2, updated_at = NOW()
+       WHERE tenant_id = $1`,
+      [tenantId, newReserved]
+    );
+
+    const jobId = `job_${crypto.randomBytes(8).toString('hex')}`;
+    const eventsUrl = `/api/v1/generations/${jobId}/events`;
+
+    const jobInsertRes = await client.query(
+      `INSERT INTO jobs (
+         job_id, tenant_id, user_id, project_id, idempotency_key,
+         modality, model, resolved_provider_model, provider,
+         status, submission_state, progress,
+         credits_reserved, estimated_cost,
+         inputs_json, workflow_json, delivery_json,
+         last_event_version, events_url
+       ) VALUES (
+         $1, $2, $3, $4, $5,
+         $6, $7, $8, $9,
+         'queued', 'not_submitted', 0,
+         $10, $10,
+         $11::jsonb, $12::jsonb, $13::jsonb,
+         1, $14
+       ) RETURNING *`,
+      [
+        jobId,
+        tenantId,
+        userId,
+        projectId,
+        idempotencyKey,
+        modality,
+        model,
+        resolvedProviderModel,
+        provider,
+        validCost,
+        JSON.stringify(inputs || {}),
+        JSON.stringify(workflow || {}),
+        JSON.stringify(delivery || {}),
+        eventsUrl,
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO credit_reservations (
+         job_id, tenant_id, amount, status
+       ) VALUES ($1, $2, $3, 'reserved')`,
+      [jobId, tenantId, validCost]
+    );
+
+    const ledgerEntryId = `led_${crypto.randomBytes(8).toString('hex')}`;
+    await client.query(
+      `INSERT INTO credit_ledger (
+         entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json
+       ) VALUES ($1, $2, $3, 'reserve', $4, $5, $6, $7::jsonb)`,
+      [
+        ledgerEntryId,
+        tenantId,
+        jobId,
+        validCost,
+        currentBalance,
+        newReserved,
+        JSON.stringify({ model, modality, provider }),
+      ]
+    );
+
+    if (idempotencyKey) {
+      await client.query(
+        `INSERT INTO idempotency_keys (
+           tenant_id, idempotency_key, request_fingerprint, normalized_request_json, job_id
+         ) VALUES ($1, $2, $3, $4::jsonb, $5)`,
+        [
+          tenantId,
+          idempotencyKey,
+          requestFingerprint,
+          JSON.stringify(canonicalPayload),
+          jobId,
+        ]
+      );
+    }
+
+    const eventId = `evt_${crypto.randomBytes(8).toString('hex')}`;
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, 1, 'generation.accepted', 'queued', 0, $4, NULL, $5::jsonb)`,
+      [
+        eventId,
+        jobId,
+        tenantId,
+        provider,
+        JSON.stringify({
+          credits_reserved: validCost,
+          estimated_cost: validCost,
+        }),
+      ]
+    );
+
+    return {
+      job: formatJobRow(jobInsertRes.rows[0]),
+      deduplicated: false,
+    };
+  });
+}
+
+export async function getJob(jobId) {
+  if (!jobId) return null;
+  const res = await query('SELECT * FROM jobs WHERE job_id = $1', [jobId]);
+  if (res.rowCount === 0) return null;
+  return formatJobRow(res.rows[0]);
+}
+
+export async function listJobs(tenantId, limit = 50) {
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+  const res = await query(
+    `SELECT * FROM jobs
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC, job_id DESC
+     LIMIT $2`,
+    [tenantId, safeLimit]
+  );
+  return res.rows.map(formatJobRow);
+}
+
+/**
+ * Claims the next runnable job using `FOR UPDATE SKIP LOCKED`, increments `fencing_token`,
+ * and persists lease ownership before releasing the transaction.
+ *
+ * If an expired lease is found on a job whose `submission_state = 'submitting'` and
+ * `provider_job_id IS NULL`, the previous worker crashed after initiating submission
+ * but before persisting `provider_job_id`. Rather than blindly resubmitting or releasing
+ * credits, this transitions the job to `status = 'reconciling_submission'` and
+ * `submission_state = 'submission_unknown'`.
+ */
+export async function claimNextRunnableJob({ workerId, leaseDurationMs = 30000 }) {
+  if (!workerId) {
+    throw new Error('workerId is required to claim a job');
+  }
+  const safeLeaseMs = Math.max(25, Number(leaseDurationMs) || 30000);
+
+  return withTransaction(async (client) => {
+    const candidateRes = await client.query(
+      `SELECT *
+       FROM jobs
+       WHERE (
+         (status = 'queued' AND next_run_at <= NOW())
+         OR
+         (status = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= NOW()))
+       )
+       ORDER BY next_run_at ASC, created_at ASC
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED`
+    );
+
+    if (candidateRes.rowCount === 0) {
+      return null;
+    }
+
+    const row = candidateRes.rows[0];
+
+    // Recovery guard: if a previous worker crashed while `submission_state = 'submitting'`
+    // and before persisting `provider_job_id`, do NOT blindly resubmit.
+    if (row.submission_state === 'submitting' && !row.provider_job_id) {
+      const nextEventVersion = Number(row.last_event_version || 0) + 1;
+      const newFencingToken = Number(row.fencing_token || 0) + 1;
+      const reason =
+        'Worker lease expired after provider submission began but before provider_job_id was persisted; marked submission_unknown for reconciliation without resubmission.';
+
+      const reconciledRes = await client.query(
+        `UPDATE jobs
+         SET status = 'reconciling_submission',
+             submission_state = 'submission_unknown',
+             lease_owner = NULL,
+             lease_expires_at = NULL,
+             fencing_token = $2,
+             last_event_version = $3,
+             error = $4,
+             updated_at = NOW()
+         WHERE job_id = $1
+         RETURNING *`,
+        [row.job_id, newFencingToken, nextEventVersion, reason]
+      );
+
+      await client.query(
+        `INSERT INTO job_events (
+           event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+         ) VALUES ($1, $2, $3, $4, 'generation.reconciliation_required', 'reconciling_submission', $5, $6, NULL, $7::jsonb)`,
+        [
+          `evt_${crypto.randomBytes(8).toString('hex')}`,
+          row.job_id,
+          row.tenant_id,
+          nextEventVersion,
+          Number(row.progress || 0),
+          row.provider,
+          JSON.stringify({
+            reason,
+            submission_attempt_id: row.submission_attempt_id,
+          }),
+        ]
+      );
+
+      return {
+        job: formatJobRow(reconciledRes.rows[0]),
+        reconciliationRequired: true,
+      };
+    }
+
+    const newFencingToken = Number(row.fencing_token || 0) + 1;
+    const claimedRes = await client.query(
+      `UPDATE jobs
+       SET status = 'running',
+           lease_owner = $2,
+           lease_expires_at = NOW() + ($3 * INTERVAL '1 millisecond'),
+           fencing_token = $4,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [row.job_id, workerId, safeLeaseMs, newFencingToken]
+    );
+
+    return {
+      job: formatJobRow(claimedRes.rows[0]),
+      reconciliationRequired: false,
+    };
+  });
+}
+
+function createStaleFencingError(jobId, workerId, fencingToken) {
+  const err = new Error(
+    `Stale worker lease or fencing token for job ${jobId} (worker=${workerId}, token=${fencingToken})`
+  );
+  err.code = 'STALE_WORKER_FENCING_TOKEN';
+  err.status = 409;
+  err.statusCode = 409;
+  return err;
+}
+
+export async function heartbeatJobLease({
+  jobId,
+  workerId,
+  fencingToken,
+  leaseDurationMs = 30000,
+}) {
+  const safeLeaseMs = Math.max(500, Number(leaseDurationMs) || 30000);
+  const res = await query(
+    `UPDATE jobs
+     SET lease_expires_at = NOW() + ($4 * INTERVAL '1 millisecond'),
+         updated_at = NOW()
+     WHERE job_id = $1
+       AND lease_owner = $2
+       AND fencing_token = $3
+       AND status = 'running'
+     RETURNING *`,
+    [jobId, workerId, fencingToken, safeLeaseMs]
+  );
+  if (res.rowCount === 0) {
+    throw createStaleFencingError(jobId, workerId, fencingToken);
+  }
+  return formatJobRow(res.rows[0]);
+}
+
+/**
+ * Persists a unique `submission_attempt_id` and transitions `submission_state` to `'submitting'`
+ * BEFORE the worker contacts the external provider over the network.
+ */
+export async function beginProviderSubmissionAttempt({ jobId, workerId, fencingToken }) {
+  return withTransaction(async (client) => {
+    const jobRes = await client.query(
+      `SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE`,
+      [jobId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const row = jobRes.rows[0];
+    if (
+      row.status !== 'running' ||
+      row.lease_owner !== workerId ||
+      Number(row.fencing_token) !== Number(fencingToken)
+    ) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+
+    if (row.provider_job_id || row.submission_state === 'submitted') {
+      return formatJobRow(row);
+    }
+
+    if (row.submission_state !== 'not_submitted') {
+      const err = new Error(
+        `Cannot begin submission for job ${jobId} in submission_state=${row.submission_state}`
+      );
+      err.code = 'INVALID_SUBMISSION_STATE';
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const attemptId = `sub_${crypto.randomBytes(10).toString('hex')}`;
+    const nextEventVersion = Number(row.last_event_version || 0) + 1;
+    const nextAttempts = Number(row.submission_attempts || 0) + 1;
+
+    const updatedRes = await client.query(
+      `UPDATE jobs
+       SET submission_state = 'submitting',
+           submission_attempt_id = $2,
+           submission_started_at = NOW(),
+           submission_attempts = $3,
+           progress = GREATEST(progress, 0.05),
+           last_event_version = $4,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, attemptId, nextAttempts, nextEventVersion]
+    );
+
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.started', 'running', 0.05, $5, NULL, $6::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        row.job_id,
+        row.tenant_id,
+        nextEventVersion,
+        row.provider,
+        JSON.stringify({
+          stage: 'submitting_to_provider',
+          submission_attempt_id: attemptId,
+          attempt: nextAttempts,
+        }),
+      ]
+    );
+
+    return formatJobRow(updatedRes.rows[0]);
+  });
+}
+
+/**
+ * Immediately persists `provider_job_id` and transitions `submission_state = 'submitted'`
+ * as soon as the provider returns a task ID.
+ */
+export async function recordProviderTaskId({
+  jobId,
+  workerId,
+  fencingToken,
+  providerJobId,
+}) {
+  if (!providerJobId) {
+    throw new Error('providerJobId is required');
+  }
+  return withTransaction(async (client) => {
+    const jobRes = await client.query(
+      `SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE`,
+      [jobId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const row = jobRes.rows[0];
+    if (
+      row.status !== 'running' ||
+      row.lease_owner !== workerId ||
+      Number(row.fencing_token) !== Number(fencingToken)
+    ) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+
+    const nextEventVersion = Number(row.last_event_version || 0) + 1;
+    const nextProgress = Math.max(Number(row.progress || 0), 0.15);
+
+    const updatedRes = await client.query(
+      `UPDATE jobs
+       SET provider_job_id = $2,
+           submission_state = 'submitted',
+           progress = $3,
+           last_event_version = $4,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, String(providerJobId), nextProgress, nextEventVersion]
+    );
+
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.progress', 'running', $5, $6, $7, $8::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        row.job_id,
+        row.tenant_id,
+        nextEventVersion,
+        nextProgress,
+        row.provider,
+        String(providerJobId),
+        JSON.stringify({ stage: 'queued_at_provider' }),
+      ]
+    );
+
+    return formatJobRow(updatedRes.rows[0]);
+  });
+}
+
+/**
+ * Transitions a job with an ambiguous provider submission outcome into
+ * `status = 'reconciling_submission'` and `submission_state = 'submission_unknown'`
+ * without releasing the credit reservation or resubmitting.
+ */
+export async function markSubmissionAmbiguous({
+  jobId,
+  workerId,
+  fencingToken,
+  reason,
+}) {
+  return withTransaction(async (client) => {
+    const jobRes = await client.query(
+      `SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE`,
+      [jobId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const row = jobRes.rows[0];
+    if (
+      row.status !== 'running' ||
+      row.lease_owner !== workerId ||
+      Number(row.fencing_token) !== Number(fencingToken)
+    ) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+
+    const nextEventVersion = Number(row.last_event_version || 0) + 1;
+    const updatedRes = await client.query(
+      `UPDATE jobs
+       SET status = 'reconciling_submission',
+           submission_state = 'submission_unknown',
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           last_event_version = $2,
+           error = $3,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, nextEventVersion, reason || 'Ambiguous provider submission outcome']
+    );
+
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.reconciliation_required', 'reconciling_submission', $5, $6, $7, $8::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        row.job_id,
+        row.tenant_id,
+        nextEventVersion,
+        Number(row.progress || 0),
+        row.provider,
+        row.provider_job_id,
+        JSON.stringify({
+          reason: reason || 'Ambiguous provider submission outcome',
+          submission_attempt_id: row.submission_attempt_id,
+        }),
+      ]
+    );
+
+    return formatJobRow(updatedRes.rows[0]);
+  });
+}
+
+/**
+ * Schedules a pre-submission retry (when provider was definitely not reached, e.g., ECONNREFUSED/429)
+ * or schedules the next status-poll tick for an already-submitted `provider_job_id`.
+ */
+export async function scheduleNextWorkerAttempt({
+  jobId,
+  workerId,
+  fencingToken,
+  delayMs = 500,
+  mode = 'poll', // 'submission_retry' | 'poll'
+  progress = null,
+  stage = null,
+  error = null,
+}) {
+  const safeDelayMs = Math.max(10, Number(delayMs) || 500);
+  return withTransaction(async (client) => {
+    const jobRes = await client.query(
+      `SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE`,
+      [jobId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const row = jobRes.rows[0];
+    if (
+      row.status !== 'running' ||
+      row.lease_owner !== workerId ||
+      Number(row.fencing_token) !== Number(fencingToken)
+    ) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+
+    if (mode === 'submission_retry') {
+      const updatedRes = await client.query(
+        `UPDATE jobs
+         SET status = 'queued',
+             submission_state = 'not_submitted',
+             submission_attempt_id = NULL,
+             submission_started_at = NULL,
+             lease_owner = NULL,
+             lease_expires_at = NULL,
+             next_run_at = NOW() + ($2 * INTERVAL '1 millisecond'),
+             error = $3,
+             updated_at = NOW()
+         WHERE job_id = $1
+         RETURNING *`,
+        [jobId, safeDelayMs, error]
+      );
+      return formatJobRow(updatedRes.rows[0]);
+    }
+
+    // mode === 'poll'
+    const nextPollAttempts = Number(row.poll_attempts || 0) + 1;
+    const nextProgress =
+      typeof progress === 'number'
+        ? Math.min(0.95, Math.max(Number(row.progress || 0), progress))
+        : Math.min(0.9, Math.max(Number(row.progress || 0.15), 0.15 + nextPollAttempts * 0.05));
+    const nextEventVersion = Number(row.last_event_version || 0) + 1;
+
+    const updatedRes = await client.query(
+      `UPDATE jobs
+       SET status = 'queued',
+           poll_attempts = $2,
+           progress = $3,
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           next_run_at = NOW() + ($4 * INTERVAL '1 millisecond'),
+           last_event_version = $5,
+           error = $6,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, nextPollAttempts, nextProgress, safeDelayMs, nextEventVersion, error]
+    );
+
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.progress', 'running', $5, $6, $7, $8::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        row.job_id,
+        row.tenant_id,
+        nextEventVersion,
+        nextProgress,
+        row.provider,
+        row.provider_job_id,
+        JSON.stringify({
+          stage: stage || 'generating',
+          poll_attempt: nextPollAttempts,
+        }),
+      ]
+    );
+
+    return formatJobRow(updatedRes.rows[0]);
+  });
+}
+
+/**
+ * Atomically transitions a job to `succeeded`, registers the external media reference,
+ * transitions `credit_reservations` (`reserved -> settled`), updates `tenants` balances,
+ * appends the immutable `settle` entry to `credit_ledger`, and persists `generation.succeeded`
+ * in `job_events`.
+ *
+ * Lock order:
+ *   1. tenants (FOR UPDATE)
+ *   2. jobs (FOR UPDATE)
+ *   3. credit_reservations (FOR UPDATE)
+ */
+export async function completeJobSuccess({
+  jobId,
+  tenantId = null,
+  workerId = null,
+  fencingToken = null,
+  providerJobId = null,
+  sourceUrl,
+  actualCredits = null,
+}) {
+  const validatedMedia = validateExternalMediaUrl(sourceUrl);
+
+  return withTransaction(async (client) => {
+    // Resolve tenantId if not passed
+    let resolvedTenantId = tenantId;
+    if (!resolvedTenantId) {
+      const lookupRes = await client.query(
+        'SELECT tenant_id FROM jobs WHERE job_id = $1',
+        [jobId]
+      );
+      if (lookupRes.rowCount === 0) {
+        throw new Error(`Job not found: ${jobId}`);
+      }
+      resolvedTenantId = lookupRes.rows[0].tenant_id;
+    }
+
+    // Lock #1: tenants
+    const tenantRes = await client.query(
+      `SELECT tenant_id, credits_balance, credits_reserved
+       FROM tenants
+       WHERE tenant_id = $1
+       FOR UPDATE`,
+      [resolvedTenantId]
+    );
+    if (tenantRes.rowCount === 0) {
+      throw new Error(`Tenant not found: ${resolvedTenantId}`);
+    }
+    const tenantRow = tenantRes.rows[0];
+
+    // Lock #2: jobs
+    const jobRes = await client.query(
+      `SELECT * FROM jobs
+       WHERE job_id = $1 AND tenant_id = $2
+       FOR UPDATE`,
+      [jobId, resolvedTenantId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const jobRow = jobRes.rows[0];
+
+    // Lock #3: credit_reservations
+    const resvRes = await client.query(
+      `SELECT * FROM credit_reservations
+       WHERE job_id = $1 AND tenant_id = $2
+       FOR UPDATE`,
+      [jobId, resolvedTenantId]
+    );
+    if (resvRes.rowCount === 0) {
+      throw new Error(`Credit reservation not found for job: ${jobId}`);
+    }
+    const resvRow = resvRes.rows[0];
+
+    // Duplicate completion event guard: if already succeeded, return idempotently without settling twice
+    if (jobRow.status === 'succeeded' && resvRow.status === 'settled') {
+      if (fencingToken !== null && Number(jobRow.fencing_token) !== Number(fencingToken)) {
+        throw createStaleFencingError(jobId, workerId, fencingToken);
+      }
+      return {
+        job: formatJobRow(jobRow),
+        alreadyTerminal: true,
+      };
+    }
+
+    // Conflicting terminal state guard: a failed/released job can never be settled
+    if (jobRow.status === 'failed' || resvRow.status === 'released') {
+      const err = new Error(
+        `Conflicting terminal transition: job ${jobId} is already in state status=${jobRow.status}, reservation=${resvRow.status}`
+      );
+      err.code = 'CONFLICTING_TERMINAL_STATE';
+      err.status = 409;
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Verify worker fencing token if called by a worker
+    if (fencingToken !== null) {
+      if (
+        jobRow.status !== 'running' ||
+        jobRow.lease_owner !== workerId ||
+        Number(jobRow.fencing_token) !== Number(fencingToken)
+      ) {
+        throw createStaleFencingError(jobId, workerId, fencingToken);
+      }
+    }
+
+    const reservedAmount = parseSafeCreditBigInt(resvRow.amount, 'reservation.amount');
+    const currentBalance = parseSafeCreditBigInt(tenantRow.credits_balance, 'credits_balance');
+    const currentReserved = parseSafeCreditBigInt(tenantRow.credits_reserved, 'credits_reserved');
+
+    // Never silently overdraft: cap settled amount at the reserved amount (fixed-price reservation cap)
+    let settledCost = reservedAmount;
+    if (actualCredits !== null && actualCredits !== undefined && Number.isFinite(Number(actualCredits))) {
+      const requestedActual = Math.max(0, Math.round(Number(actualCredits)));
+      settledCost = Math.min(reservedAmount, requestedActual);
+    }
+
+    const newReserved = currentReserved - reservedAmount;
+    const newBalance = currentBalance - settledCost;
+
+    // 1. Transition reservation: reserved -> settled
+    await client.query(
+      `UPDATE credit_reservations
+       SET status = 'settled',
+           settled_amount = $2,
+           settled_at = NOW(),
+           updated_at = NOW()
+       WHERE job_id = $1 AND status = 'reserved'`,
+      [jobId, settledCost]
+    );
+
+    // 2. Update tenant balances
+    await client.query(
+      `UPDATE tenants
+       SET credits_reserved = $2,
+           credits_balance = $3,
+           updated_at = NOW()
+       WHERE tenant_id = $1`,
+      [resolvedTenantId, newReserved, newBalance]
+    );
+
+    // 3. Append immutable ledger entry
+    const ledgerEntryId = `led_${crypto.randomBytes(8).toString('hex')}`;
+    await client.query(
+      `INSERT INTO credit_ledger (
+         entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json
+       ) VALUES ($1, $2, $3, 'settle', $4, $5, $6, $7::jsonb)`,
+      [
+        ledgerEntryId,
+        resolvedTenantId,
+        jobId,
+        settledCost,
+        newBalance,
+        newReserved,
+        JSON.stringify({
+          reserved_amount: reservedAmount,
+          provider_reported_credits: actualCredits,
+          capped_to_reservation: actualCredits !== null && Number(actualCredits) > reservedAmount,
+        }),
+      ]
+    );
+
+    // 4. Register external media reference in assets table
+    const assetId = `ast_${crypto.randomBytes(8).toString('hex')}`;
+    const assetUrl = `/api/v1/assets/${assetId}`;
+    const inferredMime =
+      ['video', 'i2v', 'v2v', 'lipsync'].includes(jobRow.modality) ? 'video/mp4' : 'image/png';
+    const isInlineData = validatedMedia.url.startsWith('data:');
+    const storageType = isInlineData ? 'inline_data_url' : 'external_url_reference';
+
+    await client.query(
+      `INSERT INTO assets (
+         asset_id, tenant_id, job_id, modality, content_type, storage_type, durable, private, source_url, status, url
+       ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, 'reference_registered', $8)`,
+      [
+        assetId,
+        resolvedTenantId,
+        jobId,
+        jobRow.modality,
+        inferredMime,
+        storageType,
+        validatedMedia.url,
+        assetUrl,
+      ]
+    );
+
+    const outputPayload = {
+      asset_id: assetId,
+      url: validatedMedia.url,
+      delivery_url: assetUrl,
+      content_type: inferredMime,
+      storage_type: storageType,
+      durable: false,
+    };
+
+    const nextEventVersion = Number(jobRow.last_event_version || 0) + 1;
+    const finalProviderJobId = providerJobId || jobRow.provider_job_id;
+
+    // 5. Transition job to terminal succeeded state
+    const updatedJobRes = await client.query(
+      `UPDATE jobs
+       SET status = 'succeeded',
+           submission_state = 'submitted',
+           provider_job_id = COALESCE($2, provider_job_id),
+           progress = 1,
+           actual_cost = $3,
+           output_json = $4::jsonb,
+           outputs_json = $5::jsonb,
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           last_event_version = $6,
+           error = NULL,
+           updated_at = NOW(),
+           completed_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [
+        jobId,
+        finalProviderJobId ? String(finalProviderJobId) : null,
+        settledCost,
+        JSON.stringify(outputPayload),
+        JSON.stringify([outputPayload]),
+        nextEventVersion,
+      ]
+    );
+
+    // 6. Persist terminal generation.succeeded event
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.succeeded', 'succeeded', 1, $5, $6, $7::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        jobId,
+        resolvedTenantId,
+        nextEventVersion,
+        jobRow.provider,
+        finalProviderJobId ? String(finalProviderJobId) : null,
+        JSON.stringify({
+          url: outputPayload.url,
+          delivery_url: outputPayload.delivery_url,
+          asset_id: outputPayload.asset_id,
+          storage_type: outputPayload.storage_type,
+          durable: false,
+          credits_settled: settledCost,
+        }),
+      ]
+    );
+
+    return {
+      job: formatJobRow(updatedJobRes.rows[0]),
+      alreadyTerminal: false,
+    };
+  });
+}
+
+/**
+ * Atomically transitions a job to `failed`, transitions `credit_reservations` (`reserved -> released`),
+ * restores `credits_reserved` on `tenants`, appends the immutable `release` entry to `credit_ledger`,
+ * and persists `generation.failed` in `job_events`.
+ *
+ * Lock order:
+ *   1. tenants (FOR UPDATE)
+ *   2. jobs (FOR UPDATE)
+ *   3. credit_reservations (FOR UPDATE)
+ */
+export async function completeJobFailure({
+  jobId,
+  tenantId = null,
+  workerId = null,
+  fencingToken = null,
+  errorMessage = 'Generation failed',
+}) {
+  return withTransaction(async (client) => {
+    let resolvedTenantId = tenantId;
+    if (!resolvedTenantId) {
+      const lookupRes = await client.query(
+        'SELECT tenant_id FROM jobs WHERE job_id = $1',
+        [jobId]
+      );
+      if (lookupRes.rowCount === 0) {
+        throw new Error(`Job not found: ${jobId}`);
+      }
+      resolvedTenantId = lookupRes.rows[0].tenant_id;
+    }
+
+    // Lock #1: tenants
+    const tenantRes = await client.query(
+      `SELECT tenant_id, credits_balance, credits_reserved
+       FROM tenants
+       WHERE tenant_id = $1
+       FOR UPDATE`,
+      [resolvedTenantId]
+    );
+    if (tenantRes.rowCount === 0) {
+      throw new Error(`Tenant not found: ${resolvedTenantId}`);
+    }
+    const tenantRow = tenantRes.rows[0];
+
+    // Lock #2: jobs
+    const jobRes = await client.query(
+      `SELECT * FROM jobs
+       WHERE job_id = $1 AND tenant_id = $2
+       FOR UPDATE`,
+      [jobId, resolvedTenantId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const jobRow = jobRes.rows[0];
+
+    // Lock #3: credit_reservations
+    const resvRes = await client.query(
+      `SELECT * FROM credit_reservations
+       WHERE job_id = $1 AND tenant_id = $2
+       FOR UPDATE`,
+      [jobId, resolvedTenantId]
+    );
+    if (resvRes.rowCount === 0) {
+      throw new Error(`Credit reservation not found for job: ${jobId}`);
+    }
+    const resvRow = resvRes.rows[0];
+
+    // Duplicate failure event guard: if already failed/released, return idempotently without releasing twice
+    if (jobRow.status === 'failed' && resvRow.status === 'released') {
+      if (fencingToken !== null && Number(jobRow.fencing_token) !== Number(fencingToken)) {
+        throw createStaleFencingError(jobId, workerId, fencingToken);
+      }
+      return {
+        job: formatJobRow(jobRow),
+        alreadyTerminal: true,
+      };
+    }
+
+    // Conflicting terminal state guard: a succeeded/settled job can never be released
+    if (jobRow.status === 'succeeded' || resvRow.status === 'settled') {
+      const err = new Error(
+        `Conflicting terminal transition: job ${jobId} is already in state status=${jobRow.status}, reservation=${resvRow.status}`
+      );
+      err.code = 'CONFLICTING_TERMINAL_STATE';
+      err.status = 409;
+      err.statusCode = 409;
+      throw err;
+    }
+
+    if (fencingToken !== null) {
+      if (
+        jobRow.status !== 'running' ||
+        jobRow.lease_owner !== workerId ||
+        Number(jobRow.fencing_token) !== Number(fencingToken)
+      ) {
+        throw createStaleFencingError(jobId, workerId, fencingToken);
+      }
+    }
+
+    const reservedAmount = parseSafeCreditBigInt(resvRow.amount, 'reservation.amount');
+    const currentBalance = parseSafeCreditBigInt(tenantRow.credits_balance, 'credits_balance');
+    const currentReserved = parseSafeCreditBigInt(tenantRow.credits_reserved, 'credits_reserved');
+    const newReserved = currentReserved - reservedAmount;
+
+    // 1. Transition reservation: reserved -> released
+    await client.query(
+      `UPDATE credit_reservations
+       SET status = 'released',
+           released_at = NOW(),
+           updated_at = NOW()
+       WHERE job_id = $1 AND status = 'reserved'`,
+      [jobId]
+    );
+
+    // 2. Update tenant reserved credits
+    await client.query(
+      `UPDATE tenants
+       SET credits_reserved = $2,
+           updated_at = NOW()
+       WHERE tenant_id = $1`,
+      [resolvedTenantId, newReserved]
+    );
+
+    // 3. Append immutable release ledger entry
+    const ledgerEntryId = `led_${crypto.randomBytes(8).toString('hex')}`;
+    await client.query(
+      `INSERT INTO credit_ledger (
+         entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json
+       ) VALUES ($1, $2, $3, 'release', $4, $5, $6, $7::jsonb)`,
+      [
+        ledgerEntryId,
+        resolvedTenantId,
+        jobId,
+        reservedAmount,
+        currentBalance,
+        newReserved,
+        JSON.stringify({ reason: errorMessage }),
+      ]
+    );
+
+    const nextEventVersion = Number(jobRow.last_event_version || 0) + 1;
+
+    // 4. Transition job to terminal failed state
+    const updatedJobRes = await client.query(
+      `UPDATE jobs
+       SET status = 'failed',
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           last_event_version = $2,
+           error = $3,
+           updated_at = NOW(),
+           completed_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, nextEventVersion, errorMessage]
+    );
+
+    // 5. Persist terminal generation.failed event
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.failed', 'failed', $5, $6, $7, $8::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        jobId,
+        resolvedTenantId,
+        nextEventVersion,
+        Number(jobRow.progress || 0),
+        jobRow.provider,
+        jobRow.provider_job_id,
+        JSON.stringify({ error: errorMessage }),
+      ]
+    );
+
+    return {
+      job: formatJobRow(updatedJobRes.rows[0]),
+      alreadyTerminal: false,
+    };
+  });
+}
+
+/**
+ * Operator reconciliation helper for jobs in `reconciling_submission` (`submission_unknown`):
+ * - action === 'attach_provider_task': attaches the discovered `providerJobId` and re-queues
+ *   the job for status polling (`submission_state = 'submitted'`).
+ * - action === 'confirm_not_submitted_refund': confirms the provider never created a task,
+ *   transitions the job to `failed`, and releases the credit reservation.
+ */
+export async function reconcileAmbiguousJob({
+  jobId,
+  action, // 'attach_provider_task' | 'confirm_not_submitted_refund'
+  providerJobId = null,
+  reason = 'Operator manual reconciliation',
+}) {
+  if (action === 'confirm_not_submitted_refund') {
+    return completeJobFailure({
+      jobId,
+      errorMessage: `Reconciled as not submitted: ${reason}`,
+    });
   }
 
-  return { job, deduplicated: false };
+  if (action === 'attach_provider_task') {
+    if (!providerJobId) {
+      throw new Error('providerJobId is required for attach_provider_task reconciliation');
+    }
+    return withTransaction(async (client) => {
+      const jobRes = await client.query(
+        'SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE',
+        [jobId]
+      );
+      if (jobRes.rowCount === 0) {
+        throw new Error(`Job not found: ${jobId}`);
+      }
+      const row = jobRes.rows[0];
+      if (row.status !== 'reconciling_submission') {
+        throw new Error(
+          `Job ${jobId} is in status=${row.status}; expected reconciling_submission`
+        );
+      }
+
+      const nextEventVersion = Number(row.last_event_version || 0) + 1;
+      const updatedRes = await client.query(
+        `UPDATE jobs
+         SET status = 'queued',
+             submission_state = 'submitted',
+             provider_job_id = $2,
+             next_run_at = NOW(),
+             last_event_version = $3,
+             error = NULL,
+             updated_at = NOW()
+         WHERE job_id = $1
+         RETURNING *`,
+        [jobId, String(providerJobId), nextEventVersion]
+      );
+
+      await client.query(
+        `INSERT INTO job_events (
+           event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+         ) VALUES ($1, $2, $3, $4, 'generation.progress', 'running', $5, $6, $7, $8::jsonb)`,
+        [
+          `evt_${crypto.randomBytes(8).toString('hex')}`,
+          row.job_id,
+          row.tenant_id,
+          nextEventVersion,
+          Math.max(Number(row.progress || 0), 0.15),
+          row.provider,
+          String(providerJobId),
+          JSON.stringify({ stage: 'reconciled_provider_task', reason }),
+        ]
+      );
+
+      return formatJobRow(updatedRes.rows[0]);
+    });
+  }
+
+  throw new Error(`Unsupported reconciliation action: ${action}`);
 }
 
-export function getJob(jobId) {
-  const state = getState();
-  return state.jobs.get(jobId) || state.simulationJobs.get(jobId) || null;
-}
+/**
+ * Fetches ordered persisted events for a job.
+ * Supports resuming from `afterEventVersion` or resolving `lastEventId` (which can be either
+ * an `event_id` string like `evt_...` or a numeric `event_version`).
+ */
+export async function getJobEventsAfter(jobId, { afterEventVersion = 0, lastEventId = null } = {}) {
+  let startVersion = Number(afterEventVersion) || 0;
 
-export function updateJob(jobId, patch = {}) {
-  const job = getJob(jobId);
-  if (!job) return null;
-  Object.assign(job, patch, { updated_at: new Date().toISOString() });
-  return job;
-}
-
-export function listJobs(tenantId = 'org_default', limit = 50) {
-  const state = getState();
-  const items = [];
-  for (const job of state.jobs.values()) {
-    if (!tenantId || job.tenant_id === tenantId) {
-      items.push(job);
+  if (lastEventId) {
+    const trimmed = String(lastEventId).trim();
+    if (/^\d+$/.test(trimmed)) {
+      startVersion = Math.max(startVersion, Number(trimmed));
+    } else {
+      const lookupRes = await query(
+        `SELECT event_version FROM job_events WHERE job_id = $1 AND event_id = $2`,
+        [jobId, trimmed]
+      );
+      if (lookupRes.rowCount > 0) {
+        startVersion = Math.max(startVersion, Number(lookupRes.rows[0].event_version));
+      }
     }
   }
-  items.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-  return items.slice(0, limit);
+
+  const res = await query(
+    `SELECT *
+     FROM job_events
+     WHERE job_id = $1 AND event_version > $2
+     ORDER BY event_version ASC`,
+    [jobId, startVersion]
+  );
+  return res.rows.map(formatEventRow);
 }
 
-export function emitJobEvent(jobId, { type, status, progress, providerJobId, data = {} }) {
-  const state = getState();
-  const job = state.jobs.get(jobId) || state.simulationJobs.get(jobId);
-  if (!job) return null;
-
-  if (status) job.status = status;
-  if (typeof progress === 'number') job.progress = progress;
-  if (providerJobId) job.provider_job_id = providerJobId;
-  job.updated_at = new Date().toISOString();
-
-  const envelope = {
-    event_id: `evt_${crypto.randomBytes(8).toString('hex')}`,
-    job_id: job.job_id,
-    tenant_id: job.tenant_id,
-    type,
-    status: job.status,
-    progress: job.progress,
-    provider: job.provider,
-    provider_job_id: job.provider_job_id,
-    occurred_at: job.updated_at,
-    data,
-  };
-
-  job.events.push(envelope);
-  state.emitter.emit(`job:${jobId}`, envelope);
-  return envelope;
-}
-
-export function getLatestJobSnapshotEvent(jobId) {
-  const job = getJob(jobId);
-  if (!job) return null;
-  if (job.events.length > 0) {
-    return job.events[job.events.length - 1];
-  }
-  return {
-    event_id: `evt_snapshot_${job.job_id}`,
-    job_id: job.job_id,
-    tenant_id: job.tenant_id,
-    type: 'generation.snapshot',
-    status: job.status,
-    progress: job.progress,
-    provider: job.provider,
-    provider_job_id: job.provider_job_id,
-    occurred_at: job.updated_at,
-    data: {
-      output: job.output,
-      error: job.error,
-    },
-  };
-}
-
-export function subscribeJobEvents(jobId, callback) {
-  const state = getState();
-  const channel = `job:${jobId}`;
-  state.emitter.on(channel, callback);
-  return () => {
-    state.emitter.off(channel, callback);
-  };
-}
-
-export function registerAsset(assetRecord) {
-  const state = getState();
+export async function registerAsset(assetRecord) {
   const assetId = assetRecord.asset_id || `ast_${crypto.randomBytes(8).toString('hex')}`;
-  const fullRecord = {
-    ...assetRecord,
-    asset_id: assetId,
-    url: `/api/v1/assets/${assetId}`,
-    created_at: new Date().toISOString(),
-  };
-  state.assets.set(assetId, fullRecord);
-  return fullRecord;
+  const assetUrl = `/api/v1/assets/${assetId}`;
+  const isInline = String(assetRecord.source_url || '').startsWith('data:');
+  const storageType =
+    assetRecord.storage_type || (isInline ? 'inline_data_url' : 'external_url_reference');
+
+  const res = await query(
+    `INSERT INTO assets (
+       asset_id, tenant_id, job_id, modality, content_type, storage_type, durable, private, source_url, filename, status, url
+     ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, $10)
+     RETURNING *`,
+    [
+      assetId,
+      assetRecord.tenant_id,
+      assetRecord.job_id || null,
+      assetRecord.modality || 'image',
+      assetRecord.content_type || 'application/octet-stream',
+      storageType,
+      assetRecord.source_url,
+      assetRecord.filename || null,
+      assetRecord.status || 'reference_registered',
+      assetUrl,
+    ]
+  );
+
+  return formatAssetRow(res.rows[0]);
 }
 
-export function getAsset(assetId) {
-  return getState().assets.get(assetId) || null;
+export async function getAsset(assetId) {
+  if (!assetId) return null;
+  const res = await query('SELECT * FROM assets WHERE asset_id = $1', [assetId]);
+  if (res.rowCount === 0) return null;
+  return formatAssetRow(res.rows[0]);
 }
