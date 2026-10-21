@@ -1,4 +1,5 @@
 import './globals.css';
+import '../packages/studio/dist/tailwind.css';
 import { TIMECAPSULE_BRAND } from '@/branding';
 
 export const metadata = {
