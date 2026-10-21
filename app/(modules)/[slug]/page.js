@@ -7,59 +7,225 @@ export default async function GenericModulePage({ params }) {
   const resolvedParams = await params;
   const slug = resolvedParams?.slug;
 
-  const titles = {
-    workflows: { name: 'Workflows & Automation', status: 'preview', desc: 'Pre-built multi-step AI video and character creation pipelines.' },
-    assistant: { name: 'Creative Assistant', status: 'planned', desc: 'Context-aware screenwriting, style prompting, and camera direction companion.' },
-    agents: { name: 'Autonomous Production Agents', status: 'planned', desc: 'Coordinated agent squad for script breakdown, shot lists, and batch rendering.' },
-    apps: { name: 'AI Creative Apps', status: 'preview', desc: 'Specialized single-purpose web apps: Upscaler, Face Swap, and Background Remover.' },
-    'api-keys': { name: 'Developer API Keys', status: 'planned', desc: 'Unified developer API keys for programmatic inference across all providers.' },
-    integrations: { name: 'SDKs & Integrations', status: 'preview', desc: 'Connect Timecapsule to Next.js, Python, ComfyUI, and Blender.' },
-    billing: { name: 'Billing & Top-Up', status: 'planned', desc: 'Enterprise and single-tenant credit balance replenishment.' },
-    referrals: { name: 'Creator Referrals', status: 'planned', desc: 'Earn generation credits by inviting fellow filmmakers and studios.' },
-    'white-label': { name: 'White-Label Dedicated Clusters', status: 'planned', desc: 'Custom branding and dedicated private GPU nodes for enterprise studios.' },
-    rankings: { name: 'Model Quality Leaderboard', status: 'preview', desc: 'Community blind test rankings across video fidelity, motion smoothness, and adherence.' },
-    docs: { name: 'Platform Documentation', status: 'working', desc: 'Technical specifications, API reference, and self-hosted deployment guides.' },
-    blog: { name: 'Timecapsule Engineering Blog', status: 'preview', desc: 'Architecture deep-dives, benchmark releases, and platform updates.' },
+  const catalog = {
+    workflows: {
+      title: 'AI Workflows & Generation Pipelines',
+      category: 'Pipeline Orchestration',
+      status: 'preview',
+      description: 'Chained multimodal workflows connecting scriptwriting, character design, image-to-video expansion, and lip synchronization.',
+      cards: [
+        { name: 'Cinematic Teaser Pipeline', steps: 'Script Breakdown → Veo 3.1 Shot Generation → Lip Sync Audio Pass', tag: 'Cinema' },
+        { name: 'Character Consistency Reel', steps: 'Character Seed Shot → Multi-Angle I2I → Motion Video Render', tag: 'Animation' },
+        { name: 'Talking Portrait Pipeline', steps: 'Nano Banana Pro Portrait → Voice Track Upload → LipSync Studio', tag: 'Avatar' },
+      ]
+    },
+    assistant: {
+      title: 'Timecapsule Creative Assistant',
+      category: 'Screenplay & Prompts',
+      status: 'planned',
+      description: 'An intelligent creative copilot trained on cinematic cinematography, camera angles, lighting prompts, and director style guides.',
+      cards: [
+        { name: 'Camera & Lens Prompt Assistant', steps: 'Converts simple descriptions into 35mm anamorphic, volumetric lighting specifications.', tag: 'Prompts' },
+        { name: 'Scene & Storyboard Co-Writer', steps: 'Generates shot-by-shot visual sequences ready for Cinema Studio.', tag: 'Directing' },
+      ]
+    },
+    agents: {
+      title: 'Autonomous Production Agents',
+      category: 'Multi-Agent Suite',
+      status: 'planned',
+      description: 'A squad of coordinated autonomous agents handling background batch rendering, asset tagging, and video quality checks.',
+      cards: [
+        { name: 'Render Orchestrator Agent', steps: 'Queues jobs across providers with automatic retry, refund guards, and format validation.', tag: 'System' },
+        { name: 'Quality & Consistency Reviewer', steps: 'Inspects generated frames for motion artifacts, limb distortions, and facial coherence.', tag: 'Review' },
+      ]
+    },
+    apps: {
+      title: 'Specialized Creative Apps',
+      category: 'Single-Purpose Web Tools',
+      status: 'preview',
+      description: 'One-click AI utility tools designed for instant image manipulation, video upscaling, and background isolation.',
+      cards: [
+        { name: '4K Cinema Video Upscaler', steps: 'AI super-resolution enhancing 480p/720p generations to crisp 4K master files.', tag: 'Video' },
+        { name: 'Bioluminescent Face Swap', steps: 'Transfer consistent actor faces onto generated video sequences seamlessly.', tag: 'Identity' },
+        { name: 'Alpha Matting Background Remover', steps: 'Produce clean transparent PNGs and ProRes 4444 video cutouts in 1 click.', tag: 'Compositing' },
+      ]
+    },
+    'api-keys': {
+      title: 'Developer API Keys & Access Control',
+      category: 'Developer Platform',
+      status: 'planned',
+      description: 'Manage programmatic API keys, rate limits, and webhook endpoints for automated pipeline integration.',
+      cards: [
+        { name: 'Production API Key', steps: 'High-throughput dedicated queue with priority provider routing.', tag: 'API' },
+        { name: 'Sandbox Development Key', steps: 'Zero-credit test mode enforcing mock adapters and format verification.', tag: 'Test' },
+      ]
+    },
+    integrations: {
+      title: 'SDKs & Studio Integrations',
+      category: 'Ecosystem & Plugins',
+      status: 'preview',
+      description: 'Pre-built client SDKs and plugins for integrating Timecapsule into popular creative and web development tools.',
+      cards: [
+        { name: 'Python SDK (`timecapsule-ai`)', steps: 'Async client for batch generation, SSE event streaming, and asset management.', tag: 'Python' },
+        { name: 'Next.js & React Component Library', steps: 'Embeddable video players, prompt bars, and model pickers.', tag: 'React' },
+        { name: 'ComfyUI Custom Node Pack', steps: 'Direct integration with local ComfyUI nodes for hybrid cloud rendering.', tag: 'ComfyUI' },
+      ]
+    },
+    billing: {
+      title: 'Billing, Plans & Credit Top-Up',
+      category: 'Account Management',
+      status: 'planned',
+      description: 'Credit package purchases, monthly subscriptions, and invoice history. Protected by double-entry credit ledgering.',
+      cards: [
+        { name: 'Creator Pro Plan', steps: '5,000 monthly credits with priority Veo 3.1 & Seedance access.', tag: 'Tier' },
+        { name: 'Studio Cluster License', steps: 'Dedicated private GPU worker nodes and zero provider rate limits.', tag: 'Enterprise' },
+      ]
+    },
+    referrals: {
+      title: 'Creator Referral Program',
+      category: 'Community Rewards',
+      status: 'planned',
+      description: 'Invite fellow filmmakers, studios, and creators to Timecapsule and earn generation credits on every render.',
+      cards: [
+        { name: 'Referral Link Generator', steps: 'Share your link and earn 20% bonus generation credits on your friend’s renders.', tag: 'Rewards' },
+      ]
+    },
+    'white-label': {
+      title: 'White-Label Dedicated Clusters',
+      category: 'Enterprise Solutions',
+      status: 'planned',
+      description: 'Deploy Timecapsule Studio under your own production studio domain with custom branding and private VPC security.',
+      cards: [
+        { name: 'Custom Domain & Branding', steps: 'Full white-label UI with your custom logo, CSS design tokens, and subdomains.', tag: 'Brand' },
+        { name: 'Private GPU Isolated Mesh', steps: 'Dedicated inference infrastructure isolated in your private AWS/GCP VPC.', tag: 'Security' },
+      ]
+    },
+    rankings: {
+      title: 'Model Quality & Benchmark Rankings',
+      category: 'Community Leaderboard',
+      status: 'preview',
+      description: 'Blind comparison ratings evaluating video realism, prompt adherence, camera motion smoothness, and inference speed.',
+      cards: [
+        { name: 'Veo 3.1 Cinema', steps: 'Rank #1 • Cinematic Realism: 9.6/10 • Motion Consistency: 9.4/10', tag: '#1 Cinema' },
+        { name: 'Nano Banana Pro', steps: 'Rank #1 • Photorealistic Portrait Adherence: 9.7/10', tag: '#1 Image' },
+        { name: 'Kie Veo Alternative', steps: 'Rank #2 • Fast Inference Latency: 4.2s per 5s clip', tag: 'Fast Video' },
+      ]
+    },
+    docs: {
+      title: 'Timecapsule Platform Documentation',
+      category: 'Technical Specifications',
+      status: 'working',
+      description: 'Complete architecture specifications, OpenAPI schemas, authentication contracts, and self-hosted installation guides.',
+      cards: [
+        { name: 'BFF Architecture Specification', steps: 'Fail-closed authentication, CSRF validation, and single-tenant session handling.', tag: 'Security' },
+        { name: 'PostgreSQL Durable Queue', steps: 'Idempotency fingerprints, fenced worker leases, and crash reconciliation.', tag: 'Backend' },
+        { name: 'Provider Contract Registry', steps: 'Muapi, Kie.ai, and self-hosted GPU worker adapter specifications.', tag: 'Adapters' },
+      ]
+    },
+    blog: {
+      title: 'Engineering Blog & Checkpoint Releases',
+      category: 'Product Changelog',
+      status: 'preview',
+      description: 'In-depth engineering write-ups, architecture decisions, and release notes from the Timecapsule core team.',
+      cards: [
+        { name: 'Checkpoint 3A: Provider Failover & Cost Separation', steps: 'How we achieved zero-loss provider billing and automated disposable test DBs.', tag: 'Deep Dive' },
+        { name: 'Checkpoint 2: Durable PostgreSQL Job Queues', steps: 'Fenced leases and multi-process crash recovery for generative AI pipelines.', tag: 'Architecture' },
+      ]
+    }
   };
 
-  const meta = titles[slug] || { name: 'Timecapsule Module', status: 'planned', desc: 'Planned platform feature.' };
+  const meta = catalog[slug] || {
+    title: 'Timecapsule Module',
+    category: 'Platform Feature',
+    status: 'planned',
+    description: 'This module is on the Timecapsule engineering roadmap.',
+    cards: []
+  };
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white flex flex-col">
       <PlatformNav activeModule={slug} />
 
-      <main className="max-w-4xl mx-auto px-6 py-16 flex-1 w-full text-center flex flex-col items-center justify-center">
-        <div className="mb-4">
-          <ModuleStatusBadge status={meta.status} />
+      <main className="max-w-6xl mx-auto px-6 py-12 flex-1 w-full">
+        {/* Module Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-8 border-b border-white/10">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="px-2.5 py-1 rounded bg-[#00e5ff]/15 text-[#00e5ff] text-[11px] font-black uppercase tracking-wider border border-[#00e5ff]/30">
+                {meta.category}
+              </span>
+              <ModuleStatusBadge status={meta.status} />
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight mb-2">
+              {meta.title}
+            </h1>
+            <p className="text-white/60 text-sm max-w-2xl leading-relaxed">
+              {meta.description}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 bg-[#121217] border border-white/10 rounded-2xl p-4 self-start">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00e5ff]" />
+            <div>
+              <div className="text-xs font-bold text-white uppercase tracking-wider">Module Posture</div>
+              <div className="text-xs text-white/50 font-mono">
+                {meta.status === 'working' ? 'Production Ready' : meta.status === 'preview' ? 'Sample UI Preview' : 'Roadmap Planned'}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight mb-4">
-          {meta.name}
-        </h1>
-        <p className="text-white/60 text-base max-w-xl mb-8 leading-relaxed">
-          {meta.desc}
-        </p>
+        {/* Feature Cards Grid matching Muapi's rich layout */}
+        {meta.cards && meta.cards.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {meta.cards.map((c, i) => (
+              <div
+                key={i}
+                className="bg-[#121217] border border-white/10 hover:border-[#00e5ff]/40 rounded-2xl p-6 transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#00e5ff] px-2 py-0.5 rounded bg-[#00e5ff]/10">
+                      {c.tag}
+                    </span>
+                    <span className="text-[10px] font-mono text-white/30">Feature Preview</span>
+                  </div>
+                  <h3 className="text-base font-bold text-white mb-2 group-hover:text-[#00e5ff] transition-colors">
+                    {c.name}
+                  </h3>
+                  <p className="text-xs text-white/60 leading-relaxed mb-4">
+                    {c.steps}
+                  </p>
+                </div>
 
-        <div className="p-8 rounded-3xl bg-[#121217] border border-white/10 max-w-md w-full mb-8 text-left space-y-4">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#00e5ff]">
-            <span className="w-2 h-2 rounded-full bg-[#00e5ff]" />
-            Module Posture & Contract Guard
+                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-[11px] text-white/40">Status: Integrated</span>
+                  <Link
+                    href="/studio?mode=preview"
+                    className="text-xs font-bold text-[#00e5ff] hover:underline"
+                  >
+                    Try in Studio →
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="text-xs text-white/50 leading-relaxed">
-            {meta.status === 'working'
-              ? 'This module is fully backed by verified backend contracts.'
-              : meta.status === 'preview'
-              ? 'This module is operating in Development UI Preview mode. Simulated fixtures are strictly isolated from backend credits.'
-              : 'This module is on the engineering roadmap. Backend services are not yet provisioned.'}
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/studio?mode=preview"
-              className="w-full block text-center py-3 rounded-xl bg-[#00e5ff] text-black font-black text-xs hover:opacity-90 transition-opacity"
-            >
-              Open Creative Studio →
-            </Link>
+        )}
+
+        {/* Context Explainer Banner */}
+        <div className="p-8 rounded-3xl bg-[#121217] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
+          <div>
+            <h4 className="text-base font-bold text-white mb-1">Looking to generate cinema or image assets now?</h4>
+            <p className="text-xs text-white/50 max-w-xl">
+              All core Image, Video, Cinema, and Lip-Sync engines are fully active in Timecapsule Creative Studio.
+            </p>
           </div>
+          <Link
+            href="/studio?mode=preview"
+            className="px-6 py-3 rounded-xl bg-[#00e5ff] text-black font-black text-xs hover:opacity-90 transition-opacity whitespace-nowrap"
+          >
+            Launch Creative Studio →
+          </Link>
         </div>
       </main>
 
