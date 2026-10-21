@@ -1,9 +1,15 @@
+'use client';
+
+import PlatformNav from '@/components/PlatformNav';
 import StandaloneShell from '@/components/StandaloneShell';
 
-export const metadata = {
-  title: 'Studio — Timecapsule',
-};
-
 export default function StudioPage() {
-  return <StandaloneShell />;
+  return (
+    <div className="h-screen flex flex-col bg-[#09090b] overflow-hidden">
+      <PlatformNav activeModule="studio" />
+      <div className="flex-1 overflow-hidden">
+        <StandaloneShell />
+      </div>
+    </div>
+  );
 }
