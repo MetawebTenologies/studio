@@ -57,6 +57,7 @@ export const SAMPLE_LIBRARY_ITEMS = [
 function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [previewState, setPreviewState] = useState('default'); // 'default' | 'loading' | 'empty' | 'error'
 
   const loadItems = useCallback(async () => {
     const collected = [];
@@ -142,24 +143,84 @@ function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
               Unified media archive across Image, Video, Cinema, and Lip Sync studios.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {['all', 'image', 'video'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
-                  filter === f
-                    ? 'bg-[#00e5ff] text-black'
-                    : 'bg-white/5 text-white/60 hover:text-white'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            {isPreviewMode && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+                <span className="text-white/40 px-2 font-bold uppercase tracking-wider text-[10px]">Preview State:</span>
+                {[
+                  { id: 'default', label: 'Default' },
+                  { id: 'loading', label: 'Loading' },
+                  { id: 'empty', label: 'Empty' },
+                  { id: 'error', label: 'Error' },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    onClick={() => setPreviewState(st.id)}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors ${
+                      previewState === st.id
+                        ? 'bg-amber-400 text-black'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              {['all', 'image', 'video'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                    filter === f
+                      ? 'bg-[#00e5ff] text-black'
+                      : 'bg-white/5 text-white/60 hover:text-white'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {previewState === 'error' && (
+          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+              <div>
+                <p className="font-bold text-sm">Preview Simulation: Generation API Failure</p>
+                <p className="text-xs text-red-300/80">Simulated 429 Provider Rate Limit with safe error redaction. No user credits were deducted.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPreviewState('default')}
+              className="text-xs bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-bold text-red-100 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {previewState === 'loading' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="bg-[#121217] border border-white/10 rounded-2xl overflow-hidden flex flex-col animate-pulse"
+              >
+                <div className="aspect-video bg-white/5 flex items-center justify-center">
+                  <span className="text-[#00e5ff] text-2xl animate-spin">◌</span>
+                </div>
+                <div className="p-4 space-y-2">
+                  <div className="h-3 bg-white/10 rounded w-1/3" />
+                  <div className="h-3 bg-white/5 rounded w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (previewState === 'empty' || filtered.length === 0) ? (
           <div className="border border-white/10 rounded-3xl p-12 text-center bg-[#121217]">
             <p className="text-white/60 text-base mb-4">
               No generated assets in your Timecapsule Library yet.
@@ -220,11 +281,17 @@ export default function StandaloneShell() {
 
   useEffect(() => {
     setHasMounted(true);
+    const searchParams = new URLSearchParams(window.location.search);
+    const isUrlPreview = searchParams.get('preview') === '1' || searchParams.get('mode') === 'preview';
+
     const mode = localStorage.getItem(TIMECAPSULE_BRAND.storageKeys.backendMode);
     const stored =
       localStorage.getItem(TIMECAPSULE_BRAND.storageKeys.apiKey) ||
       localStorage.getItem(STORAGE_KEY);
-    if (mode === 'bff') {
+    if (isUrlPreview) {
+      localStorage.setItem(TIMECAPSULE_BRAND.storageKeys.backendMode, 'preview');
+      setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
+    } else if (mode === 'bff') {
       setApiKey('TIMECAPSULE_BFF');
     } else if (mode === 'preview') {
       setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
