@@ -1,4 +1,4 @@
-// MATAI Library — every generated asset from the content-factory backend.
+// Timecapsule Library — unified generated media archive.
 // All media types in one place (images, videos, talking avatars), sorted with
 // the newest first. Requires a backend session; prompts sign-in otherwise.
 import { cfBackendEnabled, listLibrary } from '../lib/api.js';
@@ -50,7 +50,7 @@ function mediaBody(item) {
     }
     if (item.state === 'failed' || item.status === 'Failed') {
         return `<div class="w-full h-full flex flex-col items-center justify-center gap-2 bg-white/5">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff2d2d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
             <span class="text-[9px] font-bold uppercase tracking-widest text-secondary">Failed</span>
         </div>`;
     }
@@ -140,7 +140,7 @@ export function LibraryPage() {
         note.className = 'mx-auto max-w-md text-center mt-16 flex flex-col items-center gap-4';
         note.innerHTML = `
             <div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow mb-2">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ff2d2d" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/></svg>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/></svg>
             </div>
             <p class="text-sm text-secondary leading-relaxed">Sign in to your content-factory account to browse the shared library.</p>
             <button id="lib-signin-btn" class="px-6 py-3 rounded-xl bg-primary text-black text-[11px] font-black uppercase tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all">Sign in</button>

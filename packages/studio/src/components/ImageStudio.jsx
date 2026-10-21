@@ -544,7 +544,7 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
               </div>
             </div>
             {selectedModel === m.id && (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d9ff00" strokeWidth="4">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" strokeWidth="4">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
@@ -578,7 +578,7 @@ function SimpleDropdown({ title, options, selected, onSelect, onClose }) {
               {opt}
             </span>
             {selected === opt && (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d9ff00" strokeWidth="4">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" strokeWidth="4">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}

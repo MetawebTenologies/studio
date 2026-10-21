@@ -19,9 +19,9 @@ function createWindow() {
             nodeIntegration: false,
         },
         titleBarStyle: 'hiddenInset',
-        backgroundColor: '#0d0d0d',
+        backgroundColor: '#09090b',
         show: false,
-        title: 'Open Higgsfield AI',
+        title: 'Timecapsule Studio',
     });
 
     const indexPath = path.join(__dirname, '../dist/index.html');

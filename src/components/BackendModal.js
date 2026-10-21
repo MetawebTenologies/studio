@@ -10,13 +10,13 @@ export function BackendModal(onSuccess) {
     modal.innerHTML = `
         <div class="flex flex-col items-center text-center mb-8">
             <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow mb-6">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ff2d2d" stroke-width="2">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
                     <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
                     <path d="M8.5 8.5v.01"/>
                 </svg>
             </div>
-            <h2 class="text-2xl font-black text-white uppercase tracking-wider mb-2">Sign in</h2>
-            <p class="text-secondary text-sm">Use your content-factory account to enable credits, the shared library and prompt builder.</p>
+            <h2 class="text-2xl font-black text-white uppercase tracking-wider mb-2">Timecapsule Sign In</h2>
+            <p class="text-secondary text-sm">Sign in to enable credits, shared library, and prompt builder.</p>
         </div>
 
         <div class="space-y-6">

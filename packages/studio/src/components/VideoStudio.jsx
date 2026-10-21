@@ -42,7 +42,7 @@ async function downloadFile(url, filename) {
 // ── SVG icons (kept inline to avoid extra deps) ───────────────────────────────
 
 const CheckSvg = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d9ff00" strokeWidth="4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" strokeWidth="4">
         <polyline points="20 6 9 17 4 12" />
     </svg>
 );
@@ -58,7 +58,7 @@ const VideoReadySvg = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
         <polygon points="23 7 16 12 23 17 23 7" />
         <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-        <polyline points="7 10 10 13 15 8" stroke="#d9ff00" strokeWidth="2.5" />
+        <polyline points="7 10 10 13 15 8" stroke="#00e5ff" strokeWidth="2.5" />
     </svg>
 );
 

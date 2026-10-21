@@ -1,0 +1,19 @@
+{
+  "name": "@timecapsule/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./branding": "./src/branding.js",
+    "./models": "./src/models/index.js",
+    "./client": "./src/client/index.js",
+    "./server/store": "./src/server/store.js",
+    "./server/auth": "./src/server/auth.js",
+    "./server/providers": "./src/server/providers.js",
+    "./server/media": "./src/server/media.js",
+    "./server/orchestrator": "./src/server/orchestrator.js"
+  }
+}

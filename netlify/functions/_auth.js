@@ -119,9 +119,13 @@ function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex')
 }
 
-const SESSION_SECRET = sha256('matai-content-factory-session-v2') // hardcoded — no env needed
+const EPHEMERAL_FALLBACK_SECRET = crypto.randomBytes(32).toString('hex')
 function secret() {
-  return SESSION_SECRET
+  const configured = process.env.TIMECAPSULE_SESSION_SECRET || process.env.SESSION_SECRET
+  if (configured && String(configured).trim().length >= 16) {
+    return sha256(String(configured).trim())
+  }
+  return EPHEMERAL_FALLBACK_SECRET
 }
 
 function sign(value, purpose) {

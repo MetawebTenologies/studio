@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
+      "@/branding": ["./packages/timecapsule/src/branding.js"],
+      "@timecapsule/core": ["./packages/timecapsule/src/index.js"],
+      "@/packages/studio/src/models": ["./packages/timecapsule/src/models/index.js"],
+      "@/packages/studio/src/muapi": ["./packages/timecapsule/src/client/index.js"],
+      "@/packages/studio/src/kie": ["./packages/timecapsule/src/client/index.js"],
       "@/*": ["./*"]
     }
   }

@@ -1,16 +1,18 @@
 {
-  "name": "open-higgsfield-ai",
-  "description": "Open-source alternative to Higgsfield AI — AI image, video, cinema and lip sync studio",
+  "name": "timecapsule-studio",
+  "description": "Timecapsule — Multimodal AI cinema, video, image, and lip-sync studio",
   "private": true,
   "version": "1.0.0",
   "workspaces": [
-    "packages/studio"
+    "packages/studio",
+    "packages/timecapsule"
   ],
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:studio && next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --test tests/timecapsule.test.mjs",
     "build:studio": "cd packages/studio && npm run build",
     "setup": "npm install && npm run build:studio",
     "vite:dev": "vite",
@@ -20,9 +22,9 @@
     "electron:build:all": "vite build && electron-builder --mac --win"
   },
   "build": {
-    "appId": "ai.higgsfield.open",
-    "productName": "Open Higgsfield AI",
-    "copyright": "Copyright © 2025",
+    "appId": "studio.timecapsule.app",
+    "productName": "Timecapsule Studio",
+    "copyright": "Copyright © 2026 Timecapsule",
     "directories": { "output": "release" },
     "afterPack": "./afterPack.js",
     "files": ["dist/**/*", "electron/**/*"],

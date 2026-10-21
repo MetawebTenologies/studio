@@ -1,21 +1,16 @@
 :root {
-  /* Brand Colors */
-  --color-primary: #ff2d2d;
-  /* Neon Yellow-Green (Higgsfield Nano) */
-  --color-primary-hover: #e11d1d;
-  --color-accent: #a855f7;
-  /* Creative Purple */
-  --color-accent-hover: #9333ea;
+  /* Timecapsule Brand Colors */
+  --color-primary: #00e5ff;
+  --color-primary-hover: #38bdf8;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
   --color-danger: #ef4444;
 
   /* Backgrounds - Strict Dark Mode */
-  --bg-app: #050505;
-  /* Deepest Black */
-  --bg-panel: #0a0a0a;
-  /* Panel Background */
-  --bg-card: #141414;
-  /* Card/Input Background */
-  --bg-glass: rgba(10, 10, 10, 0.8);
+  --bg-app: #09090b;
+  --bg-panel: #121217;
+  --bg-card: #18181f;
+  --bg-glass: rgba(18, 18, 23, 0.85);
 
   /* Text */
   --text-primary: #ffffff;
@@ -36,8 +31,8 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-  --shadow-glow: 0 0 20px rgba(255, 45, 45, 0.4);
-  --shadow-glow-accent: 0 0 20px rgba(168, 85, 247, 0.4);
+  --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.35);
+  --shadow-glow-accent: 0 0 20px rgba(99, 102, 241, 0.4);
   --backdrop-blur: blur(20px);
 
   /* Transitions */
