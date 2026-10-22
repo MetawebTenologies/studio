@@ -9,6 +9,7 @@ export const PRIMARY_NAV = [
   { label: 'Rankings', href: '/rankings' },
   { label: 'Docs', href: '/docs' },
   { label: 'Blog', href: '/blog' },
+  { label: 'Pricing', href: '/pricing' },
   { label: 'Discord', href: 'https://github.com/MetawebTenologies/studio', external: true },
 ];
 
@@ -25,7 +26,6 @@ export const APP_SUBNAV = [
   { label: 'MCP & CLI', href: '/cli', status: 'working' },
   { label: 'Billing', href: '/billing', status: 'planned' },
   { label: 'Referral', href: '/referrals', status: 'planned' },
-  { label: 'White Label', href: '/white-label', status: 'planned' },
   { label: 'Usage', href: '/usage', status: 'working' },
 ];
 
@@ -33,47 +33,53 @@ export default function PlatformNav({ activeModule = 'studio' }) {
   const pathname = usePathname();
 
   return (
-    <header className="flex-shrink-0 bg-[#070709] border-b border-[#1c1c22] z-40 sticky top-0 backdrop-blur-md">
-      {/* Top Header - Exact Muapi Alignment */}
-      <div className="max-w-[1440px] mx-auto flex items-center justify-between px-6 lg:px-8 h-14">
-        {/* Left: Brand + Public Nav */}
+    <header className="flex-shrink-0 bg-[var(--tc-bg-card,#ffffff)]/90 border-b border-[var(--tc-border-divider,rgba(226,232,240,0.8))] z-40 sticky top-0 backdrop-blur-md transition-all">
+      {/* Top Header Row — 1400px Max Width */}
+      <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 xl:px-0 h-16">
+        {/* Left: Brand + Public Navigation */}
         <div className="flex items-center gap-8">
           <Link href="/explore" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#00e5ff] via-[#0284c7] to-[#2563eb] flex items-center justify-center text-black font-black text-xs shadow-[0_0_16px_rgba(0,229,255,0.4)]">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#00e5ff] via-[#3b82f6] to-[#6366f1] flex items-center justify-center text-white font-black text-xs shadow-sm">
               TC
             </div>
-            <span className="text-white font-extrabold text-base tracking-widest uppercase">
+            <span className="text-[var(--tc-text-primary,#0f172a)] font-extrabold text-base tracking-widest uppercase">
               {TIMECAPSULE_BRAND.name}
             </span>
           </Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="hidden lg:flex items-center gap-6" aria-label="Main Navigation">
             {PRIMARY_NAV.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive =
+                pathname === item.href ||
+                (item.href === '/explore' && (pathname === '/' || pathname === '/explore'));
+
               return (
                 <Link
                   key={item.label}
                   href={item.href}
                   target={item.external ? '_blank' : undefined}
-                  className={`text-sm font-medium transition-colors ${
+                  className={`inline-flex min-h-9 items-center text-[13px] font-semibold transition-all relative ${
                     isActive
-                      ? 'text-white font-semibold'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'text-[var(--tc-color-primary,#3b82f6)] font-bold'
+                      : 'text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)]'
                   }`}
                 >
                   {item.label}
+                  {isActive && (
+                    <div className="absolute -bottom-[16px] left-0 right-0 h-0.5 bg-[var(--tc-color-primary,#3b82f6)]" />
+                  )}
                 </Link>
               );
             })}
           </nav>
         </div>
 
-        {/* Right: Search Circle + Sign In + Avatar */}
-        <div className="flex items-center gap-3.5">
+        {/* Right: Search + Sign In Pill + Avatar */}
+        <div className="flex items-center gap-3">
           <Link
             href="/explore"
             aria-label="Search models"
-            className="w-9 h-9 rounded-full bg-[#141418] hover:bg-[#1f1f26] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+            className="w-9 h-9 rounded-full bg-[var(--tc-bg-page,#f8fafc)] hover:bg-[var(--tc-bg-subtle,#f1f5f9)] border border-[var(--tc-border-card,#e2e8f0)] flex items-center justify-center text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)] transition-colors shadow-xs"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
@@ -83,13 +89,13 @@ export default function PlatformNav({ activeModule = 'studio' }) {
 
           <Link
             href="/studio?preview=1"
-            className="px-5 py-1.5 rounded-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]"
+            className="px-4 py-2 rounded-full bg-[var(--tc-color-primary,#3b82f6)] hover:bg-[var(--tc-color-primary-hover,#2563eb)] text-white text-xs font-semibold transition-all shadow-sm"
           >
             Sign In
           </Link>
 
           <div
-            className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-white/10 select-none"
+            className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-slate-100 select-none shadow-xs"
             title="Single-Tenant Workspace User"
           >
             TC
@@ -98,38 +104,38 @@ export default function PlatformNav({ activeModule = 'studio' }) {
       </div>
 
       {/* Secondary Horizontal Sub-Nav */}
-      <div className="border-t border-[#18181f] bg-[#070709]">
-        <div className="max-w-[1440px] mx-auto flex items-center px-6 lg:px-8 overflow-x-auto no-scrollbar">
+      <div className="border-t border-[var(--tc-border-divider,rgba(226,232,240,0.7))] bg-[var(--tc-bg-page,#f8fafc)]/60">
+        <div className="max-w-[1400px] mx-auto flex items-center px-4 sm:px-6 xl:px-0 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-6 min-w-max">
             {APP_SUBNAV.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href.startsWith('/studio') && pathname.startsWith('/studio')) ||
-                (item.href === '/explore' && pathname === '/explore');
+                (item.href === '/explore' && (pathname === '/explore' || pathname === '/'));
 
               return (
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`relative py-2.5 text-xs md:text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
+                  className={`relative py-2.5 text-[12px] md:text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
                     isActive
-                      ? 'text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'text-[var(--tc-text-primary,#0f172a)] font-bold'
+                      : 'text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)]'
                   }`}
                 >
                   <span>{item.label}</span>
                   {item.greenBadge && (
-                    <span className="text-[11px] font-bold text-emerald-400 leading-none">
+                    <span className="text-[11px] font-bold text-emerald-500 leading-none">
                       {item.greenBadge}
                     </span>
                   )}
                   {item.badge && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-[#eab308] text-black leading-none">
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-[var(--tc-color-badge-amber,#eab308)] text-black leading-none">
                       {item.badge}
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 rounded-full" />
+                    <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-[var(--tc-color-primary,#3b82f6)] rounded-t-full" />
                   )}
                 </Link>
               );
