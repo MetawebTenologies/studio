@@ -100,6 +100,7 @@ function formatAssetRow(row) {
     content_type: row.content_type,
     storage_type: row.storage_type,
     provider: row.provider || null,
+    request_id: row.request_id || null,
     durable: Boolean(row.durable),
     private: Boolean(row.private),
     source_url: row.source_url,
@@ -1161,8 +1162,8 @@ export async function completeJobSuccess({
 
       await client.query(
         `INSERT INTO assets (
-           asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, status, url
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, 'reference_registered', $9)`,
+           asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, request_id, durable, private, source_url, status, url
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, TRUE, $9, 'reference_registered', $10)`,
         [
           assetId,
           resolvedTenantId,
@@ -1171,6 +1172,7 @@ export async function completeJobSuccess({
           inferredMime,
           storageType,
           jobRow.provider,
+          jobRow.provider_job_id || null,
           outUrl,
           assetUrl,
         ]
@@ -1572,8 +1574,8 @@ export async function registerAsset(assetRecord) {
   return withSystemContext(async (client) => {
     const res = await client.query(
       `INSERT INTO assets (
-         asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, filename, status, url
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, $9, $10, $11)
+         asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, request_id, durable, private, source_url, filename, status, url
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, TRUE, $9, $10, $11, $12)
        RETURNING *`,
       [
         assetId,
@@ -1583,6 +1585,7 @@ export async function registerAsset(assetRecord) {
         assetRecord.content_type || 'application/octet-stream',
         storageType,
         assetRecord.provider || null,
+        assetRecord.request_id || null,
         assetRecord.source_url,
         assetRecord.filename || null,
         assetRecord.status || 'reference_registered',
