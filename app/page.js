@@ -97,7 +97,7 @@ export default function HomePage() {
                     Explore Models
                   </Link>
                   <Link
-                    href="/studio?preview=1"
+                    href="/studio"
                     className="w-full sm:w-auto px-6 py-3 bg-[#121217] hover:bg-[#181820] border border-white/10 text-[#f5f7fa] rounded-md text-xs font-bold uppercase tracking-wider transition-colors"
                   >
                     Launch Studio

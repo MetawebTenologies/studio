@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   query,
+  withTransaction,
+  withTenantContext,
   runMigrations,
   closePool,
   assertDisposableTestDatabase,
@@ -36,8 +38,10 @@ import {
   resetStoreForTests,
   registerAsset,
   createSubmissionTransaction,
+  claimNextRunnableJob,
   listJobs,
 } from '../packages/timecapsule/src/server/store.js';
+import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js';
 import { GET as getJobDetailRoute } from '../app/api/v1/generations/[jobId]/route.js';
 import { GET as getGenerationsRoute } from '../app/api/v1/generations/route.js';
 import { GET as getAssetRoute } from '../app/api/v1/assets/[assetId]/route.js';
@@ -361,4 +365,239 @@ test('White-Label W0: Cross-tenant job and asset isolation (403/404)', async (t)
       return true;
     }
   );
+});
+
+test('White-Label S1: Row Level Security & GUC Tenant Isolation (Migration 005)', async (t) => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+  await resetStoreForTests();
+
+  const tenantA = await createTenant({
+    tenantId: 'tnt_rls_alpha',
+    slug: 'rls-alpha',
+    name: 'RLS Alpha',
+    initialCredits: 1000,
+  });
+  const tenantB = await createTenant({
+    tenantId: 'tnt_rls_beta',
+    slug: 'rls-beta',
+    name: 'RLS Beta',
+    initialCredits: 1000,
+  });
+
+  // Create jobs for both tenants
+  const { job: jobA } = await createSubmissionTransaction({
+    jobId: 'job_rls_alpha_1',
+    tenantId: tenantA.tenant_id,
+    userId: 'usr_rls_a',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'Alpha artwork' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  const { job: jobB } = await createSubmissionTransaction({
+    jobId: 'job_rls_beta_1',
+    tenantId: tenantB.tenant_id,
+    userId: 'usr_rls_b',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'Beta artwork' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  // Verify RLS under timecapsule_tenant_role
+  await withTransaction(async (client) => {
+    // Switch to non-bypass tenant role
+    await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+
+    // 1. When app.tenant_id is not set, 0 rows should be visible
+    const unsetOnJobs = await client.query('SELECT job_id, tenant_id FROM jobs');
+    assert.equal(unsetOnJobs.rows.length, 0, 'No jobs visible without app.tenant_id GUC set');
+
+    // 2. Set GUC to tenant A -> only tenant A jobs visible
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+    const alphaJobs = await client.query('SELECT job_id, tenant_id FROM jobs');
+    assert.equal(alphaJobs.rows.length, 1, 'Tenant A sees exactly 1 job');
+    assert.equal(alphaJobs.rows[0].job_id, jobA.job_id);
+
+    // 3. Set GUC to tenant B -> only tenant B jobs visible
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantB.tenant_id]);
+    const betaJobs = await client.query('SELECT job_id, tenant_id FROM jobs');
+    assert.equal(betaJobs.rows.length, 1, 'Tenant B sees exactly 1 job');
+    assert.equal(betaJobs.rows[0].job_id, jobB.job_id);
+
+    // 4. Attempting to cross-insert into jobs for tenant B while scoped to tenant A violates RLS
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+    await assert.rejects(
+      async () => {
+        await client.query(`
+          INSERT INTO jobs (job_id, tenant_id, project_id, modality, model, provider, status, inputs_json, submission_state)
+          VALUES ('job_cross_leak', $1, 'prj_x', 'image', 'nano-banana-pro', 'muapi', 'queued', '{}', 'not_submitted')
+        `, [tenantB.tenant_id]);
+      },
+      (err) => {
+        assert.ok(err.message.includes('row-level security') || err.code === '42501', 'RLS rejects cross-tenant insertion');
+        return true;
+      }
+    );
+  });
+});
+
+test('White-Label S2: Worker tenant status gate refuses jobs for suspended and killed tenants', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+
+  const tenantSuspended = await createTenant({
+    tenantId: 'tnt_suspended',
+    slug: 'suspended-org',
+    name: 'Suspended Org',
+    initialCredits: 1000,
+  });
+
+  const tenantKilled = await createTenant({
+    tenantId: 'tnt_killed',
+    slug: 'killed-org',
+    name: 'Killed Org',
+    initialCredits: 1000,
+  });
+
+  // 1. Seed jobs for both tenants
+  await createSubmissionTransaction({
+    jobId: 'job_susp_1',
+    tenantId: tenantSuspended.tenant_id,
+    userId: 'usr_susp_user',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'Suspended job' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  await createSubmissionTransaction({
+    jobId: 'job_kill_1',
+    tenantId: tenantKilled.tenant_id,
+    userId: 'usr_kill_user',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'Killed job' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  // Suspend and kill tenants
+  await updateTenant(tenantSuspended.tenant_id, { status: 'suspended' });
+  await updateTenant(tenantKilled.tenant_id, { status: 'killed' });
+
+  // CLAIM PATH VERIFICATION:
+  // Neither suspended nor killed jobs should be claimed by the worker
+  const claimed1 = await claimNextRunnableJob({ workerId: 'wrk_test_s2' });
+  assert.equal(claimed1, null, 'Worker claim path refuses to claim job for suspended/killed tenant');
+
+  // EXECUTE PATH VERIFICATION:
+  // Create an active tenant and a job, claim it, then suspend tenant before execution
+  const tenantActive = await createTenant({
+    tenantId: 'tnt_active_to_suspend',
+    slug: 'active-to-suspend',
+    name: 'Active to Suspend',
+    initialCredits: 1000,
+  });
+  const { job: activeJob } = await createSubmissionTransaction({
+    jobId: 'job_act_to_susp',
+    tenantId: tenantActive.tenant_id,
+    userId: 'usr_act_user',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 20,
+    creditsReserved: 20,
+    inputsJson: { prompt: 'Active to suspend prompt' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  const claimedActiveJob = await claimNextRunnableJob({ workerId: 'wrk_test_s2_exec' });
+  assert.ok(claimedActiveJob, 'Active job was claimed');
+  assert.equal(claimedActiveJob.job.job_id, activeJob.job_id);
+
+  // Now suspend the tenant while job is in claimed state
+  await updateTenant(tenantActive.tenant_id, { status: 'suspended' });
+
+  // Create worker and execute claimed job directly
+  const worker = createDurableWorker({
+    workerId: 'wrk_test_s2_exec',
+    idlePollIntervalMs: 50,
+  });
+
+  const stepRes = await worker.executeClaimedJob(claimedActiveJob.job);
+  assert.equal(stepRes.processed, true);
+  assert.equal(stepRes.action, 'refused_suspended');
+
+  // Verify job is marked failed in DB with refusal message
+  const failedJobRes = await query('SELECT status, error FROM jobs WHERE job_id = $1', [claimedActiveJob.job.job_id]);
+  assert.equal(failedJobRes.rows[0].status, 'failed');
+  assert.ok(failedJobRes.rows[0].error.includes('tenant is suspended'));
+
+  // Test repeat for killed tenant in execute path
+  const tenantActive2 = await createTenant({
+    tenantId: 'tnt_active_to_kill',
+    slug: 'active-to-kill',
+    name: 'Active to Kill',
+    initialCredits: 1000,
+  });
+  const { job: activeJob2 } = await createSubmissionTransaction({
+    jobId: 'job_act_to_kill',
+    tenantId: tenantActive2.tenant_id,
+    userId: 'usr_act_user2',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 20,
+    creditsReserved: 20,
+    inputsJson: { prompt: 'Active to kill prompt' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+  const claimedActiveJob2 = await claimNextRunnableJob({ workerId: 'wrk_test_s2_exec2' });
+  assert.ok(claimedActiveJob2, 'Second active job claimed');
+
+  // Kill tenant
+  await updateTenant(tenantActive2.tenant_id, { status: 'killed' });
+  const worker2 = createDurableWorker({
+    workerId: 'wrk_test_s2_exec2',
+    idlePollIntervalMs: 50,
+  });
+  const stepRes2 = await worker2.executeClaimedJob(claimedActiveJob2.job);
+  assert.equal(stepRes2.processed, true);
+  assert.equal(stepRes2.action, 'refused_killed');
+
+  const failedJobRes2 = await query('SELECT status, error FROM jobs WHERE job_id = $1', [claimedActiveJob2.job.job_id]);
+  assert.equal(failedJobRes2.rows[0].status, 'failed');
+  assert.ok(failedJobRes2.rows[0].error.includes('tenant is killed'));
 });

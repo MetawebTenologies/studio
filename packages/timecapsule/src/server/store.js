@@ -515,16 +515,18 @@ export async function claimNextRunnableJob({ workerId, leaseDurationMs = 30000 }
 
   return withTransaction(async (client) => {
     const candidateRes = await client.query(
-      `SELECT *
-       FROM jobs
-       WHERE (
-         (status = 'queued' AND next_run_at <= NOW())
-         OR
-         (status = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= NOW()))
-       )
-       ORDER BY next_run_at ASC, created_at ASC
+      `SELECT j.*
+       FROM jobs j
+       JOIN tenants t ON t.tenant_id = j.tenant_id
+       WHERE t.status = 'active'
+         AND (
+           (j.status = 'queued' AND j.next_run_at <= NOW())
+           OR
+           (j.status = 'running' AND (j.lease_expires_at IS NULL OR j.lease_expires_at <= NOW()))
+         )
+       ORDER BY j.next_run_at ASC, j.created_at ASC
        LIMIT 1
-       FOR UPDATE SKIP LOCKED`
+       FOR UPDATE OF j SKIP LOCKED`
     );
 
     if (candidateRes.rowCount === 0) {

@@ -894,6 +894,34 @@ test('Checkpoint 1 (Auth): Client-supplied tenant/user IDs cannot override serve
       const crossOriginData = await crossOriginRes.json();
       assert.equal(crossOriginData.code, 'CSRF_ORIGIN_MISMATCH');
 
+      // Acceptance Test A1.1: POST /api/v1/session with Origin: http://127.0.0.1:3002 on a server addressed as localhost:3002 -> 200 (cookie set)
+      const loopbackEquivalentReq = new Request('http://localhost:3002/api/v1/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://127.0.0.1:3002',
+        },
+        body: JSON.stringify({ access_key: 'preview-operator-secret-key-2026' }),
+      });
+      const loopbackEquivalentRes = await postSessionRoute(loopbackEquivalentReq);
+      assert.equal(loopbackEquivalentRes.status, 200);
+      const loopbackCookie = loopbackEquivalentRes.headers.get('set-cookie') || '';
+      assert.ok(loopbackCookie.includes('timecapsule_session='));
+
+      // Acceptance Test A1.2: Same request with Origin: http://evil.example -> 403 CSRF_ORIGIN_MISMATCH (guard must still fail closed)
+      const evilOriginReq = new Request('http://localhost:3002/api/v1/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://evil.example',
+        },
+        body: JSON.stringify({ access_key: 'preview-operator-secret-key-2026' }),
+      });
+      const evilOriginRes = await postSessionRoute(evilOriginReq);
+      assert.equal(evilOriginRes.status, 403);
+      const evilOriginData = await evilOriginRes.json();
+      assert.equal(evilOriginData.code, 'CSRF_ORIGIN_MISMATCH');
+
       const validReq = new Request('http://localhost:3000/api/v1/session', {
         method: 'POST',
         headers: {

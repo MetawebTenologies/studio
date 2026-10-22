@@ -199,6 +199,43 @@ export function extractTokenFromRequest(request) {
   return '';
 }
 
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+export function parseHostAndPort(hostStr) {
+  if (!hostStr) return { hostname: '', port: '' };
+  const str = String(hostStr).trim().toLowerCase();
+  if (str.startsWith('[')) {
+    const bracketEnd = str.indexOf(']');
+    if (bracketEnd !== -1) {
+      const hostname = str.slice(1, bracketEnd);
+      const port = str.slice(bracketEnd + 1).replace(/^:/, '');
+      return { hostname, port };
+    }
+  }
+  const parts = str.split(':');
+  return {
+    hostname: parts[0],
+    port: parts[1] || '',
+  };
+}
+
+export function areHostsEquivalent(hostA, hostB) {
+  if (!hostA || !hostB) return false;
+  if (String(hostA).toLowerCase() === String(hostB).toLowerCase()) return true;
+
+  const a = parseHostAndPort(hostA);
+  const b = parseHostAndPort(hostB);
+
+  const isALoopback = LOOPBACK_HOSTNAMES.has(a.hostname);
+  const isBLoopback = LOOPBACK_HOSTNAMES.has(b.hostname);
+
+  if (isALoopback && isBLoopback) {
+    return a.port === b.port;
+  }
+
+  return false;
+}
+
 export function verifyMutationOrigin(request) {
   const method = String(request?.method || 'GET').toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
@@ -214,6 +251,7 @@ export function verifyMutationOrigin(request) {
     requestHost = '';
   }
 
+  const hostHeader = request?.headers?.get?.('host') || request?.headers?.host || '';
   const originHeader = request?.headers?.get?.('origin') || request?.headers?.origin || '';
   const refererHeader = request?.headers?.get?.('referer') || request?.headers?.referer || '';
   const csrfHeader =
@@ -231,7 +269,10 @@ export function verifyMutationOrigin(request) {
       err.statusCode = 403;
       throw err;
     }
-    if (requestHost && originHost !== requestHost) {
+    const matchesRequestHost = requestHost && areHostsEquivalent(originHost, requestHost);
+    const matchesHostHeader = hostHeader && areHostsEquivalent(originHost, hostHeader);
+
+    if (!matchesRequestHost && !matchesHostHeader) {
       const err = new Error('Cross-origin mutation request rejected');
       err.code = 'CSRF_ORIGIN_MISMATCH';
       err.statusCode = 403;
@@ -250,7 +291,10 @@ export function verifyMutationOrigin(request) {
       err.statusCode = 403;
       throw err;
     }
-    if (requestHost && refererHost !== requestHost) {
+    const matchesRequestHost = requestHost && areHostsEquivalent(refererHost, requestHost);
+    const matchesHostHeader = hostHeader && areHostsEquivalent(refererHost, hostHeader);
+
+    if (!matchesRequestHost && !matchesHostHeader) {
       const err = new Error('Cross-origin Referer mutation request rejected');
       err.code = 'CSRF_ORIGIN_MISMATCH';
       err.statusCode = 403;
