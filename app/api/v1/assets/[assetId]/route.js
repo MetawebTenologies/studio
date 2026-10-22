@@ -16,7 +16,7 @@ export async function GET(request, context) {
       );
     }
 
-    if (asset.tenant_id !== session.tenant_id) {
+    if (session.role !== 'platform_admin' && asset.tenant_id !== session.tenant_id) {
       return Response.json(
         {
           error: 'Forbidden: cross-tenant private asset access is not permitted',

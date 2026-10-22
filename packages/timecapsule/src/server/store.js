@@ -267,7 +267,7 @@ export async function checkExistingIdempotentJob(tenantId, idempotencyKey, reque
 export async function createSubmissionTransaction({
   tenantId,
   userId,
-  projectId,
+  projectId = 'prj_default',
   idempotencyKey = null,
   requestFingerprint,
   canonicalPayload,

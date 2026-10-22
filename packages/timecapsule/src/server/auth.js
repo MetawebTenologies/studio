@@ -7,6 +7,7 @@ export const PREVIEW_IDENTITY = Object.freeze({
   name: 'Private Preview Operator',
   auth_mode: 'private_preview',
   scope: 'single_tenant_private_preview',
+  role: 'platform_admin',
 });
 
 function getSessionSecret() {
@@ -67,9 +68,37 @@ export function issuePreviewSessionToken({ ttlSeconds = 8 * 3600 } = {}) {
   const payload = {
     sub: PREVIEW_IDENTITY.user_id,
     tenant_id: PREVIEW_IDENTITY.tenant_id,
+    role: PREVIEW_IDENTITY.role || 'platform_admin',
     name: PREVIEW_IDENTITY.name,
     auth_mode: PREVIEW_IDENTITY.auth_mode,
     scope: PREVIEW_IDENTITY.scope,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sig = signPayload(encoded);
+  return `${encoded}.${sig}`;
+}
+
+export function issueTenantSessionToken({
+  userId,
+  tenantId,
+  role = 'end_user',
+  name = 'User',
+  email = null,
+  ttlSeconds = 8 * 3600,
+} = {}) {
+  if (!userId || !tenantId) {
+    throw new Error('userId and tenantId are required to issue a tenant session token');
+  }
+  const payload = {
+    sub: userId,
+    tenant_id: tenantId,
+    role,
+    name,
+    email,
+    auth_mode: 'tenant_session',
+    scope: 'tenant_scoped',
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
   };
@@ -83,6 +112,7 @@ export function issuePreviewSessionToken({ ttlSeconds = 8 * 3600 } = {}) {
 export function issueSessionTokenForTest({
   userId = PREVIEW_IDENTITY.user_id,
   tenantId = PREVIEW_IDENTITY.tenant_id,
+  role = 'end_user',
   name = PREVIEW_IDENTITY.name,
   ttlSeconds = 3600,
 } = {}) {
@@ -97,6 +127,7 @@ export function issueSessionTokenForTest({
   const payload = {
     sub: userId,
     tenant_id: tenantId,
+    role,
     name,
     auth_mode: 'private_preview_test',
     scope: 'single_tenant_private_preview',
@@ -139,6 +170,8 @@ export function verifySessionToken(token) {
     return {
       user_id: payload.sub,
       tenant_id: payload.tenant_id,
+      role: payload.role || (payload.tenant_id === PREVIEW_IDENTITY.tenant_id ? 'platform_admin' : 'end_user'),
+      email: payload.email || null,
       name: payload.name || PREVIEW_IDENTITY.name,
       auth_mode: payload.auth_mode || PREVIEW_IDENTITY.auth_mode,
       scope: payload.scope || PREVIEW_IDENTITY.scope,
@@ -257,7 +290,7 @@ export async function authorizeJobAccess(session, jobId) {
     err.statusCode = 404;
     throw err;
   }
-  if (job.tenant_id !== session.tenant_id) {
+  if (session?.role !== 'platform_admin' && job.tenant_id !== session.tenant_id) {
     const err = new Error('Forbidden: job belongs to another tenant');
     err.code = 'FORBIDDEN';
     err.statusCode = 403;
