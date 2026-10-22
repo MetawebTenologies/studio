@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query, withTransaction, withSystemContext, withTenantContext } from './db.js';
+import { query, withTransaction, withSystemContext, withTenantContext, assumeSystemRole } from './db.js';
 
 export async function createTenant({
   tenantId,
@@ -17,7 +17,7 @@ export async function createTenant({
   const normalizedSlug = slug ? String(slug).toLowerCase().trim() : null;
 
   return withTransaction(async (client) => {
-    await withSystemContext(client, async () => {});
+    await assumeSystemRole(client);
     const res = await client.query(
       `INSERT INTO tenants (
         tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved
@@ -57,23 +57,27 @@ export async function createTenant({
 
 export async function getTenant(tenantId) {
   if (!tenantId) return null;
-  const res = await query(
-    `SELECT tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, created_at
-     FROM tenants WHERE tenant_id = $1`,
-    [tenantId]
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, created_at
+       FROM tenants WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function getTenantBySlug(slug) {
   if (!slug) return null;
   const normalized = String(slug).toLowerCase().trim();
-  const res = await query(
-    `SELECT tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, created_at
-     FROM tenants WHERE slug = $1`,
-    [normalized]
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, created_at
+       FROM tenants WHERE slug = $1`,
+      [normalized]
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function updateTenant(tenantId, updates = {}) {
@@ -120,12 +124,14 @@ export async function updateTenant(tenantId, updates = {}) {
 
   fields.push(`updated_at = NOW()`);
 
-  const res = await query(
-    `UPDATE tenants SET ${fields.join(', ')} WHERE tenant_id = $1
-     RETURNING tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, updated_at`,
-    values
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `UPDATE tenants SET ${fields.join(', ')} WHERE tenant_id = $1
+       RETURNING tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved, updated_at`,
+      values
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function createUser({
@@ -137,33 +143,39 @@ export async function createUser({
   const id = userId || `usr_${crypto.randomBytes(8).toString('hex')}`;
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  const res = await query(
-    `INSERT INTO users (user_id, email, auth_mode, status)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
-     RETURNING user_id, email, auth_mode, status, created_at`,
-    [id, normalizedEmail, authMode, status]
-  );
-  return res.rows[0];
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `INSERT INTO users (user_id, email, auth_mode, status)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
+       RETURNING user_id, email, auth_mode, status, created_at`,
+      [id, normalizedEmail, authMode, status]
+    );
+    return res.rows[0];
+  });
 }
 
 export async function getUser(userId) {
   if (!userId) return null;
-  const res = await query(
-    `SELECT user_id, email, auth_mode, status, created_at FROM users WHERE user_id = $1`,
-    [userId]
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT user_id, email, auth_mode, status, created_at FROM users WHERE user_id = $1`,
+      [userId]
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function getUserByEmail(email) {
   if (!email) return null;
   const normalized = String(email).toLowerCase().trim();
-  const res = await query(
-    `SELECT user_id, email, auth_mode, status, created_at FROM users WHERE email = $1`,
-    [normalized]
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT user_id, email, auth_mode, status, created_at FROM users WHERE email = $1`,
+      [normalized]
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function createMembership({

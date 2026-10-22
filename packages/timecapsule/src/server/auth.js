@@ -327,8 +327,18 @@ export async function requireSession(request) {
 }
 
 export async function authorizeJobAccess(session, jobId) {
-  const job = await getJob(jobId);
+  const tenantId = session?.role === 'platform_admin' ? null : session?.tenant_id;
+  const job = await getJob(jobId, { tenant_id: tenantId });
   if (!job) {
+    if (session?.role !== 'platform_admin') {
+      const crossTenantJob = await getJob(jobId);
+      if (crossTenantJob) {
+        const err = new Error('Forbidden: job belongs to another tenant');
+        err.code = 'FORBIDDEN';
+        err.statusCode = 403;
+        throw err;
+      }
+    }
     const err = new Error(`Job not found: ${jobId}`);
     err.code = 'JOB_NOT_FOUND';
     err.statusCode = 404;

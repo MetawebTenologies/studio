@@ -5,8 +5,24 @@ export async function GET(request, context) {
   try {
     const session = await requireSession(request);
     const resolvedParams = await context.params;
-    const asset = await getAsset(resolvedParams.assetId);
+    const tenantId = session.role === 'platform_admin' ? null : session.tenant_id;
+    const asset = await getAsset(resolvedParams.assetId, { tenant_id: tenantId });
     if (!asset) {
+      if (session.role !== 'platform_admin') {
+        const crossTenantAsset = await getAsset(resolvedParams.assetId);
+        if (crossTenantAsset) {
+          return Response.json(
+            {
+              error: 'Forbidden: cross-tenant private asset access is not permitted',
+              code: 'FORBIDDEN',
+            },
+            {
+              status: 403,
+              headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+            }
+          );
+        }
+      }
       return Response.json(
         { error: 'Asset not found', code: 'ASSET_NOT_FOUND' },
         {

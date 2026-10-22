@@ -223,14 +223,23 @@ export async function withTenantContext(clientOrCallback, tenantIdOrMaybeCallbac
 }
 
 /**
- * Assumes `timecapsule_system_role` via SET LOCAL ROLE and sets `app.is_system_actor` to 'true'
- * for system worker and admin operations under RLS. Supports either (client, callback) or (callback).
+ * Assumes `timecapsule_system_role` via SET LOCAL ROLE on an active transaction client.
+ */
+export async function assumeSystemRole(client) {
+  if (!client || typeof client.query !== 'function') {
+    throw new Error('Valid transaction client is required for assumeSystemRole');
+  }
+  await client.query('SET LOCAL ROLE timecapsule_system_role');
+}
+
+/**
+ * Assumes `timecapsule_system_role` via SET LOCAL ROLE for system worker and admin operations
+ * under RLS. Supports either (client, callback) or (callback).
  */
 export async function withSystemContext(clientOrCallback, maybeCallback) {
   if (typeof clientOrCallback === 'function') {
     return withTransaction(async (client) => {
       await client.query('SET LOCAL ROLE timecapsule_system_role');
-      await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
       return await clientOrCallback(client);
     });
   }
@@ -238,8 +247,56 @@ export async function withSystemContext(clientOrCallback, maybeCallback) {
   const client = clientOrCallback;
   const callback = maybeCallback;
   await client.query('SET LOCAL ROLE timecapsule_system_role');
-  await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
   return await callback(client);
+}
+
+/**
+ * Verifies that the connected database role is non-superuser and does NOT have BYPASSRLS.
+ * Dev/test override is forbidden when NODE_ENV=production.
+ */
+export async function assertRuntimeRoleSafety(client = null) {
+  const runCheck = async (c) => {
+    const res = await c.query(
+      'SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user'
+    );
+    if (res.rowCount === 0) return;
+    const role = res.rows[0];
+    const isInsecure = Boolean(role.rolsuper || role.rolbypassrls);
+    if (isInsecure) {
+      if (process.env.NODE_ENV === 'production') {
+        const err = new Error(
+          `Runtime database connection role "${role.current_user}" is insecure (superuser=${role.rolsuper}, bypassrls=${role.rolbypassrls}). Runtime role must be a non-superuser without BYPASSRLS.`
+        );
+        err.code = 'INSECURE_RUNTIME_ROLE';
+        err.statusCode = 500;
+        throw err;
+      }
+      const devOverride =
+        process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE === '1' ||
+        process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB === '1' ||
+        process.env.TIMECAPSULE_TEST_MODE === '1';
+      if (!devOverride) {
+        const err = new Error(
+          `Runtime database connection role "${role.current_user}" has superuser or BYPASSRLS privileges. Set TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE=1 to permit in dev/test.`
+        );
+        err.code = 'INSECURE_RUNTIME_ROLE';
+        err.statusCode = 500;
+        throw err;
+      }
+    }
+  };
+
+  if (client) {
+    await runCheck(client);
+  } else {
+    const pool = getPool();
+    const c = await pool.connect();
+    try {
+      await runCheck(c);
+    } finally {
+      c.release();
+    }
+  }
 }
 
 export function parseSafeCreditBigInt(raw, fieldName = 'credit_amount') {

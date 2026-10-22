@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   query,
   withTransaction,
   withTenantContext,
   withSystemContext,
+  assertRuntimeRoleSafety,
   runMigrations,
   closePool,
   assertDisposableTestDatabase,
@@ -38,10 +41,14 @@ import {
 import {
   resetStoreForTests,
   registerAsset,
+  getAsset,
   createSubmissionTransaction,
   claimNextRunnableJob,
   listJobs,
   getJob,
+  getJobPrivateProviderDetails,
+  listTenantUploads,
+  softDeleteAsset,
 } from '../packages/timecapsule/src/server/store.js';
 import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js';
 import {
@@ -1135,4 +1142,291 @@ test('P0-2 / S5: /api/v1/tenant/config field whitelisting and Cache-Control: pri
   const sanitized = sanitizePublicTenantConfig(poisonedTenant);
   assert.equal(sanitized.injected_leak, undefined, 'sanitizePublicTenantConfig strips unwhitelisted fields');
   assert.equal(sanitized.flags.leaked_raw_secret, undefined, 'sanitizePublicTenantConfig strips unwhitelisted flags');
+});
+
+test('P0-1 / S8 / A1 Negative Test: Tenant role querying tenants table cannot see other tenants or balances', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenantA = await createTenant({
+    tenantId: 'tnt_leak_test_a',
+    slug: 'leak-test-a',
+    name: 'Tenant Leak A',
+    initialCredits: 500,
+  });
+
+  const tenantB = await createTenant({
+    tenantId: 'tnt_leak_test_b',
+    slug: 'leak-test-b',
+    name: 'Tenant Leak B',
+    initialCredits: 9999,
+  });
+
+  await withTransaction(async (client) => {
+    await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+
+    // 1. SELECT * FROM tenants must only return tenantA
+    const allTenants = await client.query('SELECT tenant_id, name, credits_balance FROM tenants');
+    assert.equal(allTenants.rows.length, 1, 'Tenant role sees exactly 1 tenant row (itself)');
+    assert.equal(allTenants.rows[0].tenant_id, tenantA.tenant_id);
+    assert.equal(allTenants.rows[0].credits_balance, '500');
+
+    // 2. Direct lookup of tenantB must return 0 rows
+    const bLookup = await client.query('SELECT tenant_id, credits_balance FROM tenants WHERE tenant_id = $1', [
+      tenantB.tenant_id,
+    ]);
+    assert.equal(bLookup.rows.length, 0, 'Tenant A cannot query Tenant B balance or metadata');
+  });
+});
+
+test('P0-1 / S8 / A1 Negative Test: Tenant role querying users table cannot see other tenants user emails', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  await createTenant({
+    tenantId: 'tnt_usr_test_a',
+    slug: 'usr-test-a',
+    name: 'User Test Tenant A',
+  });
+  await createTenant({
+    tenantId: 'tnt_usr_test_b',
+    slug: 'usr-test-b',
+    name: 'User Test Tenant B',
+  });
+
+  const userA = await createUser({
+    userId: 'usr_rls_test_a',
+    email: 'user-a@tenant-a.com',
+  });
+  const userB = await createUser({
+    userId: 'usr_rls_test_b',
+    email: 'user-b@tenant-b.com',
+  });
+
+  await createMembership({
+    membershipId: 'mem_rls_test_a',
+    userId: userA.user_id,
+    tenantId: 'tnt_usr_test_a',
+    role: 'end_user',
+  });
+  await createMembership({
+    membershipId: 'mem_rls_test_b',
+    userId: userB.user_id,
+    tenantId: 'tnt_usr_test_b',
+    role: 'end_user',
+  });
+
+  await withTransaction(async (client) => {
+    await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", ['tnt_usr_test_a']);
+
+    // 1. SELECT user_id, email FROM users must only return userA
+    const visibleUsers = await client.query('SELECT user_id, email FROM users');
+    assert.equal(visibleUsers.rows.length, 1, 'Tenant A sees only user A');
+    assert.equal(visibleUsers.rows[0].user_id, userA.user_id);
+    assert.equal(visibleUsers.rows[0].email, 'user-a@tenant-a.com');
+
+    // 2. Direct query for userB email must return 0 rows
+    const bEmail = await client.query('SELECT email FROM users WHERE user_id = $1', [userB.user_id]);
+    assert.equal(bEmail.rows.length, 0, 'Tenant A cannot query User B email address');
+  });
+});
+
+test('P0-1 / S8 / A2 Negative Test: Tenant-scoped reads enforce RLS without relying on app-layer checks', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenantA = await createTenant({
+    tenantId: 'tnt_read_a',
+    slug: 'read-a',
+    name: 'Read Tenant A',
+    initialCredits: 500,
+  });
+  const tenantB = await createTenant({
+    tenantId: 'tnt_read_b',
+    slug: 'read-b',
+    name: 'Read Tenant B',
+    initialCredits: 500,
+  });
+
+  const subB = await createSubmissionTransaction({
+    tenantId: tenantB.tenant_id,
+    userId: 'usr_b',
+    modality: 'image',
+    model: 'nano-banana-2',
+    resolvedProviderModel: 'nano-banana-2',
+    provider: 'muapi',
+    estimatedCost: 10,
+    inputs: { prompt: 'Secret project B' },
+  });
+  const jobB = subB.job;
+
+  const assetB = await registerAsset({
+    tenant_id: tenantB.tenant_id,
+    user_id: 'usr_b',
+    job_id: jobB.job_id,
+    source_url: 'https://example.com/secret_b.png',
+    modality: 'image',
+    content_type: 'image/png',
+  });
+
+  // 1. getJob with tenantA context must return null for jobB (RLS blocks row)
+  const jobLookupA = await getJob(jobB.job_id, { tenant_id: tenantA.tenant_id });
+  assert.equal(jobLookupA, null, 'getJob with tenant A context returns null for tenant B job');
+
+  // 2. getAsset with tenantA context must return null for assetB (RLS blocks row)
+  const assetLookupA = await getAsset(assetB.asset_id, { tenant_id: tenantA.tenant_id });
+  assert.equal(assetLookupA, null, 'getAsset with tenant A context returns null for tenant B asset');
+
+  // 3. getJobPrivateProviderDetails with tenantA context must return null
+  const detailsA = await getJobPrivateProviderDetails(jobB.job_id, { tenant_id: tenantA.tenant_id });
+  assert.equal(detailsA, null, 'getJobPrivateProviderDetails returns null for cross-tenant job');
+
+  // 4. softDeleteAsset called by tenantA on assetB must return false (0 rows updated)
+  const deleteAttempt = await softDeleteAsset({
+    tenant_id: tenantA.tenant_id,
+    asset_id: assetB.asset_id,
+  });
+  assert.equal(deleteAttempt, false, 'softDeleteAsset by tenant A cannot delete tenant B asset');
+
+  // 5. Verify assetB remains intact
+  const assetBIntact = await getAsset(assetB.asset_id, { tenant_id: tenantB.tenant_id });
+  assert.ok(assetBIntact, 'Asset B is intact and readable by tenant B');
+  assert.equal(assetBIntact.deleted_at, null, 'Asset B was not soft-deleted');
+});
+
+test('Task A4 Guard Test: app/api never imports withSystemContext and raw query() does not touch tenant tables outside context wrapper', async (t) => {
+  // Part (a): Check app/api/ for withSystemContext imports
+  const apiDir = path.resolve('app/api');
+  function findFiles(dir, ext = '.js') {
+    let files = [];
+    if (!fs.existsSync(dir)) return files;
+    for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, item.name);
+      if (item.isDirectory()) {
+        files = files.concat(findFiles(fullPath, ext));
+      } else if (item.name.endsWith(ext)) {
+        files.push(fullPath);
+      }
+    }
+    return files;
+  }
+
+  const apiFiles = findFiles(apiDir);
+  assert.ok(apiFiles.length > 0, 'Found api route files');
+  for (const file of apiFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    assert.ok(
+      !content.includes('withSystemContext'),
+      `Route file ${file} must NEVER import or use withSystemContext`
+    );
+  }
+
+  // Part (b): Verify raw query() calls in packages/timecapsule/src/server/ do not touch tenant tables
+  // outside context wrappers. Allowed exceptions: schema_migrations in db.js
+  const serverDir = path.resolve('packages/timecapsule/src/server');
+  const serverFiles = findFiles(serverDir);
+  const TENANT_TABLES = [
+    'tenants',
+    'users',
+    'jobs',
+    'assets',
+    'credit_reservations',
+    'credit_ledger',
+    'idempotency_keys',
+    'memberships',
+    'job_events',
+  ];
+
+  for (const file of serverFiles) {
+    const basename = path.basename(file);
+    if (basename === 'db.js') continue; // db.js contains low-level driver primitives
+
+    const content = fs.readFileSync(file, 'utf8');
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Match raw query(...) from db.js, not client.query(...) or pool.query(...)
+      const rawQueryMatch = /(?<!client\.|pool\.)\bquery\(/.test(line);
+      if (rawQueryMatch) {
+        for (const tbl of TENANT_TABLES) {
+          const tableRegex = new RegExp(`\\b${tbl}\\b`, 'i');
+          if (tableRegex.test(line)) {
+            assert.fail(
+              `Raw query() touches tenant table "${tbl}" outside context wrapper at ${basename}:${i + 1}: ${line.trim()}`
+            );
+          }
+        }
+      }
+    }
+  }
+});
+
+test('Task A5 Test: assertRuntimeRoleSafety refuses superuser or BYPASSRLS in production', async (t) => {
+  const originalEnv = process.env.NODE_ENV;
+  const originalOverride = process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE;
+
+  try {
+    // 1. Mock insecure role (superuser = true) under NODE_ENV=production
+    process.env.NODE_ENV = 'production';
+    const mockInsecureClient = {
+      query: async (sql) => {
+        if (sql.includes('pg_roles')) {
+          return { rowCount: 1, rows: [{ current_user: 'postgres', rolsuper: true, rolbypassrls: true }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+
+    await assert.rejects(
+      async () => {
+        await assertRuntimeRoleSafety(mockInsecureClient);
+      },
+      (err) => {
+        assert.equal(err.code, 'INSECURE_RUNTIME_ROLE');
+        assert.ok(err.message.includes('insecure (superuser=true, bypassrls=true)'));
+        return true;
+      },
+      'assertRuntimeRoleSafety strictly refuses superuser connection in production'
+    );
+
+    // 2. In non-production without dev override, it must also fail
+    process.env.NODE_ENV = 'development';
+    delete process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE;
+    delete process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB;
+    delete process.env.TIMECAPSULE_TEST_MODE;
+
+    await assert.rejects(
+      async () => {
+        await assertRuntimeRoleSafety(mockInsecureClient);
+      },
+      (err) => {
+        assert.equal(err.code, 'INSECURE_RUNTIME_ROLE');
+        assert.ok(err.message.includes('TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE=1'));
+        return true;
+      },
+      'assertRuntimeRoleSafety refuses superuser connection in dev without explicit override'
+    );
+
+    // 3. Secure role (non-superuser, no bypassrls) passes cleanly in production
+    process.env.NODE_ENV = 'production';
+    const mockSecureClient = {
+      query: async (sql) => {
+        if (sql.includes('pg_roles')) {
+          return { rowCount: 1, rows: [{ current_user: 'timecapsule_app_user', rolsuper: false, rolbypassrls: false }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+    await assertRuntimeRoleSafety(mockSecureClient);
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+    if (originalOverride !== undefined) {
+      process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE = originalOverride;
+    }
+  }
 });

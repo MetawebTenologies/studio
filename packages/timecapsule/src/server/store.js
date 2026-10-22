@@ -4,6 +4,7 @@ import {
   withTransaction,
   withSystemContext,
   withTenantContext,
+  assumeSystemRole,
   parseSafeCreditBigInt,
   assertValidCreditUnits,
   assertDisposableTestDatabase,
@@ -161,74 +162,86 @@ export async function getTenantCredits(tenantId) {
     err.statusCode = 400;
     throw err;
   }
-  const res = await query(
-    `SELECT tenant_id, credits_balance, credits_reserved
-     FROM tenants
-     WHERE tenant_id = $1`,
-    [tenantId]
-  );
-  if (res.rowCount === 0) {
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT tenant_id, credits_balance, credits_reserved
+       FROM tenants
+       WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    if (res.rowCount === 0) {
+      return {
+        tenant_id: tenantId,
+        available_credits: 0,
+        total_credits: 0,
+        reserved_credits: 0,
+      };
+    }
+    const row = res.rows[0];
+    const balance = parseSafeCreditBigInt(row.credits_balance, 'credits_balance');
+    const reserved = parseSafeCreditBigInt(row.credits_reserved, 'credits_reserved');
     return {
-      tenant_id: tenantId,
-      available_credits: 0,
-      total_credits: 0,
-      reserved_credits: 0,
+      tenant_id: row.tenant_id,
+      available_credits: balance - reserved,
+      total_credits: balance,
+      reserved_credits: reserved,
     };
-  }
-  const row = res.rows[0];
-  const balance = parseSafeCreditBigInt(row.credits_balance, 'credits_balance');
-  const reserved = parseSafeCreditBigInt(row.credits_reserved, 'credits_reserved');
-  return {
-    tenant_id: row.tenant_id,
-    available_credits: balance - reserved,
-    total_credits: balance,
-    reserved_credits: reserved,
-  };
+  });
 }
 
 export async function getTenantLedger(tenantId) {
-  const res = await query(
-    `SELECT entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json, occurred_at
-     FROM credit_ledger
-     WHERE tenant_id = $1
-     ORDER BY occurred_at ASC, entry_id ASC`,
-    [tenantId]
-  );
-  return res.rows.map((r) => ({
-    entry_id: r.entry_id,
-    tenant_id: r.tenant_id,
-    job_id: r.job_id,
-    entry_type: r.entry_type,
-    amount: parseSafeCreditBigInt(r.amount, 'amount'),
-    balance_after: parseSafeCreditBigInt(r.balance_after, 'balance_after'),
-    reserved_after: parseSafeCreditBigInt(r.reserved_after, 'reserved_after'),
-    metadata: r.metadata_json || {},
-    occurred_at: new Date(r.occurred_at).toISOString(),
-  }));
+  if (!tenantId) return [];
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT entry_id, tenant_id, job_id, entry_type, amount, balance_after, reserved_after, metadata_json, occurred_at
+       FROM credit_ledger
+       WHERE tenant_id = $1
+       ORDER BY occurred_at ASC, entry_id ASC`,
+      [tenantId]
+    );
+    return res.rows.map((r) => ({
+      entry_id: r.entry_id,
+      tenant_id: r.tenant_id,
+      job_id: r.job_id,
+      entry_type: r.entry_type,
+      amount: parseSafeCreditBigInt(r.amount, 'amount'),
+      balance_after: parseSafeCreditBigInt(r.balance_after, 'balance_after'),
+      reserved_after: parseSafeCreditBigInt(r.reserved_after, 'reserved_after'),
+      metadata: r.metadata_json || {},
+      occurred_at: new Date(r.occurred_at).toISOString(),
+    }));
+  });
 }
 
-export async function getCreditReservation(jobId) {
-  const res = await query(
-    `SELECT job_id, tenant_id, amount, status, settled_amount, reserved_at, settled_at, released_at, updated_at
-     FROM credit_reservations
-     WHERE job_id = $1`,
-    [jobId]
-  );
-  if (res.rowCount === 0) return null;
-  const r = res.rows[0];
-  return {
-    job_id: r.job_id,
-    tenant_id: r.tenant_id,
-    amount: parseSafeCreditBigInt(r.amount, 'amount'),
-    status: r.status,
-    settled_amount:
-      r.settled_amount !== null && r.settled_amount !== undefined
-        ? parseSafeCreditBigInt(r.settled_amount, 'settled_amount')
-        : null,
-    reserved_at: new Date(r.reserved_at).toISOString(),
-    settled_at: r.settled_at ? new Date(r.settled_at).toISOString() : null,
-    released_at: r.released_at ? new Date(r.released_at).toISOString() : null,
-  };
+export async function getCreditReservation(jobId, optionsOrTenant = {}) {
+  const tenant_id =
+    typeof optionsOrTenant === 'string' ? optionsOrTenant : optionsOrTenant?.tenant_id || null;
+  const runner = tenant_id
+    ? (cb) => withTenantContext(tenant_id, cb)
+    : (cb) => withSystemContext(cb);
+  return runner(async (client) => {
+    const res = await client.query(
+      `SELECT job_id, tenant_id, amount, status, settled_amount, reserved_at, settled_at, released_at, updated_at
+       FROM credit_reservations
+       WHERE job_id = $1`,
+      [jobId]
+    );
+    if (res.rowCount === 0) return null;
+    const r = res.rows[0];
+    return {
+      job_id: r.job_id,
+      tenant_id: r.tenant_id,
+      amount: parseSafeCreditBigInt(r.amount, 'amount'),
+      status: r.status,
+      settled_amount:
+        r.settled_amount !== null && r.settled_amount !== undefined
+          ? parseSafeCreditBigInt(r.settled_amount, 'settled_amount')
+          : null,
+      reserved_at: new Date(r.reserved_at).toISOString(),
+      settled_at: r.settled_at ? new Date(r.settled_at).toISOString() : null,
+      released_at: r.released_at ? new Date(r.released_at).toISOString() : null,
+    };
+  });
 }
 
 /**
@@ -238,25 +251,27 @@ export async function getCreditReservation(jobId) {
  */
 export async function checkExistingIdempotentJob(tenantId, idempotencyKey, requestFingerprint) {
   if (!idempotencyKey) return null;
-  const res = await query(
-    `SELECT ik.request_fingerprint, j.*
-     FROM idempotency_keys ik
-     JOIN jobs j ON j.tenant_id = ik.tenant_id AND j.job_id = ik.job_id
-     WHERE ik.tenant_id = $1 AND ik.idempotency_key = $2`,
-    [tenantId, idempotencyKey]
-  );
-  if (res.rowCount === 0) return null;
-  const row = res.rows[0];
-  if (requestFingerprint && row.request_fingerprint !== requestFingerprint) {
-    const err = new Error(
-      `Idempotency-Key "${idempotencyKey}" has already been used with a different request payload`
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT ik.request_fingerprint, j.*
+       FROM idempotency_keys ik
+       JOIN jobs j ON j.tenant_id = ik.tenant_id AND j.job_id = ik.job_id
+       WHERE ik.tenant_id = $1 AND ik.idempotency_key = $2`,
+      [tenantId, idempotencyKey]
     );
-    err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
-    err.status = 409;
-    err.statusCode = 409;
-    throw err;
-  }
-  return formatJobRow(row);
+    if (res.rowCount === 0) return null;
+    const row = res.rows[0];
+    if (requestFingerprint && row.request_fingerprint !== requestFingerprint) {
+      const err = new Error(
+        `Idempotency-Key "${idempotencyKey}" has already been used with a different request payload`
+      );
+      err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
+      err.status = 409;
+      err.statusCode = 409;
+      throw err;
+    }
+    return formatJobRow(row);
+  });
 }
 
 /**
@@ -295,8 +310,19 @@ export async function createSubmissionTransaction({
     fieldName: 'estimatedCost',
   });
 
+  // TASK A3 LIMITATION & SPLIT PROPOSAL NOTE:
+  // createSubmissionTransaction currently executes entirely under timecapsule_system_role because:
+  // 1. Locking & updating tenants.credits_reserved requires elevated privileges that tenant roles
+  //    must NOT possess (otherwise a malicious tenant could grant or modify their own credit limit).
+  // 2. Initializing unseeded tenants (INSERT INTO tenants) requires administrative rights.
+  // 3. Appending to immutable audit ledgers (credit_ledger and job_events) must be tamper-proof.
+  //
+  // Proposed future split:
+  // - Step 1 (Tenant Context): Validate tenant session, check user quota, and stage the job input payload.
+  // - Step 2 (System Service / Credit Gate): Atomically lock tenant balance, reserve credits, and append ledger entry.
+  // - Step 3 (Tenant Context): Insert job row and idempotency key bound to the reservation ID.
   return withTransaction(async (client) => {
-    await withSystemContext(client, async () => {});
+    await assumeSystemRole(client);
     // Ensure a 0-balance tenant row exists if never seeded, then acquire row lock (Lock #1: tenants)
     await client.query(
       `INSERT INTO tenants (tenant_id, credits_balance, credits_reserved)
@@ -476,18 +502,28 @@ export async function createSubmissionTransaction({
   });
 }
 
-export async function getJob(jobId) {
+export async function getJob(jobId, optionsOrTenant = {}) {
   if (!jobId) return null;
-  return withSystemContext(async (client) => {
+  const tenant_id =
+    typeof optionsOrTenant === 'string' ? optionsOrTenant : optionsOrTenant?.tenant_id || null;
+  const runner = tenant_id
+    ? (cb) => withTenantContext(tenant_id, cb)
+    : (cb) => withSystemContext(cb);
+  return runner(async (client) => {
     const res = await client.query('SELECT * FROM jobs WHERE job_id = $1', [jobId]);
     if (res.rowCount === 0) return null;
     return formatJobRow(res.rows[0]);
   });
 }
 
-export async function getJobPrivateProviderDetails(jobId) {
+export async function getJobPrivateProviderDetails(jobId, optionsOrTenant = {}) {
   if (!jobId) return null;
-  return withSystemContext(async (client) => {
+  const tenant_id =
+    typeof optionsOrTenant === 'string' ? optionsOrTenant : optionsOrTenant?.tenant_id || null;
+  const runner = tenant_id
+    ? (cb) => withTenantContext(tenant_id, cb)
+    : (cb) => withSystemContext(cb);
+  return runner(async (client) => {
     const res = await client.query(
       'SELECT job_id, provider, provider_job_id, execution_route, provider_details_private_json FROM jobs WHERE job_id = $1',
       [jobId]
@@ -528,7 +564,7 @@ export async function claimNextRunnableJob({ workerId, leaseDurationMs = 30000 }
   const safeLeaseMs = Math.max(25, Number(leaseDurationMs) || 30000);
 
   return withTransaction(async (client) => {
-    await withSystemContext(client, async () => {});
+    await assumeSystemRole(client);
     const candidateRes = await client.query(
       `SELECT j.*
        FROM jobs j
@@ -634,21 +670,23 @@ export async function heartbeatJobLease({
   leaseDurationMs = 30000,
 }) {
   const safeLeaseMs = Math.max(500, Number(leaseDurationMs) || 30000);
-  const res = await query(
-    `UPDATE jobs
-     SET lease_expires_at = NOW() + ($4 * INTERVAL '1 millisecond'),
-         updated_at = NOW()
-     WHERE job_id = $1
-       AND lease_owner = $2
-       AND fencing_token = $3
-       AND status = 'running'
-     RETURNING *`,
-    [jobId, workerId, fencingToken, safeLeaseMs]
-  );
-  if (res.rowCount === 0) {
-    throw createStaleFencingError(jobId, workerId, fencingToken);
-  }
-  return formatJobRow(res.rows[0]);
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `UPDATE jobs
+       SET lease_expires_at = NOW() + ($4 * INTERVAL '1 millisecond'),
+           updated_at = NOW()
+       WHERE job_id = $1
+         AND lease_owner = $2
+         AND fencing_token = $3
+         AND status = 'running'
+       RETURNING *`,
+      [jobId, workerId, fencingToken, safeLeaseMs]
+    );
+    if (res.rowCount === 0) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+    return formatJobRow(res.rows[0]);
+  });
 }
 
 /**
@@ -991,7 +1029,7 @@ export async function completeJobSuccess({
     : [validatedMedia.url];
 
   return withTransaction(async (client) => {
-    await withSystemContext(client, async () => {});
+    await assumeSystemRole(client);
     // Resolve tenantId if not passed
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
@@ -1289,7 +1327,7 @@ export async function completeJobFailure({
   providerDetails = null,
 }) {
   return withTransaction(async (client) => {
-    await withSystemContext(client, async () => {});
+    await assumeSystemRole(client);
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
       const lookupRes = await client.query(
@@ -1540,42 +1578,53 @@ export async function reconcileAmbiguousJob({
  * Supports resuming from `afterEventVersion` or resolving `lastEventId` (which can be either
  * an `event_id` string like `evt_...` or a numeric `event_version`).
  */
-export async function getJobEventsAfter(jobId, { afterEventVersion = 0, lastEventId = null } = {}) {
+export async function getJobEventsAfter(
+  jobId,
+  { afterEventVersion = 0, lastEventId = null, tenant_id = null } = {}
+) {
   let startVersion = Number(afterEventVersion) || 0;
+  const runner = tenant_id
+    ? (cb) => withTenantContext(tenant_id, cb)
+    : (cb) => withSystemContext(cb);
 
-  if (lastEventId) {
-    const trimmed = String(lastEventId).trim();
-    if (/^\d+$/.test(trimmed)) {
-      startVersion = Math.max(startVersion, Number(trimmed));
-    } else {
-      const lookupRes = await query(
-        `SELECT event_version FROM job_events WHERE job_id = $1 AND event_id = $2`,
-        [jobId, trimmed]
-      );
-      if (lookupRes.rowCount > 0) {
-        startVersion = Math.max(startVersion, Number(lookupRes.rows[0].event_version));
+  return runner(async (client) => {
+    if (lastEventId) {
+      const trimmed = String(lastEventId).trim();
+      if (/^\d+$/.test(trimmed)) {
+        startVersion = Math.max(startVersion, Number(trimmed));
+      } else {
+        const lookupRes = await client.query(
+          `SELECT event_version FROM job_events WHERE job_id = $1 AND event_id = $2`,
+          [jobId, trimmed]
+        );
+        if (lookupRes.rowCount > 0) {
+          startVersion = Math.max(startVersion, Number(lookupRes.rows[0].event_version));
+        }
       }
     }
-  }
 
-  const res = await query(
-    `SELECT *
-     FROM job_events
-     WHERE job_id = $1 AND event_version > $2
-     ORDER BY event_version ASC`,
-    [jobId, startVersion]
-  );
-  return res.rows.map(formatEventRow);
+    const res = await client.query(
+      `SELECT *
+       FROM job_events
+       WHERE job_id = $1 AND event_version > $2
+       ORDER BY event_version ASC`,
+      [jobId, startVersion]
+    );
+    return res.rows.map(formatEventRow);
+  });
 }
 
 export async function registerAsset(assetRecord) {
+  if (!assetRecord?.tenant_id) {
+    throw new Error('tenant_id is required to register an asset');
+  }
   const assetId = assetRecord.asset_id || `ast_${crypto.randomBytes(8).toString('hex')}`;
   const assetUrl = `/api/v1/assets/${assetId}`;
   const isInline = String(assetRecord.source_url || '').startsWith('data:');
   const storageType =
     assetRecord.storage_type || (isInline ? 'inline_data_url' : 'external_url_reference');
 
-  return withSystemContext(async (client) => {
+  return withTenantContext(assetRecord.tenant_id, async (client) => {
     const res = await client.query(
       `INSERT INTO assets (
          asset_id, tenant_id, user_id, job_id, modality, content_type, storage_type, provider, request_id, thumbnail_url, metadata_json, durable, private, source_url, filename, status, url
@@ -1604,14 +1653,21 @@ export async function registerAsset(assetRecord) {
   });
 }
 
-export async function getAsset(assetId, options = {}) {
+export async function getAsset(assetId, optionsOrTenant = {}) {
   if (!assetId) return null;
-  const includeDeleted = Boolean(options.includeDeleted);
-  return withSystemContext(async (client) => {
-    const query = includeDeleted
+  const tenant_id =
+    typeof optionsOrTenant === 'string' ? optionsOrTenant : optionsOrTenant?.tenant_id || null;
+  const includeDeleted =
+    typeof optionsOrTenant === 'object' && Boolean(optionsOrTenant?.includeDeleted);
+  const runner = tenant_id
+    ? (cb) => withTenantContext(tenant_id, cb)
+    : (cb) => withSystemContext(cb);
+
+  return runner(async (client) => {
+    const queryStr = includeDeleted
       ? 'SELECT * FROM assets WHERE asset_id = $1'
       : 'SELECT * FROM assets WHERE asset_id = $1 AND deleted_at IS NULL';
-    const res = await client.query(query, [assetId]);
+    const res = await client.query(queryStr, [assetId]);
     if (res.rowCount === 0) return null;
     return formatAssetRow(res.rows[0]);
   });
@@ -1620,9 +1676,9 @@ export async function getAsset(assetId, options = {}) {
 export async function listTenantUploads({ tenant_id, user_id = null, limit = 50, cursor = null } = {}) {
   if (!tenant_id) throw new Error('tenant_id is required to list uploads');
   const maxLimit = Math.min(Math.max(1, Number(limit) || 50), 100);
-  return withSystemContext(async (client) => {
+  return withTenantContext(tenant_id, async (client) => {
     const params = [tenant_id, maxLimit];
-    let query = `
+    let queryStr = `
       SELECT * FROM assets
       WHERE tenant_id = $1
         AND deleted_at IS NULL
@@ -1630,22 +1686,22 @@ export async function listTenantUploads({ tenant_id, user_id = null, limit = 50,
     `;
     if (user_id) {
       params.push(user_id);
-      query += ` AND (user_id = $${params.length} OR user_id IS NULL)`;
+      queryStr += ` AND (user_id = $${params.length} OR user_id IS NULL)`;
     }
     if (cursor) {
       params.push(cursor);
-      query += ` AND created_at < $${params.length}`;
+      queryStr += ` AND created_at < $${params.length}`;
     }
-    query += ` ORDER BY created_at DESC LIMIT $2`;
+    queryStr += ` ORDER BY created_at DESC LIMIT $2`;
 
-    const res = await client.query(query, params);
+    const res = await client.query(queryStr, params);
     return res.rows.map(formatAssetRow);
   });
 }
 
 export async function softDeleteAsset({ tenant_id, asset_id }) {
   if (!tenant_id || !asset_id) throw new Error('tenant_id and asset_id are required');
-  return withSystemContext(async (client) => {
+  return withTenantContext(tenant_id, async (client) => {
     const res = await client.query(
       `UPDATE assets
        SET deleted_at = NOW()

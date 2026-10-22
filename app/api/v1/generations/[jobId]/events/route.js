@@ -71,6 +71,7 @@ export async function GET(request, context) {
             const events = await getJobEventsAfter(job.job_id, {
               afterEventVersion: lastDeliveredVersion,
               lastEventId: isInitialReplay ? lastEventIdHeader : null,
+              tenant_id: job.tenant_id,
             });
             isInitialReplay = false;
 
@@ -83,7 +84,7 @@ export async function GET(request, context) {
 
             // If no events had terminal status yet, also check if the job is already terminal
             // (e.g. when client reconnects with Last-Event-ID already equal to the final event version).
-            const latestJob = await getJob(job.job_id);
+            const latestJob = await getJob(job.job_id, { tenant_id: job.tenant_id });
             if (
               !latestJob ||
               latestJob.status === 'succeeded' ||
