@@ -3,31 +3,32 @@
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
 
 const LEFT_PROVIDERS = [
-  { name: 'Kling 2.1 Pro', icon: '🎬', category: 'Video' },
-  { name: 'Runway Gen-3', icon: '🌀', category: 'Video' },
-  { name: 'Luma Dream Machine', icon: '✨', category: 'Video' },
-  { name: 'Pika 2.0', icon: '🎥', category: 'Video' },
-  { name: 'WanX 2.1', icon: '⚡', category: 'Video' },
-  { name: 'Hunyuan Video', icon: '🏮', category: 'Video' },
-  { name: 'Google Veo 3.1', icon: '🌟', category: 'Video' },
-  { name: 'PixVerse v3', icon: '🎞️', category: 'Video' },
-  { name: 'Vidu AI', icon: '🎭', category: 'Video' },
-  { name: 'Hailuo MiniMax', icon: '🐚', category: 'Video' },
+  { name: 'Kling 2.1 Pro', slug: 'kling', category: 'Video' },
+  { name: 'Runway Gen-3', slug: 'runway', category: 'Video' },
+  { name: 'Luma Dream Machine', slug: 'luma', category: 'Video' },
+  { name: 'Pika 2.0', slug: 'pika', category: 'Video' },
+  { name: 'WanX 2.1', slug: 'wanx', category: 'Video' },
+  { name: 'Hunyuan Video', slug: 'hunyuan', category: 'Video' },
+  { name: 'Google Veo 3.1', slug: 'veo', category: 'Video' },
+  { name: 'PixVerse v3', slug: 'pixverse', category: 'Video' },
+  { name: 'Vidu AI', slug: 'vidu', category: 'Video' },
+  { name: 'Hailuo MiniMax', slug: 'minimax', category: 'Video' },
 ];
 
 const RIGHT_PROVIDERS = [
-  { name: 'Flux Schnell', icon: '⚡', category: 'Image' },
-  { name: 'Nano Banana Pro', icon: '🍌', category: 'Image' },
-  { name: 'Seedance 2.5', icon: '🌱', category: 'Video' },
-  { name: 'MiniMax Hailuo', icon: '🦁', category: 'Audio' },
-  { name: 'HiDream-i1', icon: '🎨', category: 'Image' },
-  { name: 'Ideogram v4', icon: '📐', category: 'Image' },
-  { name: 'Google Imagen 3', icon: '🖼️', category: 'Image' },
-  { name: 'GPT Image 1', icon: '👁️', category: 'Vision' },
-  { name: 'Qwen Image Edit', icon: '🪄', category: 'Image' },
-  { name: 'Wan 2.2 Speech', icon: '🎙️', category: 'Audio' },
+  { name: 'Flux Schnell', slug: 'flux', category: 'Image' },
+  { name: 'Nano Banana Pro', slug: 'banana', category: 'Image' },
+  { name: 'Seedance 2.5', slug: 'seedance', category: 'Video' },
+  { name: 'MiniMax Hailuo', slug: 'minimax', category: 'Audio' },
+  { name: 'HiDream-i1', slug: 'hidream', category: 'Image' },
+  { name: 'Ideogram v4', slug: 'ideogram', category: 'Image' },
+  { name: 'Google Imagen 3', slug: 'imagen', category: 'Image' },
+  { name: 'GPT Image 1', slug: 'gpt', category: 'Vision' },
+  { name: 'Qwen Image Edit', slug: 'qwen', category: 'Image' },
+  { name: 'Wan 2.2 Speech', slug: 'wanx', category: 'Audio' },
 ];
 
 const HERO_LQIP = 'data:image/webp;base64,UklGRvoAAABXRUJQVlA4WAoAAAAQAAAAFwAABwAAQUxQSJUAAAANuS5E9D80kBvJVu3ofzMzhuD8U7EcAjMz3ST6yevRedt3NDtjAJ+WERMwAUtvvXrSMcCYRcvGXdqxbd+ENZsGMOfQC14BtNy49+QRX1tGyR2gbkOUJsNyPBtmgK9OhFXowYgY0lU4izNNhABETUcQkoFdk2iTU9imduVUAtzq1AhlRgfc/P5nXRWNqs9Id43AmRBRAABWUDggPgAAAHADAJ0BKhgACAA/EXCwUCwmJKKwCAGAIglnAMM0GB6YR/lZAAD9hBAczN3UkqEtDLkN21BXk4aQtlBi5boA';
@@ -88,10 +89,10 @@ export default function HomePage() {
                 {LEFT_PROVIDERS.map((item) => (
                   <div
                     key={item.name}
-                    className="flex items-center gap-3 p-2 rounded-lg bg-[#121217] border border-white/10 hover:border-[#00e5ff]/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.1)] transition-all"
+                    className="group flex items-center gap-3 p-2 rounded-lg bg-[#121217] border border-white/10 hover:border-[#00e5ff]/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.1)] transition-all"
                   >
-                    <span className="w-7 h-7 rounded bg-[#181820] border border-white/5 flex items-center justify-center text-sm">
-                      {item.icon}
+                    <span className="w-7 h-7 rounded bg-[#181820] border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-[#00e5ff] transition-colors">
+                      <BrandIcon name={item.slug || item.name} className="w-3.5 h-3.5" />
                     </span>
                     <span className="text-xs font-bold text-[#f5f7fa] truncate">{item.name}</span>
                     <span className="ml-auto text-[10px] text-zinc-500 font-medium">{item.category}</span>
@@ -143,10 +144,10 @@ export default function HomePage() {
                 {RIGHT_PROVIDERS.map((item) => (
                   <div
                     key={item.name}
-                    className="flex items-center gap-3 p-2 rounded-lg bg-[#121217] border border-white/10 hover:border-[#00e5ff]/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.1)] transition-all"
+                    className="group flex items-center gap-3 p-2 rounded-lg bg-[#121217] border border-white/10 hover:border-[#00e5ff]/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.1)] transition-all"
                   >
-                    <span className="w-7 h-7 rounded bg-[#181820] border border-white/5 flex items-center justify-center text-sm">
-                      {item.icon}
+                    <span className="w-7 h-7 rounded bg-[#181820] border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-[#00e5ff] transition-colors">
+                      <BrandIcon name={item.slug || item.name} className="w-3.5 h-3.5" />
                     </span>
                     <span className="text-xs font-bold text-[#f5f7fa] truncate">{item.name}</span>
                     <span className="ml-auto text-[10px] text-zinc-500 font-medium">{item.category}</span>
