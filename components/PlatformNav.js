@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TIMECAPSULE_BRAND } from '@/branding';
+import NavCreditPill from '@/components/NavCreditPill';
 
 export const PRIMARY_NAV = [
   { label: 'Explore', href: '/explore', count: 627 },
+  { label: 'Providers', href: '/providers', count: 25 },
   { label: 'Rankings', href: '/rankings' },
   { label: 'White-Label', href: '/white-label' },
   { label: 'Docs', href: '/docs' },
@@ -84,7 +86,7 @@ export default function PlatformNav({ activeModule = 'studio' }) {
           </nav>
         </div>
 
-        {/* Right: Search + Sign In Pill + Avatar */}
+        {/* Right: Search + Live Credit Pill + Sign In + Avatar */}
         <div className="flex items-center gap-3">
           <Link
             href="/explore"
@@ -96,6 +98,8 @@ export default function PlatformNav({ activeModule = 'studio' }) {
               <path d="m21 21-4.35-4.35" />
             </svg>
           </Link>
+
+          <NavCreditPill />
 
           <Link
             href="/studio?preview=1"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
@@ -66,6 +66,29 @@ const CATEGORIES_FACET = [
 ];
 
 function ModelVisualCard({ model }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const videoRef = useRef(null);
+
+  const isVideo =
+    model.catId === 't2v' ||
+    model.catId === 'i2v' ||
+    ['veo', 'seedance', 'wan', 'kling', 'minimax', 'vidu', 'runway', 'luma'].includes(model.family);
+
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (isVideo && videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    if (isVideo && videoRef.current) {
+      videoRef.current.pause();
+    }
+  };
+
   const getGradientAndIcon = (family) => {
     switch (family) {
       case 'flux':
@@ -74,6 +97,7 @@ function ModelVisualCard({ model }) {
           accent: '#9b8cff',
           tag: 'FLUX',
           icon: '⚡',
+          sample: '/samples/sample_image_1.webp',
         };
       case 'veo':
         return {
@@ -81,6 +105,7 @@ function ModelVisualCard({ model }) {
           accent: '#00e5ff',
           tag: 'VEO 3.1',
           icon: '✨',
+          sample: '/samples/demo.mp4',
         };
       case 'seedance':
         return {
@@ -88,6 +113,7 @@ function ModelVisualCard({ model }) {
           accent: '#10b981',
           tag: 'SEEDANCE',
           icon: '🎬',
+          sample: '/samples/demo.mp4',
         };
       case 'nano-banana':
         return {
@@ -95,6 +121,7 @@ function ModelVisualCard({ model }) {
           accent: '#f59e0b',
           tag: 'NANO',
           icon: '🍌',
+          sample: '/samples/sample_image_1.webp',
         };
       case 'lyria':
       case 'audio':
@@ -103,6 +130,7 @@ function ModelVisualCard({ model }) {
           accent: '#c084fc',
           tag: 'AUDIO',
           icon: '🎵',
+          sample: '/samples/sample_image_2.webp',
         };
       case 'ideogram':
         return {
@@ -110,6 +138,7 @@ function ModelVisualCard({ model }) {
           accent: '#38bdf8',
           tag: 'IDEOGRAM',
           icon: '📐',
+          sample: '/samples/sample_banner.png',
         };
       case 'wan':
         return {
@@ -117,6 +146,7 @@ function ModelVisualCard({ model }) {
           accent: '#60a5fa',
           tag: 'WAN 2.2',
           icon: '👄',
+          sample: '/samples/demo.mp4',
         };
       case 'kling':
         return {
@@ -124,6 +154,7 @@ function ModelVisualCard({ model }) {
           accent: '#ec4899',
           tag: 'KLING',
           icon: '📹',
+          sample: '/samples/demo.mp4',
         };
       case 'openai':
         return {
@@ -131,6 +162,7 @@ function ModelVisualCard({ model }) {
           accent: '#10b981',
           tag: 'OPENAI',
           icon: '🧠',
+          sample: '/samples/sample_image_2.webp',
         };
       case 'midjourney':
         return {
@@ -138,6 +170,7 @@ function ModelVisualCard({ model }) {
           accent: '#e879f9',
           tag: 'MIDJOURNEY',
           icon: '🎨',
+          sample: '/samples/sample_image_1.webp',
         };
       default:
         return {
@@ -145,6 +178,7 @@ function ModelVisualCard({ model }) {
           accent: '#00e5ff',
           tag: 'STUDIO',
           icon: '✨',
+          sample: '/samples/sample_image_1.webp',
         };
     }
   };
@@ -153,21 +187,62 @@ function ModelVisualCard({ model }) {
 
   return (
     <div
-      className={`w-full h-full bg-gradient-to-br ${style.gradient} flex flex-col justify-between p-3 relative overflow-hidden select-none group-hover:scale-105 transition-transform duration-500`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`w-full h-full bg-gradient-to-br ${style.gradient} flex flex-col justify-between p-3 relative overflow-hidden select-none transition-all duration-300`}
     >
+      {/* 1. Video Hover Preview Layer (P5) */}
+      {isVideo && (
+        <video
+          ref={videoRef}
+          src="/samples/demo.mp4"
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 z-10 ${
+            isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        />
+      )}
+
+      {/* 2. High-Res Image Hover Preview Layer (for Image Models) */}
+      {!isVideo && style.sample && (
+        <img
+          src={style.sample}
+          alt={model.name}
+          className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 z-10 ${
+            isHovered ? 'opacity-90 scale-105' : 'opacity-0 pointer-events-none'
+          }`}
+        />
+      )}
+
       {/* Subtle atmospheric visual glow */}
       <div
         className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-xl opacity-30 pointer-events-none"
         style={{ backgroundColor: style.accent }}
       />
 
-      {/* Top right icon */}
-      <div className="flex justify-end items-center">
+      {/* Top right icon & Live Preview Badge */}
+      <div className="flex justify-between items-center z-20">
+        <span
+          className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded transition-opacity duration-200 ${
+            isHovered
+              ? 'bg-blue-600 text-white opacity-100 shadow-xs'
+              : 'opacity-0'
+          }`}
+        >
+          {isVideo ? '▶ Loop' : '✦ Preview'}
+        </span>
         <span className="text-sm opacity-90 drop-shadow-md">{style.icon}</span>
       </div>
 
-      {/* Center Graphic Motif */}
-      <div className="flex items-center justify-center my-auto">
+      {/* Center Graphic Motif (visible when not hovered) */}
+      <div
+        className={`flex items-center justify-center my-auto transition-opacity duration-300 ${
+          isHovered ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         <div
           className="w-12 h-12 rounded-lg border border-white/10 flex items-center justify-center shadow-inner"
           style={{ backgroundColor: `${style.accent}15` }}
@@ -180,14 +255,16 @@ function ModelVisualCard({ model }) {
       </div>
 
       {/* Bottom Model Family Tag */}
-      <div className="flex items-center justify-between z-10 pt-1">
+      <div className="flex items-center justify-between z-20 pt-1">
         <span
-          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border border-white/10 bg-black/40 backdrop-blur-xs"
+          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border border-white/10 bg-black/60 backdrop-blur-xs"
           style={{ color: style.accent }}
         >
           {style.tag}
         </span>
-        <span className="text-[9px] font-mono text-zinc-400 opacity-60">AI</span>
+        <span className="text-[9px] font-mono text-zinc-400 opacity-80">
+          {isVideo ? 'VIDEO' : 'AI'}
+        </span>
       </div>
     </div>
   );
