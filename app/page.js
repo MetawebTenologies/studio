@@ -30,6 +30,8 @@ const RIGHT_PROVIDERS = [
   { name: 'Wan 2.2 Speech', icon: '🎙️', category: 'Audio' },
 ];
 
+const HERO_LQIP = 'data:image/webp;base64,UklGRvoAAABXRUJQVlA4WAoAAAAQAAAAFwAABwAAQUxQSJUAAAANuS5E9D80kBvJVu3ofzMzhuD8U7EcAjMz3ST6yevRedt3NDtjAJ+WERMwAUtvvXrSMcCYRcvGXdqxbd+ENZsGMOfQC14BtNy49+QRX1tGyR2gbkOUJsNyPBtmgK9OhFXowYgY0lU4izNNhABETUcQkoFdk2iTU9imduVUAtzq1AhlRgfc/P5nXRWNqs9Id43AmRBRAABWUDggPgAAAHADAJ0BKhgACAA/EXCwUCwmJKKwCAGAIglnAMM0GB6YR/lZAAD9hBAczN3UkqEtDLkN21BXk4aQtlBi5boA';
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--tc-bg-page)] text-[var(--tc-text-primary)] flex flex-col font-sans">
@@ -54,9 +56,32 @@ export default function HomePage() {
       <PlatformNav activeModule="home" />
 
       <main className="flex-1 flex flex-col">
-        {/* Hero Circuit Section */}
-        <section className="relative overflow-hidden py-16 lg:py-24 border-b border-white/10 bg-gradient-to-b from-[#09090b] via-[#0e0e13] to-[#09090b]">
-          <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Hero Circuit Section with Full-Bleed Cinematic Backdrop (F1) */}
+        <section className="relative overflow-hidden py-16 lg:py-24 border-b border-white/10 bg-[#09090b]">
+          {/* Full-bleed cinematic artwork backdrop with LQIP and responsive crops */}
+          <div
+            className="absolute inset-0 pointer-events-none select-none overflow-hidden"
+            style={{
+              backgroundImage: `url(${HERO_LQIP})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <picture>
+              <source media="(max-width: 640px)" srcSet="/assets/hero/hero_banner_grand_cinema_mobile.webp" />
+              <img
+                src="/assets/hero/hero_banner_grand_cinema.webp"
+                alt="Timecapsule Studio Cinematic AI Workspace"
+                className="w-full h-full object-cover object-center opacity-30 mix-blend-luminosity filter contrast-125"
+                loading="eager"
+              />
+            </picture>
+            {/* Multi-layer gradient overlays ensuring WCAG AA contrast ratio (>7:1) */}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#09090b]/90 via-[#09090b]/75 to-[#09090b]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#00e5ff]/5 via-transparent to-transparent" />
+          </div>
+
+          <div className="relative z-10 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
               {/* Left Model Circuit Column */}
               <div className="max-lg:hidden lg:col-span-3 flex flex-col gap-2.5">
