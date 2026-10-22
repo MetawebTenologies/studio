@@ -4,63 +4,65 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
+import { Button, Badge, Card, Input } from '@/components/ui';
 
 const LATEST_MODELS = [
   {
     id: 'flux-dev',
     name: 'flux-dev',
     type: 'Text to Image',
-    icon: '🖼️',
-    gradient: 'from-blue-500/20 to-indigo-500/20',
+    iconSlug: 'flux',
+    gradient: 'from-blue-500/20 to-indigo-500/10',
   },
   {
     id: 'veo-3.1',
     name: 'veo-3-1-cinema',
     type: 'Text to Video',
-    icon: '🎬',
-    gradient: 'from-purple-500/20 to-pink-500/20',
+    iconSlug: 'veo',
+    gradient: 'from-cyan-500/20 to-blue-500/10',
   },
   {
     id: 'nano-banana-pro',
     name: 'nano-banana-pro',
     type: 'Image to Image',
-    icon: '🍌',
-    gradient: 'from-amber-500/20 to-yellow-500/20',
+    iconSlug: 'banana',
+    gradient: 'from-amber-500/20 to-yellow-500/10',
   },
   {
     id: 'seedance-2.5',
     name: 'seedance-2-5-omni',
     type: 'Image to Video',
-    icon: '⚡',
-    gradient: 'from-emerald-500/20 to-teal-500/20',
+    iconSlug: 'seedance',
+    gradient: 'from-emerald-500/20 to-teal-500/10',
   },
   {
     id: 'lyria-3',
     name: 'lyria-3-studio',
     type: 'Text to Audio',
-    icon: '🎵',
-    gradient: 'from-cyan-500/20 to-blue-500/20',
+    iconSlug: 'audio',
+    gradient: 'from-purple-500/20 to-pink-500/10',
   },
   {
     id: 'wan-2.1',
     name: 'wan-2-1-pro-video',
     type: 'Video to Video',
-    icon: '🎥',
-    gradient: 'from-rose-500/20 to-red-500/20',
+    iconSlug: 'wanx',
+    gradient: 'from-rose-500/20 to-red-500/10',
   },
   {
     id: 'qwen-image',
     name: 'qwen-image-edit',
     type: 'Image Editing',
-    icon: '✨',
-    gradient: 'from-violet-500/20 to-purple-500/20',
+    iconSlug: 'qwen',
+    gradient: 'from-violet-500/20 to-purple-500/10',
   },
   {
     id: 'kling-v2',
     name: 'kling-2-1-pro',
     type: 'Text to Video',
-    icon: '🎞️',
-    gradient: 'from-orange-500/20 to-amber-500/20',
+    iconSlug: 'kling',
+    gradient: 'from-orange-500/20 to-amber-500/10',
   },
 ];
 
@@ -68,22 +70,22 @@ const COMPACT_MODELS = [
   {
     name: 'flux-dev',
     type: 'Text to Image',
-    icon: '🖼️',
+    iconSlug: 'flux',
   },
   {
     name: 'veo-3-1-cinema',
     type: 'Text to Video',
-    icon: '🎬',
+    iconSlug: 'veo',
   },
   {
     name: 'nano-banana-pro',
     type: 'Image to Image',
-    icon: '🍌',
+    iconSlug: 'banana',
   },
   {
     name: 'lyria-3-studio',
     type: 'Text to Audio',
-    icon: '🎵',
+    iconSlug: 'audio',
   },
 ];
 
@@ -100,68 +102,81 @@ export default function DashboardPage() {
       <PlatformNav activeModule="dashboard" />
 
       <main className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex flex-col">
-        {/* Top Header Row matching Reference Layout */}
+        {/* Top Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-slate-900">
-              Dashboard
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#00e5ff]">
+                Operator Console
+              </span>
+              <span className="text-zinc-600">•</span>
+              <span className="text-[11px] text-zinc-400 font-mono">Durable Telemetry</span>
+            </div>
+            <h1 className="text-2xl sm:text-[28px] font-black tracking-tight text-[#f5f7fa]">
+              Studio Dashboard
             </h1>
-            <p className="text-xs sm:text-[13px] text-slate-500 mt-1">
-              Overview of your API usage and generation history
+            <p className="text-xs sm:text-[13px] text-zinc-400 mt-0.5">
+              Overview of your AI compute runs, credit reservation telemetry, and active models
             </p>
           </div>
 
           <div className="flex items-center gap-3 self-start sm:self-auto">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-700 shadow-xs">
-              <span className="text-slate-400">I want to</span>
-              <span className="font-semibold text-slate-900">create with AI</span>
-              <span className="text-slate-400 text-[10px]">▾</span>
+            <div className="flex items-center gap-2 bg-[#121217] border border-white/10 rounded-md px-3 py-1.5 text-xs text-zinc-300">
+              <span className="text-zinc-500">Mode:</span>
+              <span className="font-semibold text-[#00e5ff] font-mono">Studio Workbench</span>
             </div>
 
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setShowGettingStarted(!showGettingStarted)}
-              className="bg-white hover:bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1.5 shadow-xs transition-colors"
+              className="flex items-center gap-1.5"
             >
-              <span>{showGettingStarted ? '👁️ Hide' : '👁️ Show'} Getting Started</span>
-            </button>
+              <svg className="w-3.5 h-3.5 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>{showGettingStarted ? 'Hide Checklist' : 'Show Checklist'}</span>
+            </Button>
           </div>
         </div>
 
         {/* 3-Column Onboarding & Quick Start Card */}
         {showGettingStarted && (
-          <div className="bg-white border border-slate-200/90 rounded-lg p-6 mb-8 grid grid-cols-1 lg:grid-cols-3 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 shadow-xs">
+          <Card className="p-6 mb-8 grid grid-cols-1 lg:grid-cols-3 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             {/* Col 1: Welcome Checklist */}
             <div className="pt-2 lg:pt-0 pr-0 lg:pr-6">
-              <h2 className="text-sm font-bold text-slate-900 mb-2">Welcome to Timecapsule!</h2>
-              <p className="text-xs text-slate-500 leading-relaxed mb-6">
-                Follow these steps to get the most out of your experience. If you run into any issues, reach out to our team or consult our documentation—we're happy to help!
+              <h2 className="text-sm font-bold text-[#f5f7fa] mb-2 flex items-center gap-2">
+                <BrandIcon name="timecapsule" className="w-4 h-4 text-[#00e5ff]" />
+                Welcome to Timecapsule Studio
+              </h2>
+              <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                Your operator workspace is provisioned with single-tenant isolation, forced Row Level Security, and durable credit ledger protection.
               </p>
 
               <div className="space-y-4 text-xs">
                 {/* Step 1 */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="w-4 h-4 rounded-full border border-blue-600 bg-blue-50 flex items-center justify-center text-[10px] text-blue-600 font-bold">
+                    <span className="w-4 h-4 rounded-full border border-[#00e5ff] bg-[#00e5ff]/10 flex items-center justify-center text-[10px] text-[#00e5ff] font-bold">
                       ✓
                     </span>
-                    <span className="text-slate-700 font-medium">Single-tenant session</span>
+                    <span className="text-zinc-200 font-medium">Single-tenant session</span>
                   </div>
-                  <span className="px-3 py-1 rounded bg-blue-50 border border-blue-200 text-blue-600 text-xs font-semibold">
-                    Active
-                  </span>
+                  <Badge variant="default">Active</Badge>
                 </div>
 
                 {/* Step 2 */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="w-4 h-4 rounded-full border border-slate-300 bg-slate-50 flex items-center justify-center text-[10px] text-slate-500">
+                    <span className="w-4 h-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[10px] text-zinc-400 font-mono">
                       2
                     </span>
-                    <span className="text-slate-700 font-medium">Available balance</span>
+                    <span className="text-zinc-200 font-medium">Available balance</span>
                   </div>
                   <Link
                     href="/usage"
-                    className="px-3 py-1 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+                    className="px-2.5 py-1 rounded bg-[#181820] hover:bg-[#22222c] border border-white/10 text-[#00e5ff] text-xs font-mono font-bold transition-colors"
                   >
                     500 cr
                   </Link>
@@ -170,16 +185,16 @@ export default function DashboardPage() {
                 {/* Step 3 */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="w-4 h-4 rounded-full border border-slate-300 bg-slate-50 flex items-center justify-center text-[10px] text-slate-500">
+                    <span className="w-4 h-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[10px] text-zinc-400 font-mono">
                       3
                     </span>
-                    <span className="text-slate-700 font-medium">Generate your first media</span>
+                    <span className="text-zinc-200 font-medium">Generate your first media</span>
                   </div>
                   <Link
-                    href="/studio?preview=1"
-                    className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                    href="/explore"
+                    className="px-3 py-1 rounded bg-[#00e5ff] hover:bg-[#38bdf8] text-[#09090b] text-xs font-bold uppercase tracking-wider transition-colors"
                   >
-                    Explore
+                    Explore Models
                   </Link>
                 </div>
               </div>
@@ -187,32 +202,32 @@ export default function DashboardPage() {
 
             {/* Col 2: Quick Start Actions (01 - 08) */}
             <div className="pt-6 lg:pt-0 px-0 lg:px-6">
-              <h2 className="text-sm font-bold text-slate-900 mb-1">Quick start</h2>
-              <p className="text-xs text-slate-500 mb-4">Quick access to essential features and tools.</p>
+              <h2 className="text-sm font-bold text-[#f5f7fa] mb-1">Quick Actions</h2>
+              <p className="text-xs text-zinc-400 mb-4">Direct shortcuts to studio workflows and developer tooling.</p>
 
               <div className="space-y-2 text-xs">
                 {[
-                  { num: '01', label: 'Image Generator', badge: 'HOT', link: '/studio?preview=1', cta: 'Start Creating →' },
-                  { num: '02', label: 'Video Generator', badge: 'HOT', link: '/studio?preview=1', cta: 'Start Creating →' },
-                  { num: '03', label: 'Studio', link: '/studio?preview=1', cta: 'Open →' },
-                  { num: '04', label: 'Workflows', link: '/workflows', cta: 'Build →' },
-                  { num: '05', label: 'How to use the CLI/MCP', badge: 'NEW', link: '/cli', cta: 'Check →' },
-                  { num: '06', label: 'Agent Skills', link: '/explore', cta: 'Explore →' },
-                  { num: '07', label: 'Leaderboard Rankings', link: '/rankings', cta: 'View →' },
-                  { num: '08', label: 'API Keys', link: '/api-keys', cta: 'Manage →' },
+                  { num: '01', label: 'Image Generator', badge: 'HOT', link: '/explore', cta: 'Start →' },
+                  { num: '02', label: 'Video Generator', badge: 'HOT', link: '/explore', cta: 'Start →' },
+                  { num: '03', label: 'In-Place Playground', link: '/nano-banana-pro', cta: 'Open →' },
+                  { num: '04', label: 'Provider Hub (25)', badge: 'NEW', link: '/providers', cta: 'Browse →' },
+                  { num: '05', label: 'Leaderboard Rankings', link: '/rankings', cta: 'View →' },
+                  { num: '06', label: 'Pricing Comparison', link: '/pricing', cta: 'Compare →' },
+                  { num: '07', label: 'API Usage & Ledger', link: '/usage', cta: 'Audit →' },
+                  { num: '08', label: 'API Documentation', link: '/docs', cta: 'Docs →' },
                 ].map((item) => (
                   <div key={item.num} className="flex items-center justify-between py-1 group">
                     <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-slate-400 text-[11px]">{item.num}</span>
-                      <span className="text-slate-700 group-hover:text-slate-900 font-medium transition-colors">
+                      <span className="font-mono text-zinc-500 text-[11px]">{item.num}</span>
+                      <span className="text-zinc-300 group-hover:text-[#f5f7fa] font-medium transition-colors">
                         {item.label}
                       </span>
                       {item.badge && (
                         <span
-                          className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                          className={`text-[9px] font-black px-1.5 py-0.2 rounded font-mono ${
                             item.badge === 'HOT'
                               ? 'bg-amber-400 text-slate-950'
-                              : 'bg-purple-600 text-white'
+                              : 'bg-[#00e5ff] text-[#09090b]'
                           }`}
                         >
                           {item.badge}
@@ -221,7 +236,7 @@ export default function DashboardPage() {
                     </div>
                     <Link
                       href={item.link}
-                      className="text-slate-500 hover:text-blue-600 transition-colors text-[11px] font-medium"
+                      className="text-zinc-500 hover:text-[#00e5ff] transition-colors text-[11px] font-medium"
                     >
                       {item.cta}
                     </Link>
@@ -233,24 +248,24 @@ export default function DashboardPage() {
             {/* Col 3: Explore Models Compact List */}
             <div className="pt-6 lg:pt-0 pl-0 lg:pl-6 flex flex-col justify-between">
               <div>
-                <h2 className="text-sm font-bold text-slate-900 mb-1">Explore models</h2>
-                <p className="text-xs text-slate-500 mb-4">Browse latest tools for image, video, and audio generation.</p>
+                <h2 className="text-sm font-bold text-[#f5f7fa] mb-1">Featured Foundation Models</h2>
+                <p className="text-xs text-zinc-400 mb-4">Production-grade generation endpoints available now.</p>
 
                 <div className="space-y-2.5">
                   {COMPACT_MODELS.map((m) => (
                     <Link
                       key={m.name}
                       href={`/${m.name}`}
-                      className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 transition-colors group border border-slate-100"
+                      className="flex items-center gap-3 p-2 rounded-md hover:bg-white/[0.04] transition-colors group border border-white/5"
                     >
-                      <div className="w-8 h-8 rounded bg-slate-100 border border-slate-200 flex items-center justify-center text-sm shrink-0">
-                        {m.icon}
+                      <div className="w-8 h-8 rounded bg-[#181820] border border-white/10 flex items-center justify-center text-zinc-400 group-hover:text-[#00e5ff] transition-colors shrink-0">
+                        <BrandIcon name={m.iconSlug} className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                        <h3 className="text-xs font-bold text-[#f5f7fa] group-hover:text-[#00e5ff] transition-colors truncate">
                           {m.name}
                         </h3>
-                        <p className="text-[11px] text-slate-500">{m.type}</p>
+                        <p className="text-[11px] text-zinc-500 font-mono">{m.type}</p>
                       </div>
                     </Link>
                   ))}
@@ -259,108 +274,108 @@ export default function DashboardPage() {
 
               <Link
                 href="/explore"
-                className="text-xs font-semibold text-slate-600 hover:text-blue-600 pt-4 flex items-center gap-1.5 transition-colors"
+                className="text-xs font-bold text-zinc-400 hover:text-[#00e5ff] pt-4 flex items-center gap-1.5 transition-colors uppercase tracking-wider"
               >
-                <span>⊞ View all models →</span>
+                <span>View Full Catalog (600+) →</span>
               </Link>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* 3 Metrics Cards (Exact Reference Layout) */}
+        {/* 3 Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Card 1: Balance */}
-          <div className="bg-white border border-slate-200/90 rounded-lg p-6 shadow-xs flex flex-col justify-between">
+          <Card className="p-6 flex flex-col justify-between">
             <div>
-              <span className="text-xs text-slate-500 font-medium block mb-1">Current credit balance</span>
-              <div className="text-3xl font-black text-slate-950 font-mono mb-4">
-                500 <span className="text-xs font-normal text-slate-500">cr ($0.500)</span>
+              <span className="text-xs text-zinc-400 font-medium block mb-1">Current Credit Balance</span>
+              <div className="text-3xl font-black text-[#f5f7fa] font-mono mb-4">
+                500 <span className="text-xs font-normal text-zinc-400">cr ($0.500)</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Link
                 href="/usage"
-                className="px-4 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-xs"
+                className="px-4 py-1.5 rounded bg-[#00e5ff] hover:bg-[#38bdf8] text-[#09090b] text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
               >
-                Manage credits
+                Manage Credits
               </Link>
               <Link
                 href="/billing"
-                className="px-4 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors"
+                className="px-4 py-1.5 rounded border border-white/10 bg-[#181820] hover:bg-[#22222c] text-zinc-300 text-xs font-medium transition-colors"
               >
                 Billing
               </Link>
             </div>
-          </div>
+          </Card>
 
-          {/* Card 2: Requests in last 7 days */}
-          <div className="bg-white border border-slate-200/90 rounded-lg p-6 shadow-xs flex flex-col justify-between">
+          {/* Card 2: Requests */}
+          <Card className="p-6 flex flex-col justify-between">
             <div>
-              <span className="text-xs text-slate-500 font-medium block mb-1">Requests in last 7 days</span>
-              <div className="text-3xl font-black text-slate-950 font-mono mb-4">
+              <span className="text-xs text-zinc-400 font-medium block mb-1">Requests in Last 7 Days</span>
+              <div className="text-3xl font-black text-[#f5f7fa] font-mono mb-4">
                 0
               </div>
             </div>
             <div>
               <Link
                 href="/usage"
-                className="inline-block px-4 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors"
+                className="inline-block px-4 py-1.5 rounded border border-white/10 bg-[#181820] hover:bg-[#22222c] text-zinc-300 text-xs font-medium transition-colors"
               >
-                Check history
+                Check History
               </Link>
             </div>
-          </div>
+          </Card>
 
           {/* Card 3: Models Used */}
-          <div className="bg-white border border-slate-200/90 rounded-lg p-6 shadow-xs flex flex-col justify-between">
+          <Card className="p-6 flex flex-col justify-between">
             <div>
-              <span className="text-xs text-slate-500 font-medium block mb-1">Models Used</span>
-              <div className="text-3xl font-black text-slate-950 font-mono mb-4">
-                0
+              <span className="text-xs text-zinc-400 font-medium block mb-1">Active Verified Models</span>
+              <div className="text-3xl font-black text-[#f5f7fa] font-mono mb-4">
+                6 <span className="text-xs font-normal text-zinc-500 font-mono">(627 Total)</span>
               </div>
             </div>
             <div>
               <Link
-                href="/usage"
-                className="inline-block px-4 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors"
+                href="/explore"
+                className="inline-block px-4 py-1.5 rounded border border-white/10 bg-[#181820] hover:bg-[#22222c] text-zinc-300 text-xs font-medium transition-colors"
               >
-                Check usage
+                Explore Marketplace
               </Link>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Model Quick Bar (Latest Models / Favourites) */}
         <div className="mb-8">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-4">
             <div className="flex items-center gap-6 text-sm font-semibold">
               <button
                 onClick={() => setActiveTab('latest')}
-                className={`pb-2 relative ${
+                className={`pb-2 relative cursor-pointer ${
                   activeTab === 'latest'
-                    ? 'text-slate-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-600'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'text-[#00e5ff] font-bold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#00e5ff]'
+                    : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Latest Models
+                Latest Release Models
               </button>
               <button
                 onClick={() => setActiveTab('favourites')}
-                className={`pb-2 relative ${
+                className={`pb-2 relative cursor-pointer ${
                   activeTab === 'favourites'
-                    ? 'text-slate-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-600'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'text-[#00e5ff] font-bold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#00e5ff]'
+                    : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Favourites
+                Starred Models
               </button>
             </div>
 
             <Link
               href="/explore"
-              className="text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+              className="text-xs font-medium text-zinc-400 hover:text-[#00e5ff] transition-colors"
             >
-              View all models
+              Browse All Models →
             </Link>
           </div>
 
@@ -369,18 +384,18 @@ export default function DashboardPage() {
               <Link
                 key={model.id}
                 href={`/${model.id}`}
-                className="bg-white border border-slate-200 rounded-lg p-3.5 flex items-center gap-3.5 hover:border-blue-500/60 hover:shadow-sm transition-all group"
+                className="bg-[#121217] border border-white/10 rounded-lg p-3.5 flex items-center gap-3.5 hover:border-[#00e5ff]/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.08)] transition-all group"
               >
                 <div
-                  className={`w-10 h-10 rounded-md bg-gradient-to-br ${model.gradient} border border-slate-100 flex items-center justify-center text-lg shrink-0`}
+                  className={`w-10 h-10 rounded-md bg-gradient-to-br ${model.gradient} border border-white/10 flex items-center justify-center text-zinc-300 group-hover:text-[#00e5ff] transition-colors shrink-0`}
                 >
-                  {model.icon}
+                  <BrandIcon name={model.iconSlug} className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 truncate transition-colors">
+                  <h4 className="text-xs font-bold text-[#f5f7fa] group-hover:text-[#00e5ff] truncate transition-colors">
                     {model.name}
                   </h4>
-                  <p className="text-[11px] text-slate-500">{model.type}</p>
+                  <p className="text-[11px] text-zinc-500 font-mono">{model.type}</p>
                 </div>
               </Link>
             ))}
@@ -388,78 +403,76 @@ export default function DashboardPage() {
         </div>
 
         {/* Prediction History Section */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 mb-8 shadow-xs">
+        <Card className="p-6 mb-8">
           <div className="mb-6">
-            <h2 className="text-base font-bold text-slate-900">Prediction History</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Filter and track your past model runs</p>
+            <h2 className="text-base font-bold text-[#f5f7fa]">Durable Execution History</h2>
+            <p className="text-xs text-zinc-400 mt-0.5">Filter and track past generation jobs across all provider routes</p>
           </div>
 
           {/* Filter Form Controls */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                 Request ID
               </label>
-              <input
+              <Input
                 type="text"
-                placeholder="Request ID or output filename"
+                placeholder="job_xxx or file..."
                 value={requestIdFilter}
                 onChange={(e) => setRequestIdFilter(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                 Model Name
               </label>
-              <input
+              <Input
                 type="text"
-                placeholder="Search by model..."
+                placeholder="e.g. nano-banana..."
                 value={modelFilter}
                 onChange={(e) => setModelFilter(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                 Created At
               </label>
               <input
                 type="date"
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:border-blue-500"
+                className="w-full h-9 px-3 py-1.5 bg-[#09090b] border border-white/15 rounded text-xs text-[#f5f7fa] focus:outline-none focus:border-[#00e5ff] transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                 Task Status
               </label>
               <select
                 value={taskStatus}
                 onChange={(e) => setTaskStatus(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:border-blue-500"
+                className="w-full h-9 px-3 py-1.5 bg-[#09090b] border border-white/15 rounded text-xs text-zinc-300 focus:outline-none focus:border-[#00e5ff] transition-all"
               >
-                <option value="All">All</option>
+                <option value="All">All Statuses</option>
                 <option value="settled">Settled</option>
                 <option value="processing">Processing</option>
-                <option value="failed">Failed</option>
+                <option value="failed">Failed (Refunded)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                Review Status
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                Provider Gateway
               </label>
               <select
                 value={reviewStatus}
                 onChange={(e) => setReviewStatus(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:border-blue-500"
+                className="w-full h-9 px-3 py-1.5 bg-[#09090b] border border-white/15 rounded text-xs text-zinc-300 focus:outline-none focus:border-[#00e5ff] transition-all"
               >
-                <option value="All">All</option>
-                <option value="approved">Approved</option>
-                <option value="flagged">Flagged</option>
+                <option value="All">All Gateways</option>
+                <option value="muapi">Muapi Gateway</option>
+                <option value="kie">Kie Gateway</option>
               </select>
             </div>
           </div>
@@ -472,42 +485,46 @@ export default function DashboardPage() {
                 setTaskStatus('All');
                 setReviewStatus('All');
               }}
-              className="text-xs text-slate-600 hover:text-slate-900 font-medium"
+              className="text-xs text-zinc-400 hover:text-[#f5f7fa] font-medium cursor-pointer transition-colors"
             >
               Reset Filters
             </button>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold transition-colors shadow-xs">
+            <Button size="sm">
               Search History
-            </button>
+            </Button>
           </div>
 
           {/* Retention Alert Banner */}
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs flex items-center gap-2 mb-6">
-            <span>⚠️</span>
-            <span>Your outputs are preserved in storage. Make sure to download and save your generated media assets.</span>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded text-amber-300 text-xs flex items-center gap-2 mb-6">
+            <svg className="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>Outputs are persisted in tenant-scoped storage. Download and preserve production media assets locally.</span>
           </div>
 
           {/* Table */}
-          <div className="border border-slate-200 rounded overflow-hidden mb-4">
+          <div className="border border-white/10 rounded overflow-hidden mb-4">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] border-b border-slate-200">
+              <thead className="bg-[#181820] text-zinc-400 uppercase font-semibold text-[11px] border-b border-white/5">
                 <tr>
                   <th className="p-3 w-10">
-                    <input type="checkbox" className="rounded border-slate-300" />
+                    <input type="checkbox" className="rounded border-white/20 bg-[#09090b]" />
                   </th>
                   <th className="p-3">Output</th>
-                  <th className="p-3">Request ID</th>
+                  <th className="p-3">Job ID</th>
                   <th className="p-3">Model</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Created At</th>
-                  <th className="p-3">Cost</th>
+                  <th className="p-3">Charge</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600">
+              <tbody className="divide-y divide-white/5 text-zinc-400">
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 italic">
-                    No matching requests found in your history.
+                  <td colSpan={8} className="p-8 text-center text-zinc-500 italic">
+                    No matching execution jobs found in your tenant history.
                   </td>
                 </tr>
               </tbody>
@@ -515,25 +532,22 @@ export default function DashboardPage() {
           </div>
 
           {/* Pagination Footer */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <span>No results found</span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+            <span>0 of 0 records</span>
             <div className="flex items-center gap-2">
-              <button disabled className="p-1.5 border border-slate-200 rounded text-slate-400 cursor-not-allowed">
+              <button disabled className="p-1.5 border border-white/10 rounded text-zinc-600 cursor-not-allowed">
                 &lt;
               </button>
-              <span className="px-2.5 py-1 border border-slate-200 rounded font-semibold text-slate-900 bg-slate-50">
+              <span className="px-2.5 py-1 border border-white/10 rounded font-semibold text-[#f5f7fa] bg-[#181820] font-mono">
                 1
               </span>
               <span>/ 1</span>
-              <button disabled className="p-1.5 border border-slate-200 rounded text-slate-400 cursor-not-allowed">
+              <button disabled className="p-1.5 border border-white/10 rounded text-zinc-600 cursor-not-allowed">
                 &gt;
-              </button>
-              <button className="ml-2 px-3 py-1 bg-blue-600 text-white rounded font-medium hover:bg-blue-500 transition-colors">
-                Go to Page
               </button>
             </div>
           </div>
-        </div>
+        </Card>
       </main>
 
       <PlatformFooter />

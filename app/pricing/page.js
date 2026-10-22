@@ -4,10 +4,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
+import { Button, Badge, Card, Input } from '@/components/ui';
 
 const MODEL_GROUPS = [
   {
-    name: 'Tools',
+    name: 'Tools & Utilities',
     count: '20 models',
     models: [
       { name: 'ai-image-upscaler', modality: 'IMAGE TO IMAGE', timecapsule: '$0.02 per generation', fal: '$0.03 per gen', replicate: '$0.03 per gen', discount: '-33% ↓' },
@@ -18,7 +20,7 @@ const MODEL_GROUPS = [
     ],
   },
   {
-    name: 'Veo',
+    name: 'Google Veo Series',
     count: '4 models',
     models: [
       { name: 'veo3-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '$2.5 per generation', fal: '$3.5 per generation', replicate: '$3.5 per generation', discount: '-28% ↓' },
@@ -28,7 +30,7 @@ const MODEL_GROUPS = [
     ],
   },
   {
-    name: 'Flux',
+    name: 'Black Forest Labs Flux',
     count: '11 models',
     models: [
       { name: 'flux-dev', modality: 'TEXT TO IMAGE', timecapsule: '$0.015', fal: '$0.020', replicate: '$0.020', discount: '-25% ↓' },
@@ -38,7 +40,7 @@ const MODEL_GROUPS = [
     ],
   },
   {
-    name: 'Seedance-2.5',
+    name: 'ByteDance Seedance 2.5',
     count: '18 models',
     models: [
       { name: 'seedance-2.5-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '$0.17/sec (480p), $0.34/sec (720p)', fal: '$0.47/sec (720p)', replicate: 'Not available', discount: '-64% ↓' },
@@ -47,7 +49,7 @@ const MODEL_GROUPS = [
     ],
   },
   {
-    name: 'Mmaudio & Audio',
+    name: 'Audio & Music Synthesis',
     count: '4 models',
     models: [
       { name: 'mmaudio-v2-text-to-audio', modality: 'TEXT TO AUDIO', timecapsule: '$0.01 per generation', fal: '$0.02 per generation', replicate: '$0.02 per generation', discount: '-50% ↓' },
@@ -72,57 +74,70 @@ export default function PricingPage() {
       <PlatformNav activeModule="pricing" />
 
       <main className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex flex-col">
-        {/* Header */}
+        {/* Header Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-                Pricing Comparison
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#00e5ff]">
+                  Transparent Rate Cards
+                </span>
+                <span className="text-zinc-600">•</span>
+                <span className="text-[11px] text-zinc-400 font-mono">Real-time Arbitrage</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#f5f7fa]">
+                Provider Pricing Comparison
               </h1>
-              <p className="text-xs sm:text-[13px] text-slate-500 mt-1">
-                Compare model rates across major providers.
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                Compare multi-provider model rates. Timecapsule routes tasks to optimal verified provider gateways.
               </p>
             </div>
 
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setShowPacks(!showPacks)}
-              className="self-start sm:self-auto px-3.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs transition-colors"
+              className="self-start sm:self-auto flex items-center gap-2"
             >
-              {showPacks ? 'Hide Credit Packs' : '💳 View Credit Top-Up Packs'}
-            </button>
+              <svg className="w-3.5 h-3.5 text-[#00e5ff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <line x1="2" y1="10" x2="22" y2="10" />
+              </svg>
+              <span>{showPacks ? 'Hide Credit Packs' : 'View Credit Top-Up Packs'}</span>
+            </Button>
           </div>
         </div>
 
         {/* Optional Credit Packs Drawer */}
         {showPacks && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 p-6 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 p-6 bg-[#121217] border border-white/10 rounded-xl">
             {CREDIT_PACKS.map((pack) => (
-              <div
+              <Card
                 key={pack.name}
-                className={`p-5 rounded-lg border bg-white flex flex-col justify-between ${
-                  pack.popular ? 'border-blue-500 shadow-sm ring-1 ring-blue-500/20' : 'border-slate-200'
+                className={`p-5 flex flex-col justify-between ${
+                  pack.popular ? 'border-[#00e5ff]/50 shadow-[0_0_20px_rgba(0,229,255,0.1)]' : 'border-white/10'
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-slate-900 text-sm">{pack.name}</h3>
+                    <h3 className="font-bold text-[#f5f7fa] text-sm">{pack.name}</h3>
                     {pack.popular && (
-                      <span className="text-[10px] bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded border border-blue-200">
-                        POPULAR
-                      </span>
+                      <Badge variant="default">
+                        MOST POPULAR
+                      </Badge>
                     )}
                   </div>
-                  <div className="text-2xl font-black font-mono text-slate-900 mb-1">{pack.price}</div>
-                  <div className="text-xs font-bold text-blue-600 mb-2">{pack.credits}</div>
-                  <p className="text-xs text-slate-500">{pack.desc}</p>
+                  <div className="text-2xl font-black font-mono text-[#f5f7fa] mb-1">{pack.price}</div>
+                  <div className="text-xs font-bold text-[#00e5ff] font-mono mb-2">{pack.credits}</div>
+                  <p className="text-xs text-zinc-400">{pack.desc}</p>
                 </div>
                 <Link
                   href="/billing"
-                  className="mt-4 block text-center py-2 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"
+                  className="mt-4 block text-center py-2 bg-[#00e5ff] hover:bg-[#38bdf8] text-[#09090b] rounded text-xs font-bold uppercase tracking-wider transition-colors"
                 >
-                  Buy Credits
+                  Buy Compute Credits
                 </Link>
-              </div>
+              </Card>
             ))}
           </div>
         )}
@@ -130,7 +145,7 @@ export default function PricingPage() {
         {/* Filter and Search Bar */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-8">
           {/* Modality Filter Pills */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#121217] border border-white/10 rounded-lg">
             {[
               { id: 'All', label: 'All Models' },
               { id: 'Video', label: 'Video 307' },
@@ -141,10 +156,10 @@ export default function PricingPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveModality(tab.id)}
-                className={`px-3.5 py-1.5 rounded text-xs font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all cursor-pointer ${
                   activeModality === tab.id
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                    ? 'bg-[#00e5ff] text-[#09090b] shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                 }`}
               >
                 {tab.label}
@@ -154,20 +169,23 @@ export default function PricingPage() {
 
           {/* Search Input */}
           <div className="relative w-full md:w-72">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">
-              🔍
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
             </span>
-            <input
+            <Input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search models..."
-              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+              className="pl-8"
             />
           </div>
         </div>
 
-        {/* Grouped Comparison Tables matching Reference Layout */}
+        {/* Grouped Comparison Tables */}
         <div className="space-y-8 mb-12">
           {MODEL_GROUPS.map((group) => {
             const visibleModels = group.models.filter(
@@ -179,54 +197,57 @@ export default function PricingPage() {
             if (visibleModels.length === 0) return null;
 
             return (
-              <div key={group.name} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs">
+              <Card key={group.name} className="overflow-hidden">
                 {/* Group Title Header */}
-                <div className="px-6 py-3.5 bg-slate-50/70 border-b border-slate-200 flex items-center gap-2.5">
-                  <h2 className="text-sm font-bold text-slate-900">{group.name}</h2>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200 font-semibold">
+                <div className="px-6 py-3.5 bg-[#181820] border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <BrandIcon name={group.name} className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="text-sm font-bold text-[#f5f7fa]">{group.name}</h2>
+                  </div>
+                  <Badge variant="secondary">
                     {group.count}
-                  </span>
+                  </Badge>
                 </div>
 
                 {/* Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50/40 text-slate-500 uppercase font-semibold text-[10px] border-b border-slate-200">
+                    <thead className="bg-[#14141a] text-zinc-400 uppercase font-semibold text-[10px] tracking-wider border-b border-white/5">
                       <tr>
                         <th className="px-6 py-3">MODEL & MODALITY</th>
-                        <th className="px-6 py-3">TIMECAPSULE PRICE</th>
-                        <th className="px-6 py-3">FAL.AI PRICE</th>
-                        <th className="px-6 py-3">REPLICATE PRICE</th>
-                        <th className="px-6 py-3 text-right">DISCOUNT</th>
+                        <th className="px-6 py-3">TIMECAPSULE RATE</th>
+                        <th className="px-6 py-3">FAL.AI RATE</th>
+                        <th className="px-6 py-3">REPLICATE RATE</th>
+                        <th className="px-6 py-3 text-right">SAVINGS</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-white/5 text-zinc-300">
                       {visibleModels.map((row) => (
-                        <tr key={row.name} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={row.name} className="hover:bg-white/[0.02] transition-colors">
                           <td className="px-6 py-3.5">
-                            <Link href={`/${row.name}`} className="font-bold text-slate-900 hover:text-blue-600 transition-colors block">
+                            <Link href={`/${row.name}`} className="font-bold text-[#f5f7fa] hover:text-[#00e5ff] transition-colors block">
                               {row.name}
                             </Link>
-                            <span className="text-[10px] text-slate-400 font-medium tracking-wide">
+                            <span className="text-[10px] text-zinc-500 font-mono tracking-wider">
                               {row.modality}
                             </span>
                           </td>
-                          <td className="px-6 py-3.5 font-bold text-blue-600 font-mono">
+                          <td className="px-6 py-3.5 font-bold text-[#00e5ff] font-mono">
                             {row.timecapsule}
                           </td>
-                          <td className="px-6 py-3.5 text-slate-600 font-mono">
+                          <td className="px-6 py-3.5 text-zinc-400 font-mono">
                             {row.fal}
                           </td>
-                          <td className="px-6 py-3.5 text-slate-600 font-mono">
+                          <td className="px-6 py-3.5 text-zinc-400 font-mono">
                             {row.replicate}
                           </td>
                           <td className="px-6 py-3.5 text-right">
                             {row.discount ? (
-                              <span className="inline-block text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                              <Badge variant="success">
                                 {row.discount}
-                              </span>
+                              </Badge>
                             ) : (
-                              <span className="text-slate-400">-</span>
+                              <span className="text-zinc-600">-</span>
                             )}
                           </td>
                         </tr>
@@ -234,16 +255,15 @@ export default function PricingPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
 
-        {/* Pagination Bar */}
-        <div className="flex items-center justify-center gap-2 pb-8 text-xs text-slate-500">
-          <button disabled className="px-3 py-1 border border-slate-200 rounded text-slate-400 cursor-not-allowed">
-            &lt; Group Page 1 of 15 &gt;
-          </button>
+        {/* Footer Note */}
+        <div className="flex items-center justify-between pb-8 text-xs text-zinc-500 border-t border-white/5 pt-4">
+          <span>Rates updated daily via provider API telemetry. All tasks backed by durable credit refund protection.</span>
+          <span className="font-mono text-[11px] text-zinc-400">Page 1 of 1</span>
         </div>
       </main>
 

@@ -206,6 +206,44 @@ export default function BrandIcon({ name, className = 'w-4 h-4' }) {
     );
   }
 
+  // Modality & Functional Glyphs
+  if (normalized.includes('image') || normalized === 't2i' || normalized === 'i2i') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <rect x="3" y="3" width="18" height="18" rx="2" strokeLinejoin="round" />
+        <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
+        <polyline points="21 15 16 10 5 21" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (normalized.includes('video') || normalized === 't2v' || normalized === 'i2v' || normalized.includes('cinema')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <polygon points="5 3 19 12 5 21 5 3" strokeLinejoin="round" fill="currentColor" opacity="0.2" />
+        <polygon points="5 3 19 12 5 21 5 3" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (normalized.includes('audio') || normalized.includes('music') || normalized.includes('sound') || normalized.includes('speech')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <path d="M9 18V5l12-2v13" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="6" cy="18" r="3" fill="currentColor" opacity="0.3" />
+        <circle cx="18" cy="16" r="3" fill="currentColor" opacity="0.3" />
+      </svg>
+    );
+  }
+
+  if (normalized.includes('sparkle') || normalized.includes('edit') || normalized.includes('enhance')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
   // Default clean geometric AI node mark
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
