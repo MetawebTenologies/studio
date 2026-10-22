@@ -1,3 +1,6 @@
+> LEGACY DOCUMENT — describes the pre-rename Vite-era architecture.
+> Do not use as current context. See README.md.
+
 # Open Higgsfield AI: Technical Documentation & Context
 
 This document serves as a comprehensive knowledge base for the Open Higgsfield AI project. It details the architecture, key components, API integration patterns, and state management strategies used in the application.
