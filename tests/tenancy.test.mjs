@@ -51,6 +51,7 @@ import {
 import { GET as getJobDetailRoute } from '../app/api/v1/generations/[jobId]/route.js';
 import { GET as getGenerationsRoute } from '../app/api/v1/generations/route.js';
 import { GET as getAssetRoute } from '../app/api/v1/assets/[assetId]/route.js';
+import { GET as getTenantConfigRoute, sanitizePublicTenantConfig } from '../app/api/v1/tenant/config/route.js';
 
 test('White-Label W0: Database schema & migration 004 verification', async (t) => {
   assertDisposableTestDatabase();
@@ -1029,4 +1030,109 @@ test('P0-1 / S8 Negative Test 4: Worker running under RLS via system context - c
     resetProviderAdapters();
     process.env.TIMECAPSULE_TEST_MODE = prevTestMode;
   }
+});
+
+test('P0-2 / S5: /api/v1/tenant/config field whitelisting and Cache-Control: private enforcement', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_whitelist_audit',
+    slug: 'whitelist-audit',
+    name: 'Whitelist Audit Studio',
+    status: 'active',
+    branding: {
+      app_name: 'Whitelisted App',
+      primary_color: '#00e5ff',
+      internal_theme_secret: 'LEAK_SECRET_1',
+    },
+    flags: {
+      enable_video: true,
+      maintenance_mode: false,
+      internal_admin_token: 'LEAK_RAW_FLAG_SECRET_2',
+      billing_secret_key: 'sk_live_secret_3',
+      bypass_rls_flag: true,
+    },
+    spendCeilingCredits: 50000,
+  });
+
+  // Call /api/v1/tenant/config via route handler
+  const req = new Request('http://localhost:3000/api/v1/tenant/config', {
+    method: 'GET',
+    headers: {
+      'x-timecapsule-tenant-id': tenant.tenant_id,
+    },
+  });
+
+  const res = await getTenantConfigRoute(req);
+  assert.equal(res.status, 200);
+
+  // 1. Verify Cache-Control header is private
+  const cacheControl = res.headers.get('cache-control') || '';
+  assert.match(cacheControl, /private/i, 'Cache-Control header MUST be private (S5)');
+  assert.ok(!cacheControl.includes('public'), 'Cache-Control MUST NOT be public');
+
+  const body = await res.json();
+  assert.equal(body.ok, true);
+
+  // 2. Verify whitelisted top-level fields only
+  const ALLOWED_TOP_LEVEL_FIELDS = new Set([
+    'ok',
+    'tenant_id',
+    'slug',
+    'name',
+    'status',
+    'branding',
+    'flags',
+  ]);
+
+  for (const field of Object.keys(body)) {
+    assert.ok(
+      ALLOWED_TOP_LEVEL_FIELDS.has(field),
+      `Non-whitelisted top-level field appeared in /api/v1/tenant/config: "${field}"`
+    );
+  }
+
+  // 3. Verify sensitive DB fields are NOT exposed
+  assert.equal(body.spend_ceiling_credits, undefined, 'spend_ceiling_credits must NOT be exposed');
+  assert.equal(body.credits_balance, undefined, 'credits_balance must NOT be exposed in config');
+  assert.equal(body.credits_reserved, undefined, 'credits_reserved must NOT be exposed in config');
+  assert.equal(body.legal, undefined, 'raw legal object must NOT be exposed in config');
+
+  // 4. Verify branding object is sanitized to whitelist
+  assert.equal(body.branding.app_name, 'Whitelisted App');
+  assert.equal(body.branding.primary_color, '#00e5ff');
+  assert.equal(body.branding.internal_theme_secret, undefined, 'internal_theme_secret was stripped');
+
+  // 5. Verify flags object is sanitized: NEVER raw flags object
+  assert.equal(body.flags.enable_video, true);
+  assert.equal(body.flags.maintenance_mode, false);
+  assert.equal(body.flags.internal_admin_token, undefined, 'internal_admin_token flag was stripped');
+  assert.equal(body.flags.billing_secret_key, undefined, 'billing_secret_key flag was stripped');
+  assert.equal(body.flags.bypass_rls_flag, undefined, 'bypass_rls_flag flag was stripped');
+
+  const ALLOWED_FLAG_KEYS = new Set([
+    'enable_video',
+    'enable_upscale',
+    'custom_domain_enabled',
+    'allow_user_registration',
+    'maintenance_mode',
+  ]);
+  for (const flagKey of Object.keys(body.flags)) {
+    assert.ok(
+      ALLOWED_FLAG_KEYS.has(flagKey),
+      `Non-whitelisted flag appeared in config.flags: "${flagKey}"`
+    );
+  }
+
+  // 6. Direct unit assertion: sanitizePublicTenantConfig fails if unwhitelisted field is injected
+  const poisonedTenant = {
+    ...tenant,
+    injected_leak: 'malicious_data',
+    flags: { enable_video: true, leaked_raw_secret: 'bad' },
+  };
+  const sanitized = sanitizePublicTenantConfig(poisonedTenant);
+  assert.equal(sanitized.injected_leak, undefined, 'sanitizePublicTenantConfig strips unwhitelisted fields');
+  assert.equal(sanitized.flags.leaked_raw_secret, undefined, 'sanitizePublicTenantConfig strips unwhitelisted flags');
 });

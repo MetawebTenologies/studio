@@ -18,7 +18,11 @@ export async function GET(request) {
         authenticated: true,
         auth_mode: 'private_preview',
         notice: 'Single-tenant private-preview access only (not multi-tenant authentication).',
-        session,
+        session: {
+          user_id: session.user_id,
+          tenant_id: session.tenant_id,
+          role: session.role,
+        },
         credits,
       },
       {
