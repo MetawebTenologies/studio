@@ -21,6 +21,8 @@ This document establishes the disposition of every route in relation to the `mua
 | `/referral` | `/referral` | **STUB** | Referral rewards and developer credit program preview. |
 | `/api-keys` | `/api-keys` | **STUB** | Client credential management and provider secret configuration screen. |
 | `/integrations` | `/integrations` | **STUB** | Ecosystem integrations (ComfyUI, Blender, Premiere, MCP). |
+| `/white-label` | `/white-label` | **SHOW** | *(Owner-ratified amendment TC-WL-PATCH-1)*: Status amended from HIDE → SHOW (marketing & preview only with design-partner waitlist). White-label engine/admin surfaces stay unexposed until W3. |
+| `/docs/white-label` | `/docs/white-label` | **SHOW** | *(Owner-ratified amendment TC-WL-PATCH-1)*: Developer and operator documentation for custom domains, DNS verification, and tenant configuration. |
 | Non-core locale routes (`/zh`, `/ja`, etc.) | *N/A* | **HIDE** | Omitted from active navigation to keep single-tenant footprint lean. |
 
 ---

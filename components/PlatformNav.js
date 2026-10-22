@@ -7,6 +7,7 @@ import { TIMECAPSULE_BRAND } from '@/branding';
 export const PRIMARY_NAV = [
   { label: 'Explore', href: '/explore' },
   { label: 'Rankings', href: '/rankings' },
+  { label: 'White-Label', href: '/white-label' },
   { label: 'Docs', href: '/docs' },
   { label: 'Blog', href: '/blog' },
   { label: 'Pricing', href: '/pricing' },
@@ -21,6 +22,7 @@ export const APP_SUBNAV = [
   { label: 'Agents', href: '/agents', status: 'planned' },
   { label: 'Apps', href: '/apps', status: 'preview', greenBadge: '$' },
   { label: 'Studio', href: '/studio?preview=1', status: 'working', badge: 'HOT' },
+  { label: 'White-Label', href: '/white-label', status: 'working' },
   { label: 'API Keys', href: '/api-keys', status: 'planned' },
   { label: 'Integrations', href: '/integrations', status: 'preview' },
   { label: 'MCP & CLI', href: '/cli', status: 'working' },

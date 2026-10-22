@@ -3,6 +3,9 @@ import '../packages/studio/dist/tailwind.css';
 import { TIMECAPSULE_BRAND } from '@/branding';
 
 export const metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3002'
+  ),
   title: TIMECAPSULE_BRAND.title,
   description: TIMECAPSULE_BRAND.description,
   icons: {

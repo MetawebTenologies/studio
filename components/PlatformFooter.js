@@ -34,6 +34,7 @@ export default function PlatformFooter() {
             <ul className="space-y-2 text-[var(--tc-text-secondary,#475569)]">
               <li><Link href="/explore" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Home</Link></li>
               <li><Link href="/dashboard" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Dashboard</Link></li>
+              <li><Link href="/white-label" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">White-Label Studio</Link></li>
               <li><Link href="/explore" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Explore Models</Link></li>
               <li><Link href="/rankings" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Model Rankings</Link></li>
               <li><Link href="/pricing" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Pricing</Link></li>
@@ -51,6 +52,8 @@ export default function PlatformFooter() {
             <h4 className="text-[var(--tc-text-primary,#0f172a)] font-bold uppercase tracking-wider text-[11px] mb-3">Resources</h4>
             <ul className="space-y-2 text-[var(--tc-text-secondary,#475569)]">
               <li><Link href="/docs" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Documentation</Link></li>
+              <li><Link href="/docs/white-label" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">White-Label Architecture</Link></li>
+              <li><Link href="/docs/white-label#custom-domain" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Custom Domain Setup</Link></li>
               <li><Link href="/rankings" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Model Leaderboard</Link></li>
               <li><Link href="/explore" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Providers Hub</Link></li>
               <li><Link href="/explore" className="hover:text-[var(--tc-text-primary,#0f172a)] transition-colors">Comparison Hub</Link></li>

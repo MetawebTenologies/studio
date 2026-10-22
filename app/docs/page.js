@@ -90,6 +90,37 @@ export default function DocsPage() {
                 ))}
               </ul>
             </div>
+
+            <div>
+              <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">White-Label & Reselling</h4>
+              <ul className="space-y-1">
+                <li>
+                  <Link
+                    href="/docs/white-label"
+                    className="block px-3 py-1.5 rounded transition-colors text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                  >
+                    White-Label Architecture
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/docs/white-label#custom-domain"
+                    className="flex items-center justify-between px-3 py-1.5 rounded transition-colors text-blue-600 font-semibold hover:bg-blue-50"
+                  >
+                    <span>Custom Domain Setup</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-mono">CNAME</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/white-label"
+                    className="block px-3 py-1.5 rounded transition-colors text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                  >
+                    Reseller Program & Calculator
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
         </aside>
 
@@ -134,6 +165,14 @@ export default function DocsPage() {
                 <div>
                   <strong className="text-slate-900">Use Timecapsule from an AI assistant:</strong> see our{' '}
                   <Link href="/cli" className="text-blue-600 hover:underline font-medium">MCP Server & Agent Skills</Link> documentation.
+                </div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-slate-400 font-bold">—</span>
+                <div>
+                  <strong className="text-slate-900">White-label & brand the studio:</strong> see the{' '}
+                  <Link href="/docs/white-label" className="text-blue-600 hover:underline font-medium">White-Label Deployment</Link> guide and configure your{' '}
+                  <Link href="/docs/white-label#custom-domain" className="text-blue-600 hover:underline font-medium">Custom Domain & CNAME</Link>.
                 </div>
               </li>
             </ul>

@@ -550,6 +550,8 @@ test('Track A: Forbidden-copy guard prevents verbatim Muapi taglines in UI and c
     'app/referral/page.js',
     'app/api-keys/page.js',
     'app/workflows/page.js',
+    'app/white-label/page.js',
+    'app/docs/white-label/page.js',
     'components/PlatformNav.js',
     'components/PlatformFooter.js',
   ];
@@ -574,6 +576,40 @@ test('Track A: Forbidden-copy guard prevents verbatim Muapi taglines in UI and c
       );
     }
   }
+});
+
+test('TC-WL-PATCH-1: White-label claims & guardrails (no Stripe Connect, no Vercel IP, waitlist CTA present, honest badges)', () => {
+  // (a) Assert "Stripe Connect" never appears in app/**
+  function scanDirForForbiddenString(dir, forbiddenStr) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanDirForForbiddenString(fullPath, forbiddenStr);
+      } else if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.jsx') || entry.name.endsWith('.md'))) {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        assert.ok(
+          !content.toLowerCase().includes(forbiddenStr.toLowerCase()),
+          `File ${fullPath} must not contain forbidden phrase '${forbiddenStr}'`
+        );
+      }
+    }
+  }
+  scanDirForForbiddenString(path.join(repoRoot, 'app'), 'Stripe Connect');
+
+  // (b) Assert no hardcoded Vercel IP literals in docs
+  const docsContent = fs.readFileSync(path.join(repoRoot, 'app/docs/white-label/page.js'), 'utf8');
+  assert.ok(!docsContent.includes('76.76.21.21'), 'app/docs/white-label/page.js must not contain Vercel IP 76.76.21.21');
+
+  // (c) Assert waitlist CTA exists on /white-label
+  const wlContent = fs.readFileSync(path.join(repoRoot, 'app/white-label/page.js'), 'utf8');
+  assert.ok(wlContent.includes('Join the Design-Partner Waitlist'), 'Waitlist CTA must exist on /white-label');
+  assert.ok(wlContent.includes('50% off for 12 months'), '50% off incentive must be documented on /white-label');
+
+  // (d) Assert no "SLA" guarantee in pricing tier
+  assert.ok(!wlContent.includes('Uptime SLA'), 'Scale tier must not contain SLA agreement');
+  assert.ok(!wlContent.includes('BYO-GPU provider keys'), 'Scale tier must not advertise unratified BYO-GPU keys');
+  assert.ok(!wlContent.includes('dedicated proxy IP'), 'Scale tier must not advertise unratified dedicated proxy IP');
 });
 
 test('Track A: Model catalog seam preserves all 29 upstream exports and hides unconfigured self-hosted models from active pickers', () => {
