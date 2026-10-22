@@ -12,6 +12,51 @@ const SAMPLE_PROMPTS = [
   'Hyperrealistic documentary footage of a cybernetic tiger walking through rain-slicked Tokyo streets, reflections on asphalt, neon signage',
 ];
 
+const SIBLINGS_BY_FAMILY = {
+  flux: [
+    { slug: 'flux-dev', name: 'FLUX.1 Dev' },
+    { slug: 'flux-schnell', name: 'FLUX.1 Schnell' },
+    { slug: 'flux-pro', name: 'FLUX.1 Pro' },
+    { slug: 'flux-3-klein-text-to-image', name: 'FLUX 3 Klein T2I' },
+  ],
+  seedance: [
+    { slug: 'seedance-pro-t2v', name: 'Seedance 2.5 Pro T2V' },
+    { slug: 'seedance-pro-i2v', name: 'Seedance 2.5 Pro I2V' },
+    { slug: 'seedance-2-5-omni', name: 'Seedance 2.5 Omni' },
+    { slug: 'seedream-5-0-pro', name: 'Seedream 5.0 Pro' },
+  ],
+  veo: [
+    { slug: 'veo-3-1-cinema', name: 'Veo 3.1 Cinema Fast' },
+    { slug: 'veo3.1-fast-text-to-video', name: 'Veo 3.1 Fast T2V' },
+    { slug: 'veo3.1-fast-image-to-video', name: 'Veo 3.1 Fast I2V' },
+    { slug: 'veo-3-1-4k', name: 'Veo 3.1 4K Direct' },
+  ],
+  kling: [
+    { slug: 'kling-v3-pro-t2v', name: 'Kling v3 Pro T2V' },
+    { slug: 'kling-4-0-text-to-video', name: 'Kling 4.0 Text-to-Video' },
+    { slug: 'kling-4-0-reference-to-video', name: 'Kling 4.0 Reference-to-Video' },
+    { slug: 'kling-4-0-keyframe-to-video', name: 'Kling 4.0 Keyframe-to-Video' },
+  ],
+  wan: [
+    { slug: 'wan-2-1-pro-video', name: 'Wan 2.1 Pro Video' },
+    { slug: 'wan-3-0-spicy-text-to-video', name: 'Wan 3.0 Spicy T2V' },
+    { slug: 'wan-3-0-reference-to-video', name: 'Wan 3.0 Reference-to-Video' },
+    { slug: 'infinitetalk-image-to-video', name: 'InfiniteTalk LipSync' },
+  ],
+  'nano-banana': [
+    { slug: 'nano-banana-pro', name: 'Nano Banana Pro' },
+    { slug: 'nano-banana-pro-edit', name: 'Nano Banana Pro Edit' },
+    { slug: 'nano-banana-2', name: 'Nano Banana 2' },
+    { slug: 'flux-dev', name: 'FLUX.1 Dev' },
+  ],
+  audio: [
+    { slug: 'lyria-3-studio', name: 'Lyria 3 Studio Music' },
+    { slug: 'elevenlabs-v4', name: 'ElevenLabs v4 Narration' },
+    { slug: 'suno-v4-music', name: 'Suno v4 Soundtrack' },
+    { slug: 'seedance-pro-t2v', name: 'Seedance 2.5 Pro T2V' },
+  ],
+};
+
 export default function ModelPlayground({
   slug,
   modelTitle,
@@ -412,9 +457,40 @@ console.log('SSE Stream:', job.events_url);`;
           <h1 className="text-2xl sm:text-3xl font-black text-[#f5f7fa] tracking-tight">
             {modelTitle}
           </h1>
-          <p className="text-xs text-zinc-400 mt-1 font-mono">
-            Endpoint: <code className="text-zinc-200">/api/v1/generations</code> · Model ID: <code className="text-zinc-200">{slug}</code>
-          </p>
+          <div className="flex items-center gap-2.5 mt-2 flex-wrap">
+            <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#181820] border border-white/10 text-xs font-mono text-zinc-300">
+              <span>timecapsule/{slug}</span>
+              <button
+                type="button"
+                onClick={() => handleCopyCode(`timecapsule/${slug}`)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Copy model identifier"
+              >
+                {copiedCode ? (
+                  <BrandIcon name="check" className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <BrandIcon name="copy" className="w-3 h-3" />
+                )}
+              </button>
+            </span>
+
+            {/* Sibling Model Selector */}
+            <div className="relative inline-block">
+              <select
+                value={slug}
+                onChange={(e) => {
+                  window.location.href = `/${e.target.value}`;
+                }}
+                className="bg-[#181820] border border-white/10 hover:border-white/20 text-zinc-300 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:border-blue-500 font-medium cursor-pointer transition-colors"
+              >
+                {(SIBLINGS_BY_FAMILY[providerFamily] || SIBLINGS_BY_FAMILY.flux).map((item) => (
+                  <option key={item.slug} value={item.slug}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4">
@@ -756,6 +832,81 @@ console.log('SSE Stream:', job.events_url);`;
                   </Link>
                 )}
               </div>
+
+              {/* Price Matrix Table (Matches muapi_model_playground.png) */}
+              <div className="p-4 border-t border-white/10 bg-[#14141a]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                    Price varies by resolution and duration
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Durable Telemetry</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-[11px] border-collapse font-mono">
+                    <thead>
+                      <tr className="border-b border-white/10 text-zinc-500 uppercase text-[9px] tracking-wider">
+                        <th className="py-1.5 px-2 font-bold">Resolution</th>
+                        <th className="py-1.5 px-2 font-bold">Duration</th>
+                        <th className="py-1.5 px-2 text-right font-bold">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-zinc-300">
+                      {isVideo ? (
+                        <>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">720p</td>
+                            <td className="py-1.5 px-2">5s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$0.79</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">720p</td>
+                            <td className="py-1.5 px-2">10s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$1.57</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">720p</td>
+                            <td className="py-1.5 px-2">15s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$2.35</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">1080p</td>
+                            <td className="py-1.5 px-2">5s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$1.18</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">1080p</td>
+                            <td className="py-1.5 px-2">10s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$2.35</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">1080p</td>
+                            <td className="py-1.5 px-2">15s</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$3.52</td>
+                          </tr>
+                        </>
+                      ) : (
+                        <>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">720p</td>
+                            <td className="py-1.5 px-2">Standard Draft</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$0.005</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">1080p</td>
+                            <td className="py-1.5 px-2">Production Master</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$0.009</td>
+                          </tr>
+                          <tr className="hover:bg-white/5">
+                            <td className="py-1.5 px-2 text-zinc-400">4K UHD</td>
+                            <td className="py-1.5 px-2">High-Res Detail</td>
+                            <td className="py-1.5 px-2 text-right font-bold text-emerald-400">$0.025</td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
             {/* Recent Output History Carousel */}
@@ -934,6 +1085,127 @@ data: {
           </div>
         </div>
       )}
+
+      {/* Overview & About This Model Section (Matches muapi_model_playground.png) */}
+      <section className="bg-[#121217] border border-white/10 rounded-[12px] p-6 sm:p-8 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">
+            About This Model
+          </h2>
+        </div>
+        <h3 className="text-xl sm:text-2xl font-black text-[#f5f7fa] tracking-tight mb-4">
+          Overview: {modelTitle}
+        </h3>
+        <p className="text-sm text-zinc-300 leading-relaxed max-w-4xl mb-6">
+          {modelTitle} delivers state-of-the-art generative synthesis optimized for studio pipelines, low-latency API integration, and automated creative workflows. Backed by Timecapsule&apos;s unified multi-provider execution gateway, requests inherit automatic idempotency keys, durable PostgreSQL credit reservations, and strict zero-silent-substitution pinning.
+        </p>
+
+        {/* 4 Numbered Use Case Cards (1, 2, 3, 4) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
+          <div className="bg-[#181820] border border-white/10 rounded-xl p-4.5 flex flex-col justify-between hover:border-blue-500/40 transition-all">
+            <div>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono font-black mb-3">
+                1
+              </span>
+              <h4 className="text-xs font-bold text-[#f5f7fa] mb-1.5">Cinematic Directing</h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Generate long single-take scenes up to 30s with volumetric lighting, photorealistic camera translation, and depth of field.
+              </p>
+            </div>
+            <span className="text-[10px] text-blue-400/80 font-mono mt-3">Ready in Studio →</span>
+          </div>
+
+          <div className="bg-[#181820] border border-white/10 rounded-xl p-4.5 flex flex-col justify-between hover:border-blue-500/40 transition-all">
+            <div>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono font-black mb-3">
+                2
+              </span>
+              <h4 className="text-xs font-bold text-[#f5f7fa] mb-1.5">Social Video & UGC</h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Produce 9:16 vertical clips with consistent character physics for Reels, TikTok, and YouTube Shorts.
+              </p>
+            </div>
+            <span className="text-[10px] text-blue-400/80 font-mono mt-3">Multi-Aspect →</span>
+          </div>
+
+          <div className="bg-[#181820] border border-white/10 rounded-xl p-4.5 flex flex-col justify-between hover:border-blue-500/40 transition-all">
+            <div>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono font-black mb-3">
+                3
+              </span>
+              <h4 className="text-xs font-bold text-[#f5f7fa] mb-1.5">Commercials & Ads</h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Draft photorealistic packshots, product turnarounds, and commercial moodboards before scheduling physical production shoots.
+              </p>
+            </div>
+            <span className="text-[10px] text-blue-400/80 font-mono mt-3">High Fidelity →</span>
+          </div>
+
+          <div className="bg-[#181820] border border-white/10 rounded-xl p-4.5 flex flex-col justify-between hover:border-blue-500/40 transition-all">
+            <div>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono font-black mb-3">
+                4
+              </span>
+              <h4 className="text-xs font-bold text-[#f5f7fa] mb-1.5">Storytelling & Previz</h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Prototype scene sequences, lighting setups, and keyframe transitions directly in node graphs and AI pipelines.
+              </p>
+            </div>
+            <span className="text-[10px] text-blue-400/80 font-mono mt-3">Pipeline Safe →</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Sibling Models Carousel / Links (Matches muapi_model_playground.png) */}
+      <section className="bg-[#121217] border border-white/10 rounded-[12px] p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div>
+            <h3 className="text-sm font-bold text-[#f5f7fa] uppercase tracking-wider">
+              More Models in {providerName} Family
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Switch between related models with identical API schema and shared credit balance.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <Link href="/rankings" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors">
+              See live usage rankings →
+            </Link>
+            <span className="text-zinc-600">·</span>
+            <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors">
+              Pricing Comparison →
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(SIBLINGS_BY_FAMILY[providerFamily] || SIBLINGS_BY_FAMILY.flux).map((item) => (
+            <Link
+              key={item.slug}
+              href={`/${item.slug}`}
+              className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between group ${
+                item.slug === slug
+                  ? 'bg-blue-600/15 border-blue-500 text-blue-300'
+                  : 'bg-[#181820] border-white/10 text-zinc-300 hover:border-blue-500/40 hover:text-white'
+              }`}
+            >
+              <div>
+                <div className="text-[10px] uppercase font-mono text-zinc-500 mb-1">
+                  {item.slug === slug ? 'Current Model' : 'Alternative Route'}
+                </div>
+                <div className="text-xs font-bold truncate group-hover:text-blue-400 transition-colors">
+                  {item.name}
+                </div>
+              </div>
+              <div className="text-[10px] text-zinc-400 font-mono mt-2 pt-2 border-t border-white/5 flex items-center justify-between">
+                <span>/{item.slug}</span>
+                <span className="text-blue-400 font-semibold">Try →</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {/* Private Preview Modal */}
       {showAuthModal && (

@@ -388,7 +388,7 @@ export default function RankingsPage() {
         </div>
 
         {/* Methodology Card */}
-        <div className="bg-[#121217] border border-white/10 rounded-xl p-6 text-xs text-zinc-400 shadow-sm flex items-start gap-4">
+        <div className="bg-[#121217] border border-white/10 rounded-xl p-6 text-xs text-zinc-400 shadow-sm flex items-start gap-4 mb-8">
           <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
             <BrandIcon name="shield" className="w-5 h-5 text-[#00e5ff]" />
           </div>
@@ -409,6 +409,80 @@ export default function RankingsPage() {
               <span>·</span>
               <span>Zero Synthetic Traffic</span>
             </div>
+          </div>
+        </div>
+
+        {/* Frequently Asked Questions (Matches muapi_live_rankings.png) */}
+        <div className="bg-[#121217] border border-white/10 rounded-xl p-6 sm:p-8 mb-8 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-blue-400" />
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">
+              Frequently Asked Questions
+            </h3>
+          </div>
+          <p className="text-xs text-zinc-400 mb-6">
+            Everything you need to know about Timecapsule model leaderboards, telemetry methodology, and integration.
+          </p>
+
+          <div className="space-y-3">
+            {[
+              {
+                q: 'How are models ranked on this leaderboard?',
+                a: 'Rankings reflect verified completion latency, human preference Elo ratings, and production request volume processed through Timecapsule\'s unified multi-provider execution gateway. Automated test runs and synthetic benchmarks are strictly excluded.'
+              },
+              {
+                q: 'Why rank by request volume instead of benchmark scores?',
+                a: 'Synthetic benchmarks often drift from real-world production performance. Real volume demonstrates which models creative engineers, developers, and studios rely on for high uptime, photoreal fidelity, and reliable prompt adherence.'
+              },
+              {
+                q: 'Can I try these models before integrating the API?',
+                a: 'Yes. Every model in the leaderboard features an in-place interactive playground with deterministic Safe Preview mode and direct one-click launch into Timecapsule Studio.'
+              },
+              {
+                q: 'How often are the rankings and volume charts updated?',
+                a: 'Rankings are computed dynamically from verified PostgreSQL job completion logs and refreshed hourly across rolling 7-day and 30-day windows.'
+              }
+            ].map((faq, i) => (
+              <details
+                key={i}
+                className="group bg-[#181820] border border-white/10 rounded-xl p-4.5 transition-all open:border-blue-500/40 cursor-pointer"
+              >
+                <summary className="flex items-center justify-between font-bold text-xs sm:text-sm text-[#f5f7fa] list-none select-none">
+                  <span>{faq.q}</span>
+                  <span className="text-xs text-zinc-500 group-open:rotate-180 transition-transform duration-200">
+                    ▾
+                  </span>
+                </summary>
+                <p className="text-xs text-zinc-400 leading-relaxed mt-3 pt-3 border-t border-white/5 font-sans">
+                  {faq.a}
+                </p>
+              </details>
+            ))}
+          </div>
+        </div>
+
+        {/* Video / Explainer Teaser (Matches muapi_live_rankings.png) */}
+        <div className="bg-[#121217] border border-white/10 rounded-xl p-6 sm:p-8 mb-8 shadow-sm">
+          <div className="flex flex-col md:flex-row items-center gap-6 justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase tracking-wider border border-blue-500/20 mb-3">
+                Industry Benchmark Guide
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-[#f5f7fa] tracking-tight mb-2">
+                Watch: Best AI Video & Image Generator in 2026 (Speed, Quality, Compute Efficiency)
+              </h3>
+              <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
+                Compare side-by-side generational quality between Seedance 2.5, Google Veo 3.1, FLUX.1 Pro, and WanX 2.1 across latency, temporal stability, and per-frame compute cost.
+              </p>
+            </div>
+
+            <Link
+              href="/blog"
+              className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 shadow-md group"
+            >
+              <BrandIcon name="play" className="w-3.5 h-3.5" />
+              <span>Watch Analysis</span>
+            </Link>
           </div>
         </div>
       </main>

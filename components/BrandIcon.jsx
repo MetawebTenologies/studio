@@ -445,6 +445,25 @@ export default function BrandIcon({ name, className = 'w-4 h-4' }) {
     );
   }
 
+  // Copy / Clipboard
+  if (normalized.includes('copy') || normalized.includes('clipboard')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeLinejoin="round" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  // Play button
+  if (normalized.includes('play')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    );
+  }
+
   // Lock / Auth / Key / Secret
   if (normalized.includes('lock') || normalized.includes('auth') || normalized.includes('key') || normalized.includes('secret')) {
     return (
