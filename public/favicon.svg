@@ -1,22 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <defs>
-    <linearGradient id="tcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00e5ff"/>
-      <stop offset="100%" stop-color="#6366f1"/>
-    </linearGradient>
-    <radialGradient id="tcGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#09090b" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="256" height="256" rx="48" fill="#09090b"/>
-  <circle cx="128" cy="128" r="96" fill="url(#tcGlow)"/>
-  <circle cx="128" cy="128" r="72" fill="none" stroke="url(#tcGrad)" stroke-width="8" stroke-linecap="round"/>
-  <circle cx="128" cy="128" r="44" fill="none" stroke="#00e5ff" stroke-width="4" stroke-dasharray="12 8" opacity="0.8"/>
-  <rect x="114" y="90" width="28" height="76" rx="14" fill="url(#tcGrad)"/>
-  <circle cx="128" cy="128" r="6" fill="#ffffff"/>
-  <line x1="28" y1="128" x2="48" y2="128" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
-  <line x1="208" y1="128" x2="228" y2="128" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
-  <line x1="128" y1="28" x2="128" y2="48" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
-  <line x1="128" y1="208" x2="128" y2="228" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#09090B"/>
+  <g transform="translate(16, 16) scale(0.125) translate(-120, -120)">
+    <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA"/>
+    <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF"/>
+  </g>
 </svg>

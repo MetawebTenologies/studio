@@ -39,8 +39,11 @@ export default function PlatformNav({ activeModule = 'studio' }) {
         {/* Left: Brand + Public Navigation */}
         <div className="flex items-center gap-8">
           <Link href="/explore" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#00e5ff] via-[#3b82f6] to-[#6366f1] flex items-center justify-center text-white font-black text-xs shadow-sm">
-              TC
+            <div className="w-8 h-8 rounded-lg bg-[#09090b] border border-white/10 flex items-center justify-center p-1.5 shadow-sm group-hover:border-[#00e5ff]/50 transition-colors">
+              <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+                <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
+                <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
+              </svg>
             </div>
             <span className="text-[var(--tc-text-primary,#0f172a)] font-extrabold text-base tracking-widest uppercase">
               {TIMECAPSULE_BRAND.name}
@@ -95,10 +98,13 @@ export default function PlatformNav({ activeModule = 'studio' }) {
           </Link>
 
           <div
-            className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-slate-100 select-none shadow-xs"
+            className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e5ff] to-[#9b8cff] flex items-center justify-center text-[#09090b] text-[10px] font-black ring-2 ring-[#09090b]/30 select-none shadow-xs"
             title="Single-Tenant Workspace User"
           >
-            TC
+            <svg viewBox="0 0 240 240" width="16" height="16" fill="none">
+              <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#09090B" />
+              <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#09090B" fillOpacity="0.6" />
+            </svg>
           </div>
         </div>
       </div>

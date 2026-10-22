@@ -1,6 +1,6 @@
-# Timecapsule — AI Cinema, Video & Image Studio
+# Timecapsule Studio — From imagination to motion
 
-Timecapsule is a self-hostable multimodal generative studio for AI cinema, video, image, and lip-sync creation. Users bring their own provider keys, with native server-side adapters for Muapi and Kie built in.
+Timecapsule Studio is a cinematic AI workspace for turning ideas into images, motion, and creative workflows with a secure managed BFF boundary. Native server-side adapters for Muapi and Kie are built in with zero silent model substitutions.
 
 Based on the MIT-licensed Open-Higgsfield-AI project.
 

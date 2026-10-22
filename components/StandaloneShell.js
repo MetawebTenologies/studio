@@ -348,8 +348,11 @@ export default function StandaloneShell({ hideHeader = false }) {
       {!hideHeader && (
         <header className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 bg-[#09090b]">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#00e5ff]/15 border border-[#00e5ff]/40 flex items-center justify-center text-[#00e5ff] font-black text-sm">
-              TC
+            <div className="w-8 h-8 rounded-lg bg-[#09090b] border border-[#00e5ff]/40 flex items-center justify-center p-1.5 shadow-sm">
+              <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+                <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
+                <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
+              </svg>
             </div>
             <span className="text-white font-black text-lg tracking-wider uppercase">
               {TIMECAPSULE_BRAND.name}
