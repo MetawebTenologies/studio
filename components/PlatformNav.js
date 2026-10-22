@@ -33,23 +33,23 @@ export const APP_SUBNAV = [
   { label: 'Usage', href: '/usage', status: 'working' },
 ];
 
-export default function PlatformNav({ activeModule = 'studio' }) {
+export default function PlatformNav({ activeModule = 'studio', showSubnav = true }) {
   const pathname = usePathname();
 
   return (
-    <header className="flex-shrink-0 bg-[var(--tc-bg-card,#ffffff)]/90 border-b border-[var(--tc-border-divider,rgba(226,232,240,0.8))] z-40 sticky top-0 backdrop-blur-md transition-all">
+    <header className="flex-shrink-0 bg-[#09090b]/90 border-b border-white/10 z-40 sticky top-0 backdrop-blur-md transition-all">
       {/* Top Header Row — 1400px Max Width */}
       <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 xl:px-0 h-16">
         {/* Left: Brand + Public Navigation */}
         <div className="flex items-center gap-8">
-          <Link href="/explore" className="flex items-center gap-2.5 group">
+          <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-lg bg-[#09090b] border border-white/10 flex items-center justify-center p-1.5 shadow-sm group-hover:border-[#00e5ff]/50 transition-colors">
               <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
                 <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
                 <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
               </svg>
             </div>
-            <span className="text-[var(--tc-text-primary,#0f172a)] font-extrabold text-base tracking-widest uppercase">
+            <span className="text-[#f5f7fa] font-extrabold text-base tracking-widest uppercase">
               {TIMECAPSULE_BRAND.name}
             </span>
           </Link>
@@ -58,7 +58,7 @@ export default function PlatformNav({ activeModule = 'studio' }) {
             {PRIMARY_NAV.map((item) => {
               const isActive =
                 pathname === item.href ||
-                (item.href === '/explore' && (pathname === '/' || pathname === '/explore'));
+                (item.href === '/explore' && pathname === '/explore');
 
               return (
                 <Link
@@ -67,8 +67,8 @@ export default function PlatformNav({ activeModule = 'studio' }) {
                   target={item.external ? '_blank' : undefined}
                   className={`inline-flex min-h-9 items-center gap-1.5 text-[13px] font-semibold transition-all relative ${
                     isActive
-                      ? 'text-[var(--tc-color-primary,#3b82f6)] font-bold'
-                      : 'text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)]'
+                      ? 'text-[#00e5ff] font-bold'
+                      : 'text-zinc-400 hover:text-[#f5f7fa]'
                   }`}
                 >
                   <span>{item.label}</span>
@@ -78,7 +78,7 @@ export default function PlatformNav({ activeModule = 'studio' }) {
                     </span>
                   )}
                   {isActive && (
-                    <div className="absolute -bottom-[16px] left-0 right-0 h-0.5 bg-[var(--tc-color-primary,#3b82f6)]" />
+                    <div className="absolute -bottom-[16px] left-0 right-0 h-0.5 bg-[#00e5ff]" />
                   )}
                 </Link>
               );
@@ -91,7 +91,7 @@ export default function PlatformNav({ activeModule = 'studio' }) {
           <Link
             href="/explore"
             aria-label="Search models"
-            className="w-9 h-9 rounded-full bg-[var(--tc-bg-page,#f8fafc)] hover:bg-[var(--tc-bg-subtle,#f1f5f9)] border border-[var(--tc-border-card,#e2e8f0)] flex items-center justify-center text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)] transition-colors shadow-xs"
+            className="w-9 h-9 rounded-full bg-[#121217] hover:bg-[#181820] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors shadow-xs"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
@@ -103,7 +103,7 @@ export default function PlatformNav({ activeModule = 'studio' }) {
 
           <Link
             href="/studio?preview=1"
-            className="px-4 py-2 rounded-full bg-[var(--tc-color-primary,#3b82f6)] hover:bg-[var(--tc-color-primary-hover,#2563eb)] text-white text-xs font-semibold transition-all shadow-sm"
+            className="px-4 py-2 rounded-full bg-[#00e5ff] hover:bg-[#38bdf8] text-[#09090b] text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
           >
             Sign In
           </Link>
@@ -120,46 +120,48 @@ export default function PlatformNav({ activeModule = 'studio' }) {
         </div>
       </div>
 
-      {/* Secondary Horizontal Sub-Nav */}
-      <div className="border-t border-[var(--tc-border-divider,rgba(226,232,240,0.7))] bg-[var(--tc-bg-page,#f8fafc)]/60">
-        <div className="max-w-[1400px] mx-auto flex items-center px-4 sm:px-6 xl:px-0 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-6 min-w-max">
-            {APP_SUBNAV.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href.startsWith('/studio') && pathname.startsWith('/studio')) ||
-                (item.href === '/explore' && (pathname === '/explore' || pathname === '/'));
+      {/* Secondary Horizontal Sub-Nav (Optional for app pages, hidden on landing) */}
+      {showSubnav && (
+        <div className="border-t border-white/10 bg-[#0c0c10]/80">
+          <div className="max-w-[1400px] mx-auto flex items-center px-4 sm:px-6 xl:px-0 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-6 min-w-max">
+              {APP_SUBNAV.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href.startsWith('/studio') && pathname.startsWith('/studio')) ||
+                  (item.href === '/explore' && pathname === '/explore');
 
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`relative py-2.5 text-[12px] md:text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
-                    isActive
-                      ? 'text-[var(--tc-text-primary,#0f172a)] font-bold'
-                      : 'text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)]'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {item.greenBadge && (
-                    <span className="text-[11px] font-bold text-emerald-500 leading-none">
-                      {item.greenBadge}
-                    </span>
-                  )}
-                  {item.badge && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-[var(--tc-color-badge-amber,#eab308)] text-black leading-none">
-                      {item.badge}
-                    </span>
-                  )}
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-[var(--tc-color-primary,#3b82f6)] rounded-t-full" />
-                  )}
-                </Link>
-              );
-            })}
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={`relative py-2.5 text-[12px] md:text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
+                      isActive
+                        ? 'text-[#f5f7fa] font-bold'
+                        : 'text-zinc-400 hover:text-[#f5f7fa]'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {item.greenBadge && (
+                      <span className="text-[11px] font-bold text-emerald-400 leading-none">
+                        {item.greenBadge}
+                      </span>
+                    )}
+                    {item.badge && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400 text-[#09090b] leading-none">
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive && (
+                      <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#00e5ff] rounded-t-full" />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }
