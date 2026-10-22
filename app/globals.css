@@ -1,14 +1,17 @@
 @import "tailwindcss";
+@import "./themes/theme.muapi.css";
+@import "./themes/theme.timecapsule.css";
 @config "../tailwind.config.js";
+@source "../app";
 @source "../components";
 @source "../packages/studio/src";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: #050505;
-  color: white;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--tc-bg-page, #f8fafc);
+  color: var(--tc-text-primary, #0f172a);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }
 
 :root {
