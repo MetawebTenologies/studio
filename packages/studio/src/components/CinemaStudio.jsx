@@ -735,11 +735,11 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
 
                         {/* Generate Button */}
                         <button
-                            className="h-[56px] px-8 bg-[#00e5ff] text-black rounded-xl font-black text-xs uppercase hover:bg-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-[56px] px-8 bg-[#00e5ff] text-black rounded-xl font-black text-xs uppercase hover:bg-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             disabled={isGenerating || !settings.prompt.trim()}
                             onClick={handleGenerate}
                         >
-                            {isGenerating ? 'SHOOTING...' : 'GENERATE ✨'}
+                            {isGenerating ? 'SHOOTING...' : 'GENERATE'}
                         </button>
                     </div>
                 </div>

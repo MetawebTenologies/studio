@@ -214,8 +214,8 @@ export const SUPPORTED_RELEASE_MODELS = [
   {
     id: 'seedance-pro-t2v',
     timecapsule_model_id: 'seedance-pro-t2v',
-    name: 'Seedance 1.5 Pro T2V',
-    description: 'High-coherence cinematic text-to-video generation via Muapi (with Kie alternative).',
+    name: 'Seedance Pro T2V',
+    description: 'Cinematic text-to-video via Muapi Seedance Pro (or explicit different-model alternative: Kie ByteDance Seedance 1.5 Pro). Routes are non-equivalent provider models.',
     family: 'Seedance',
     category: 't2v',
     modality: 'video',
@@ -235,6 +235,9 @@ export const SUPPORTED_RELEASE_MODELS = [
         execution_route: 'kie:market-jobs/v1:bytedance/seedance-1.5-pro',
         execution_route_version: EXECUTION_ROUTE_VERSION,
         verification_status: 'contract_tested',
+        route_relation: 'different_model_alternative',
+        is_equivalent_model: false,
+        notes: 'Kie provides bytedance/seedance-1.5-pro, which is a different model version from Muapi seedance-pro-t2v. Explicit opt-in only; never silently substituted.',
       },
     },
     required_inputs: ['prompt'],
@@ -281,8 +284,8 @@ export const SUPPORTED_RELEASE_MODELS = [
   {
     id: 'seedance-pro-i2v',
     timecapsule_model_id: 'seedance-pro-i2v',
-    name: 'Seedance 1.5 Pro I2V',
-    description: 'Animate a reference keyframe into cinematic motion via Muapi (with Kie alternative).',
+    name: 'Seedance Pro I2V',
+    description: 'Reference keyframe image animation via Muapi Seedance Pro I2V (or explicit different-model alternative: Kie ByteDance Seedance 1.5 Pro). Routes are non-equivalent provider models.',
     family: 'Seedance',
     category: 'i2v',
     modality: 'i2v',
@@ -304,6 +307,9 @@ export const SUPPORTED_RELEASE_MODELS = [
         execution_route: 'kie:market-jobs/v1:bytedance/seedance-1.5-pro',
         execution_route_version: EXECUTION_ROUTE_VERSION,
         verification_status: 'contract_tested',
+        route_relation: 'different_model_alternative',
+        is_equivalent_model: false,
+        notes: 'Kie provides bytedance/seedance-1.5-pro, which is a different model version from Muapi seedance-pro-i2v. Explicit opt-in only; never silently substituted.',
       },
     },
     required_inputs: ['image_urls'],
@@ -375,7 +381,9 @@ export const SUPPORTED_RELEASE_MODELS = [
         provider_model_id: 'veo3.1-fast-text-to-video',
         execution_route: 'muapi:predictions/v1:veo3.1-fast-text-to-video',
         execution_route_version: EXECUTION_ROUTE_VERSION,
-        verification_status: 'contract_tested',
+        verification_status: 'disabled',
+        enabled: false,
+        disabled_reason: 'Muapi contract for Veo 3.1 Fast is unverified; route disabled to prevent unestablished execution.',
       },
     },
     required_inputs: ['prompt'],
@@ -441,7 +449,9 @@ export const SUPPORTED_RELEASE_MODELS = [
         provider_model_id: 'veo3.1-fast-image-to-video',
         execution_route: 'muapi:predictions/v1:veo3.1-fast-image-to-video',
         execution_route_version: EXECUTION_ROUTE_VERSION,
-        verification_status: 'contract_tested',
+        verification_status: 'disabled',
+        enabled: false,
+        disabled_reason: 'Muapi contract for Veo 3.1 Fast I2V is unverified; route disabled to prevent unestablished execution.',
       },
     },
     required_inputs: ['image_urls'],
@@ -542,6 +552,16 @@ export function resolveReleaseRoute(modelId, modality, requestedProvider = null)
 
   const alt = entry.alternative_providers?.[targetProvider];
   if (alt) {
+    if (alt.enabled === false || alt.verification_status === 'disabled') {
+      const err = new Error(
+        `Route for model "${modelId}" with provider "${targetProvider}" is disabled: ${alt.disabled_reason || 'Contract cannot be established'}`
+      );
+      err.code = 'PROVIDER_ROUTE_DISABLED';
+      err.status = 400;
+      err.statusCode = 400;
+      throw err;
+    }
+
     return {
       timecapsule_model_id: entry.timecapsule_model_id,
       modality: entry.modality,

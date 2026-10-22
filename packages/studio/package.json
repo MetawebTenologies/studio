@@ -1,7 +1,7 @@
 {
   "name": "studio",
   "version": "1.0.0",
-  "description": "Open Higgsfield AI studio components for Muapi",
+  "description": "Timecapsule shared studio component library",
   "main": "src/index.js",
   "module": "src/index.js",
   "files": [

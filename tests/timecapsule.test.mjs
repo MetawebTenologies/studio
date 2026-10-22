@@ -495,23 +495,121 @@ test('Track A: Branding and UI shells are rebranded to Timecapsule', () => {
     'index.html',
     'src/components/Header.js',
     'src/components/AuthModal.js',
+    'README.md',
+    'packages/studio/package.json',
+    'packages/timecapsule/src/branding.js',
+    'electron/main.js',
+    'docker-compose.yml',
+    '.env.example',
   ];
 
+  const forbiddenStrings = [
+    'Matai',
+    'OPEN-HIGGSFIELD',
+    'Anil-matcha',
+    'muapi.ai/open-higgsfield-ai',
+    'Open Higgsfield',
+  ];
+
+  // Documented exemption for the single attribution line in README.md:
+  const README_ATTRIBUTION_EXEMPTION = 'Based on the MIT-licensed Open-Higgsfield-AI project.';
+
   for (const relPath of filesToCheck) {
-    const content = fs.readFileSync(path.join(repoRoot, relPath), 'utf8');
+    let content = fs.readFileSync(path.join(repoRoot, relPath), 'utf8');
+
+    // Documented exemption: strip allowed attribution sentence from README before checks
+    if (relPath === 'README.md') {
+      content = content.replace(README_ATTRIBUTION_EXEMPTION, '');
+    }
+
+    for (const forbidden of forbiddenStrings) {
+      assert.ok(
+        !content.toLowerCase().includes(forbidden.toLowerCase()),
+        `${relPath} must not contain forbidden legacy string '${forbidden}'`
+      );
+    }
     assert.ok(
-      !content.includes('Open Higgsfield AI'),
-      `${relPath} must not contain legacy 'Open Higgsfield AI' branding`
-    );
-    assert.ok(
-      !content.includes('MATAI'),
-      `${relPath} must not contain legacy 'MATAI' branding`
-    );
-    assert.ok(
-      !content.includes('muapi.ai'),
-      `${relPath} must not reference legacy 'muapi.ai' domain`
+      !content.includes('muapi.ai/open-higgsfield-ai'),
+      `${relPath} must not reference legacy 'muapi.ai/open-higgsfield-ai' URL`
     );
   }
+});
+
+test('Track A: Forbidden-copy guard prevents verbatim Muapi taglines in UI and components', () => {
+  const uiFilesToCheck = [
+    'app/page.js',
+    'app/explore/page.js',
+    'app/pricing/page.js',
+    'app/dashboard/page.js',
+    'app/usage/page.js',
+    'app/cli/page.js',
+    'app/rankings/page.js',
+    'app/docs/page.js',
+    'app/blog/page.js',
+    'app/billing/page.js',
+    'app/referral/page.js',
+    'app/api-keys/page.js',
+    'app/workflows/page.js',
+    'app/white-label/page.js',
+    'app/docs/white-label/page.js',
+    'components/PlatformNav.js',
+    'components/PlatformFooter.js',
+  ];
+
+  const forbiddenTaglines = [
+    'One API for All AI Models',
+    'Lowest cost API for image, video and audio generation',
+    'One API for all state-of-the-art AI models',
+    'Build, scale, and deploy generative AI workflows at the lowest cost',
+    'cdn.muapi.ai',
+  ];
+
+  for (const relPath of uiFilesToCheck) {
+    const fullPath = path.join(repoRoot, relPath);
+    if (!fs.existsSync(fullPath)) continue;
+    const content = fs.readFileSync(fullPath, 'utf8');
+
+    for (const tagline of forbiddenTaglines) {
+      assert.ok(
+        !content.toLowerCase().includes(tagline.toLowerCase()),
+        `${relPath} must not contain verbatim reference tagline '${tagline}'`
+      );
+    }
+  }
+});
+
+test('TC-WL-PATCH-1: White-label claims & guardrails (no Stripe Connect, no Vercel IP, waitlist CTA present, honest badges)', () => {
+  // (a) Assert "Stripe Connect" never appears in app/**
+  function scanDirForForbiddenString(dir, forbiddenStr) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanDirForForbiddenString(fullPath, forbiddenStr);
+      } else if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.jsx') || entry.name.endsWith('.md'))) {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        assert.ok(
+          !content.toLowerCase().includes(forbiddenStr.toLowerCase()),
+          `File ${fullPath} must not contain forbidden phrase '${forbiddenStr}'`
+        );
+      }
+    }
+  }
+  scanDirForForbiddenString(path.join(repoRoot, 'app'), 'Stripe Connect');
+
+  // (b) Assert no hardcoded Vercel IP literals in docs
+  const docsContent = fs.readFileSync(path.join(repoRoot, 'app/docs/white-label/page.js'), 'utf8');
+  assert.ok(!docsContent.includes('76.76.21.21'), 'app/docs/white-label/page.js must not contain Vercel IP 76.76.21.21');
+
+  // (c) Assert waitlist CTA exists on /white-label
+  const wlContent = fs.readFileSync(path.join(repoRoot, 'app/white-label/page.js'), 'utf8');
+  assert.ok(wlContent.includes('Join the Design-Partner Waitlist'), 'Waitlist CTA must exist on /white-label');
+  assert.ok(wlContent.includes('50% off for 12 months'), '50% off incentive must be documented on /white-label');
+
+  // (d) Assert no "SLA" guarantee in pricing tier
+  assert.ok(!wlContent.includes('Uptime SLA'), 'Scale tier must not contain SLA agreement');
+  assert.ok(!wlContent.includes('BYO-GPU provider keys'), 'Scale tier must not advertise unratified BYO-GPU keys');
+  assert.ok(!wlContent.includes('dedicated proxy IP'), 'Scale tier must not advertise unratified dedicated proxy IP');
 });
 
 test('Track A: Model catalog seam preserves all 29 upstream exports and hides unconfigured self-hosted models from active pickers', () => {
@@ -795,6 +893,34 @@ test('Checkpoint 1 (Auth): Client-supplied tenant/user IDs cannot override serve
       assert.equal(crossOriginRes.status, 403);
       const crossOriginData = await crossOriginRes.json();
       assert.equal(crossOriginData.code, 'CSRF_ORIGIN_MISMATCH');
+
+      // Acceptance Test A1.1: POST /api/v1/session with Origin: http://127.0.0.1:3002 on a server addressed as localhost:3002 -> 200 (cookie set)
+      const loopbackEquivalentReq = new Request('http://localhost:3002/api/v1/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://127.0.0.1:3002',
+        },
+        body: JSON.stringify({ access_key: 'preview-operator-secret-key-2026' }),
+      });
+      const loopbackEquivalentRes = await postSessionRoute(loopbackEquivalentReq);
+      assert.equal(loopbackEquivalentRes.status, 200);
+      const loopbackCookie = loopbackEquivalentRes.headers.get('set-cookie') || '';
+      assert.ok(loopbackCookie.includes('timecapsule_session='));
+
+      // Acceptance Test A1.2: Same request with Origin: http://evil.example -> 403 CSRF_ORIGIN_MISMATCH (guard must still fail closed)
+      const evilOriginReq = new Request('http://localhost:3002/api/v1/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://evil.example',
+        },
+        body: JSON.stringify({ access_key: 'preview-operator-secret-key-2026' }),
+      });
+      const evilOriginRes = await postSessionRoute(evilOriginReq);
+      assert.equal(evilOriginRes.status, 403);
+      const evilOriginData = await evilOriginRes.json();
+      assert.equal(evilOriginData.code, 'CSRF_ORIGIN_MISMATCH');
 
       const validReq = new Request('http://localhost:3000/api/v1/session', {
         method: 'POST',

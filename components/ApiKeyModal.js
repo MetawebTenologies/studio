@@ -59,11 +59,10 @@ export default function ApiKeyModal({ onSave }) {
     <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-[#121217] border border-white/10 rounded-3xl p-8 shadow-2xl">
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-16 h-16 bg-[#00e5ff]/10 rounded-2xl flex items-center justify-center border border-[#00e5ff]/25 mb-6">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" strokeWidth="1.75">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
+          <div className="w-16 h-16 bg-[#09090b] rounded-2xl flex items-center justify-center border border-[#00e5ff]/30 p-3 mb-6 shadow-glow">
+            <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+              <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
+              <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
             </svg>
           </div>
           <h1 className="text-2xl font-black text-white uppercase tracking-wider mb-2">

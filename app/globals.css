@@ -1,13 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
+@import "tailwindcss";
+@import "./themes/theme.muapi.css";
+@import "./themes/theme.timecapsule.css";
+@config "../tailwind.config.js";
+@source "./**/*.{js,jsx,ts,tsx}";
+@source "../components/**/*.{js,jsx,ts,tsx}";
+@source "../packages/studio/src/**/*.{js,jsx,ts,tsx}";
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+}
 
 body {
-  background: #050505;
-  color: white;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--tc-bg-page, #f8fafc);
+  color: var(--tc-text-primary, #0f172a);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }
 
 :root {
@@ -22,6 +29,9 @@ body {
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(16px); }

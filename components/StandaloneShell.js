@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ImageStudio, VideoStudio, LipSyncStudio, CinemaStudio } from 'studio';
 import { TIMECAPSULE_BRAND } from '@/branding';
 import ApiKeyModal from './ApiKeyModal';
+import BrandIcon from '@/components/BrandIcon';
 
 const TABS = [
   { id: 'library', label: 'Library' },
@@ -57,6 +58,7 @@ export const SAMPLE_LIBRARY_ITEMS = [
 function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [previewState, setPreviewState] = useState('default'); // 'default' | 'loading' | 'empty' | 'error'
 
   const loadItems = useCallback(async () => {
     const collected = [];
@@ -142,24 +144,84 @@ function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
               Unified media archive across Image, Video, Cinema, and Lip Sync studios.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {['all', 'image', 'video'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
-                  filter === f
-                    ? 'bg-[#00e5ff] text-black'
-                    : 'bg-white/5 text-white/60 hover:text-white'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            {isPreviewMode && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+                <span className="text-white/40 px-2 font-bold uppercase tracking-wider text-[10px]">Preview State:</span>
+                {[
+                  { id: 'default', label: 'Default' },
+                  { id: 'loading', label: 'Loading' },
+                  { id: 'empty', label: 'Empty' },
+                  { id: 'error', label: 'Error' },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    onClick={() => setPreviewState(st.id)}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors ${
+                      previewState === st.id
+                        ? 'bg-amber-400 text-black'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              {['all', 'image', 'video'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                    filter === f
+                      ? 'bg-[#00e5ff] text-black'
+                      : 'bg-white/5 text-white/60 hover:text-white'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {previewState === 'error' && (
+          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+              <div>
+                <p className="font-bold text-sm">Preview Simulation: Generation API Failure</p>
+                <p className="text-xs text-red-300/80">Simulated 429 Provider Rate Limit with safe error redaction. No user credits were deducted.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPreviewState('default')}
+              className="text-xs bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-bold text-red-100 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {previewState === 'loading' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="bg-[#121217] border border-white/10 rounded-2xl overflow-hidden flex flex-col animate-pulse"
+              >
+                <div className="aspect-video bg-white/5 flex items-center justify-center">
+                  <span className="text-[#00e5ff] text-2xl animate-spin">◌</span>
+                </div>
+                <div className="p-4 space-y-2">
+                  <div className="h-3 bg-white/10 rounded w-1/3" />
+                  <div className="h-3 bg-white/5 rounded w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (previewState === 'empty' || filtered.length === 0) ? (
           <div className="border border-white/10 rounded-3xl p-12 text-center bg-[#121217]">
             <p className="text-white/60 text-base mb-4">
               No generated assets in your Timecapsule Library yet.
@@ -211,7 +273,7 @@ function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
   );
 }
 
-export default function StandaloneShell() {
+export default function StandaloneShell({ hideHeader = false }) {
   const [apiKey, setApiKey] = useState(null);
   const [activeTab, setActiveTab] = useState('image');
   const [showSettings, setShowSettings] = useState(false);
@@ -220,11 +282,17 @@ export default function StandaloneShell() {
 
   useEffect(() => {
     setHasMounted(true);
+    const searchParams = new URLSearchParams(window.location.search);
+    const isUrlPreview = searchParams.get('preview') === '1' || searchParams.get('mode') === 'preview';
+
     const mode = localStorage.getItem(TIMECAPSULE_BRAND.storageKeys.backendMode);
     const stored =
       localStorage.getItem(TIMECAPSULE_BRAND.storageKeys.apiKey) ||
       localStorage.getItem(STORAGE_KEY);
-    if (mode === 'bff') {
+    if (isUrlPreview) {
+      localStorage.setItem(TIMECAPSULE_BRAND.storageKeys.backendMode, 'preview');
+      setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
+    } else if (mode === 'bff') {
       setApiKey('TIMECAPSULE_BFF');
     } else if (mode === 'preview') {
       setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
@@ -277,57 +345,102 @@ export default function StandaloneShell() {
   }
 
   return (
-    <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden">
-      <header className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 bg-[#09090b]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#00e5ff]/15 border border-[#00e5ff]/40 flex items-center justify-center text-[#00e5ff] font-black text-sm">
-            TC
+    <div className="h-full bg-[#09090b] flex flex-col overflow-hidden">
+      {!hideHeader && (
+        <header className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 bg-[#09090b]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#09090b] border border-[#00e5ff]/40 flex items-center justify-center p-1.5 shadow-sm">
+              <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+                <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
+                <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
+              </svg>
+            </div>
+            <span className="text-white font-black text-lg tracking-wider uppercase">
+              {TIMECAPSULE_BRAND.name}
+            </span>
           </div>
-          <span className="text-white font-black text-lg tracking-wider uppercase">
-            {TIMECAPSULE_BRAND.name}
-          </span>
-        </div>
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-[#00e5ff] text-black'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-[#00e5ff] text-black'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {credits !== null && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/80 font-mono">
+                <span className="w-2 h-2 rounded-full bg-[#00e5ff]" />
+                {credits} cr
+              </span>
+            )}
+            <span
+              className={`hidden md:inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                isPreviewMode
+                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
+                  : 'bg-[#00e5ff]/10 text-[#00e5ff]'
               }`}
             >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          {credits !== null && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/80 font-mono">
-              <span className="w-2 h-2 rounded-full bg-[#00e5ff]" />
-              {credits} cr
+              {isPreviewMode ? 'UI Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
             </span>
-          )}
-          <span
-            className={`hidden md:inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-              isPreviewMode
-                ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
-                : 'bg-[#00e5ff]/10 text-[#00e5ff]'
-            }`}
-          >
-            {isPreviewMode ? 'UI Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
-          </span>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer"
-          >
-            ⚙ Settings
-          </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-white/60 hover:text-white text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <BrandIcon name="settings" className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+          </div>
+        </header>
+      )}
+
+      {hideHeader && (
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-2.5 border-b border-white/5 bg-[#09090b]">
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-[#00e5ff] text-black'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3 text-xs">
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                isPreviewMode
+                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
+                  : 'bg-[#00e5ff]/10 text-[#00e5ff]'
+              }`}
+            >
+              {isPreviewMode ? 'Safe Offline Preview' : isManagedBff ? 'Managed BFF' : 'Direct Key'}
+            </span>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-white/50 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <BrandIcon name="settings" className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+          </div>
         </div>
-      </header>
+      )}
 
       {isPreviewMode && (
         <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 flex items-center justify-between text-xs text-amber-200">

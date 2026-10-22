@@ -465,12 +465,12 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
 
     // ── Media status labels ─────────────────────────────────────────────────
     const mediaStatusText = inputMode === 'image'
-        ? (imageState === UPLOAD_STATE.READY ? `✓ ${imageName}` : 'No image')
-        : (videoState === UPLOAD_STATE.READY ? `✓ ${videoName}` : 'No video');
+        ? (imageState === UPLOAD_STATE.READY ? imageName : 'No image')
+        : (videoState === UPLOAD_STATE.READY ? videoName : 'No video');
     const mediaStatusClass = (inputMode === 'image' ? imageState : videoState) === UPLOAD_STATE.READY
         ? 'text-primary' : 'text-muted';
 
-    const audioStatusText = audioState === UPLOAD_STATE.READY ? `✓ ${audioName}` : 'No audio';
+    const audioStatusText = audioState === UPLOAD_STATE.READY ? audioName : 'No audio';
     const audioStatusClass = audioState === UPLOAD_STATE.READY ? 'text-primary' : 'text-muted';
 
     const hasHistory = history.length > 0;
@@ -527,7 +527,14 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                         <line x1="8" y1="23" x2="16" y2="23" />
                                     </svg>
                                 </div>
-                                <div className="absolute top-4 right-4 text-primary animate-pulse">🎙</div>
+                                <div className="absolute top-4 right-4 text-primary animate-pulse">
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" y1="19" x2="12" y2="23" />
+                                        <line x1="8" y1="23" x2="16" y2="23" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
                         <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
@@ -554,7 +561,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                             : 'border-white/10 text-muted hover:border-white/30 hover:text-white'
                                     }`}
                                 >
-                                    🖼 Portrait Image
+                                    Portrait Image
                                 </button>
                                 <button
                                     type="button"
@@ -565,7 +572,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                             : 'border-white/10 text-muted hover:border-white/30 hover:text-white'
                                     }`}
                                 >
-                                    🎬 Video
+                                    Video
                                 </button>
                             </div>
 
@@ -730,7 +737,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                     ) : generateError ? (
                                         `Error: ${generateError}`
                                     ) : (
-                                        'Generate ✨'
+                                        'Generate'
                                     )}
                                 </button>
                             </div>

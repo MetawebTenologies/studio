@@ -9,8 +9,11 @@ export async function GET(request) {
   try {
     const session = await requireSession(request);
     const url = new URL(request.url);
+    const queryTenantId = url.searchParams.get('tenant_id');
+    const targetTenantId =
+      session.role === 'platform_admin' && queryTenantId ? queryTenantId : session.tenant_id;
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50));
-    const jobs = await listJobs(session.tenant_id, limit);
+    const jobs = await listJobs(targetTenantId, limit);
     return Response.json(
       {
         ok: true,

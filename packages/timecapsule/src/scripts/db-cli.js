@@ -7,6 +7,9 @@ import {
 import { PREVIEW_IDENTITY } from '../server/auth.js';
 
 async function main() {
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = 'postgresql://localhost:5432/timecapsule';
+  }
   const cmd = process.argv[2] || 'status';
   try {
     if (cmd === 'migrate') {

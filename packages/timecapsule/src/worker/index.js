@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { query } from '../server/db.js';
 import {
   claimNextRunnableJob,
   heartbeatJobLease,
@@ -59,6 +60,31 @@ export function createDurableWorker(options = {}) {
     }
 
     try {
+      // S2 Tenant Status Guard: Worker refuses execution for jobs belonging to suspended or killed tenants
+      const tenantRes = await query(
+        'SELECT status FROM tenants WHERE tenant_id = $1',
+        [claimedJob.tenant_id]
+      );
+      const tenantStatus = tenantRes.rows[0]?.status;
+      if (tenantStatus === 'suspended' || tenantStatus === 'killed') {
+        const failedJob = await completeJobFailure({
+          jobId,
+          tenantId: claimedJob.tenant_id,
+          workerId,
+          fencingToken,
+          errorMessage: `Worker refused execution: tenant is ${tenantStatus}`,
+          providerDetails: {
+            code: `TENANT_${tenantStatus.toUpperCase()}`,
+            tenant_status: tenantStatus,
+          },
+        });
+        return {
+          processed: true,
+          action: `refused_${tenantStatus}`,
+          job: failedJob,
+        };
+      }
+
       // Case 1: Job has not yet obtained a provider_job_id
       if (!claimedJob.provider_job_id) {
         const jobSubmitting = await beginProviderSubmissionAttempt({
@@ -378,6 +404,7 @@ export function createDurableWorker(options = {}) {
   return {
     workerId,
     runOnce,
+    executeClaimedJob,
     drainUntilSettled,
     start,
     stop,

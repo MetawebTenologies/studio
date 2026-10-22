@@ -11,11 +11,10 @@ export function AuthModal(onSuccess) {
 
   modal.innerHTML = `
     <div class="flex flex-col items-center text-center mb-6">
-      <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow mb-6">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
+      <div class="w-16 h-16 bg-[#09090b] rounded-2xl flex items-center justify-center border border-[#00e5ff]/30 p-3 shadow-glow mb-6">
+        <svg viewBox="0 0 240 240" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA"/>
+          <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF"/>
         </svg>
       </div>
       <h2 class="text-2xl font-black text-white uppercase tracking-wider mb-2">Timecapsule Studio</h2>

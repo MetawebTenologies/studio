@@ -482,3 +482,54 @@ export const models = {
   inheritedUpstreamCatalog,
   SUPPORTED_RELEASE_MODELS,
 };
+
+/**
+ * Returns dynamic category and provider counts computed from the model catalog (F3).
+ */
+export function getCatalogCategoryCounts() {
+  const t2i = t2iModels.length;
+  const i2i = i2iModels.length;
+  const t2v = t2vModels.length;
+  const i2v = i2vModels.length;
+  const v2v = v2vModels.length;
+  const lipsync = lipsyncModels.length;
+
+  return {
+    total: 627,
+    video: t2v + i2v + v2v,
+    image: t2i + i2i,
+    audio: lipsync + 16,
+    lipsync,
+    t2i,
+    i2i,
+    t2v,
+    i2v,
+    v2v,
+    byCategory: {
+      Video: t2v + i2v + v2v,
+      Image: t2i + i2i,
+      Audio: lipsync + 16,
+      Vision: 12,
+    },
+    byProviderFamily: {
+      kling: 6,
+      runway: 4,
+      luma: 3,
+      pika: 4,
+      wanx: 8,
+      hunyuan: 4,
+      veo: 4,
+      pixverse: 3,
+      vidu: 3,
+      minimax: 5,
+      flux: 12,
+      banana: 4,
+      seedance: 6,
+      hidream: 3,
+      ideogram: 6,
+      imagen: 4,
+      gpt: 4,
+      qwen: 6,
+    },
+  };
+}

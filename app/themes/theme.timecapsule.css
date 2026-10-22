@@ -1,0 +1,124 @@
+/*
+ * Timecapsule Custom Operator Theme Overrides
+ *
+ * Confirmed Brand Tokens:
+ * Master Brand: Timecapsule
+ * Product Name: Timecapsule Studio
+ * Tagline: From imagination to motion.
+ *
+ * Primary Accent: Chrono Cyan (#00E5FF)
+ * Secondary Accent: Iris (#9B8CFF)
+ * Background: Obsidian (#09090B)
+ * Primary Text: Soft White (#F5F7FA)
+ */
+
+:root {
+  --tc-brand-master: 'Timecapsule';
+  --tc-brand-product: 'Timecapsule Studio';
+  --tc-brand-tagline: 'From imagination to motion.';
+
+  /* Core Palette Tokens */
+  --tc-color-primary: #00e5ff;
+  --tc-color-primary-hover: #38bdf8;
+  --tc-color-accent-secondary: #9b8cff;
+  --tc-color-accent-discount: #00e5ff;
+  --tc-color-discount-text: #09090b;
+  --tc-color-price-green: #22c55e;
+  --tc-color-badge-amber: #eab308;
+
+  /* Atmospheric Surfaces */
+  --tc-bg-page: #09090b;
+  --tc-bg-card: #121217;
+  --tc-bg-elevated: #18181f;
+  --tc-bg-subtle: #14141a;
+  --tc-bg-glass: rgba(18, 18, 23, 0.85);
+
+  /* Borders & Dividers */
+  --tc-border-divider: rgba(255, 255, 255, 0.08);
+  --tc-border-card: rgba(255, 255, 255, 0.08);
+  --tc-border-card-hover: rgba(0, 229, 255, 0.4);
+
+  /* Typography */
+  --tc-text-primary: #f5f7fa;
+  --tc-text-secondary: #94a3b8;
+  --tc-text-muted: #71717a;
+  --tc-text-inverse: #09090b;
+
+  /* Radii */
+  --tc-radius-card: 6px;
+  --tc-radius-pill: 4px;
+  --tc-radius-button: 9999px;
+  --tc-radius-input: 4px;
+
+  /* Shadows */
+  --tc-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.6);
+  --tc-shadow-card-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 229, 255, 0.15);
+  --tc-shadow-header: 0 4px 30px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* ==========================================================================
+   Global Studio Dark Surfaces & Token Overrides
+   Ensures cards, panels, filters and inputs across all routes conform
+   to the Obsidian / Chrono Cyan cinematic palette.
+   ========================================================================== */
+
+body {
+  background-color: var(--tc-bg-page, #09090b);
+  color: var(--tc-text-primary, #f5f7fa);
+}
+
+/* Neutral Surfaces */
+.bg-white:not([data-keep-light]) {
+  background-color: var(--tc-bg-card, #121217) !important;
+}
+
+.bg-slate-50:not([data-keep-light]),
+.bg-slate-100:not([data-keep-light]) {
+  background-color: var(--tc-bg-elevated, #18181f) !important;
+}
+
+/* Keylines & Borders */
+.border-slate-200,
+.border-slate-200\/80,
+.border-slate-200\/90,
+.border-slate-100,
+.border-slate-300 {
+  border-color: var(--tc-border-card, rgba(255, 255, 255, 0.08)) !important;
+}
+
+/* Studio Typography */
+.text-slate-900,
+.text-slate-800 {
+  color: var(--tc-text-primary, #f5f7fa) !important;
+}
+
+.text-slate-700,
+.text-slate-600 {
+  color: var(--tc-text-secondary, #94a3b8) !important;
+}
+
+.text-slate-500,
+.text-slate-400 {
+  color: var(--tc-text-muted, #71717a) !important;
+}
+
+/* Chrono Cyan Accent Remapping */
+.text-blue-600,
+.text-blue-500,
+.text-blue-400 {
+  color: var(--tc-color-primary, #00e5ff) !important;
+}
+
+.border-blue-600,
+.border-blue-500 {
+  border-color: var(--tc-color-primary, #00e5ff) !important;
+}
+
+.hover\:border-blue-500\/60:hover {
+  border-color: rgba(0, 229, 255, 0.5) !important;
+}
+
+.hover\:text-blue-600:hover,
+.hover\:text-blue-700:hover {
+  color: #38bdf8 !important;
+}

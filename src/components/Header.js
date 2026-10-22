@@ -13,11 +13,10 @@ export function Header(navigate) {
   logoContainer.className =
     'flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform';
   logoContainer.innerHTML = `
-    <div class="w-8 h-8 bg-[#00e5ff] rounded-lg flex items-center justify-center p-1.5 shadow-lg">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#09090b"/>
-        <path d="M2 17L12 22L22 17" stroke="#09090b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M2 12L12 17L22 12" stroke="#09090b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <div class="w-8 h-8 bg-[#09090b] border border-[#00e5ff]/40 rounded-lg flex items-center justify-center p-1.5 shadow-lg">
+      <svg viewBox="0 0 240 240" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA"/>
+        <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF"/>
       </svg>
     </div>
     <span class="text-lg font-black tracking-tight text-white uppercase">Timecapsule</span>
