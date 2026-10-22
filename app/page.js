@@ -190,30 +190,46 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Production Model Providers Section */}
-        <section className="py-16 bg-[#09090b]">
+        {/* Production Model Providers Section (F4: Monochrome Logos & Routing Disclosure) */}
+        <section className="py-16 bg-[#09090b] border-t border-white/5">
           <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-2xl mx-auto mb-10">
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#00e5ff]">
-                Cinematic Foundation Models
+                Model Gateway Ecosystem
               </span>
               <h2 className="text-2xl sm:text-3xl font-black text-[#f5f7fa] tracking-tight mt-2 mb-3">
-                Production Model Providers in Timecapsule
+                Foundation Model Providers
               </h2>
               <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-                Direct state-of-the-art multimodal vision and audio generators with director-level framing and parameter control.
+                Models available on Timecapsule · multi-provider routing via integrated provider gateways
               </p>
             </div>
 
-            {/* Ecosystem Chips */}
-            <div className="flex flex-wrap items-center justify-center gap-2.5 mb-10">
-              {['OpenAI', 'Google DeepMind', 'Kling AI', 'ByteDance', 'Black Forest Labs', 'MiniMax', 'Qwen Image', 'Stability AI'].map((p) => (
-                <span
-                  key={p}
-                  className="px-4 py-2 rounded-full bg-[#121217] border border-white/10 text-xs font-bold text-zinc-300 hover:border-[#00e5ff]/40 hover:text-[#f5f7fa] transition-all shadow-2xs"
+            {/* Ecosystem Logo Marks (Open-licensed monochrome marks + wordmarks) */}
+            <div className="flex flex-wrap items-center justify-center gap-3 max-w-4xl mx-auto mb-10">
+              {[
+                { name: 'OpenAI', slug: 'openai' },
+                { name: 'Google DeepMind', slug: 'google' },
+                { name: 'Kling AI', slug: 'kling' },
+                { name: 'ByteDance', slug: 'bytedance' },
+                { name: 'Black Forest Labs', slug: 'flux' },
+                { name: 'MiniMax', slug: 'minimax' },
+                { name: 'Alibaba Qwen', slug: 'qwen' },
+                { name: 'Stability AI', slug: 'stability' },
+                { name: 'Runway', slug: 'runway' },
+                { name: 'Luma AI', slug: 'luma' },
+              ].map((p) => (
+                <div
+                  key={p.name}
+                  className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-[#121217] border border-white/10 hover:border-[#00e5ff]/50 hover:bg-[#181820] hover:shadow-[0_0_15px_rgba(0,229,255,0.08)] transition-all cursor-default select-none"
                 >
-                  {p}
-                </span>
+                  <span className="w-5 h-5 flex items-center justify-center text-zinc-400 group-hover:text-[#00e5ff] transition-colors">
+                    <BrandIcon name={p.slug} className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-bold text-zinc-300 group-hover:text-white transition-colors">
+                    {p.name}
+                  </span>
+                </div>
               ))}
             </div>
 
