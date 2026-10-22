@@ -514,6 +514,7 @@ export async function claimNextRunnableJob({ workerId, leaseDurationMs = 30000 }
   const safeLeaseMs = Math.max(25, Number(leaseDurationMs) || 30000);
 
   return withTransaction(async (client) => {
+    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
     const candidateRes = await client.query(
       `SELECT j.*
        FROM jobs j
@@ -976,6 +977,7 @@ export async function completeJobSuccess({
     : [validatedMedia.url];
 
   return withTransaction(async (client) => {
+    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
     // Resolve tenantId if not passed
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
@@ -1272,6 +1274,7 @@ export async function completeJobFailure({
   providerDetails = null,
 }) {
   return withTransaction(async (client) => {
+    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
       const lookupRes = await client.query(

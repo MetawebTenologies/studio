@@ -42,6 +42,10 @@ import {
   listJobs,
 } from '../packages/timecapsule/src/server/store.js';
 import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js';
+import {
+  registerProviderAdapter,
+  resetProviderAdapters,
+} from '../packages/timecapsule/src/server/providers.js';
 import { GET as getJobDetailRoute } from '../app/api/v1/generations/[jobId]/route.js';
 import { GET as getGenerationsRoute } from '../app/api/v1/generations/route.js';
 import { GET as getAssetRoute } from '../app/api/v1/assets/[assetId]/route.js';
@@ -600,4 +604,143 @@ test('White-Label S2: Worker tenant status gate refuses jobs for suspended and k
   const failedJobRes2 = await query('SELECT status, error FROM jobs WHERE job_id = $1', [claimedActiveJob2.job.job_id]);
   assert.equal(failedJobRes2.rows[0].status, 'failed');
   assert.ok(failedJobRes2.rows[0].error.includes('tenant is killed'));
+});
+
+test('Condition 1 Integration: Worker claims and executes jobs under Row Level Security without starvation', async () => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+
+  const prevTestMode = process.env.TIMECAPSULE_TEST_MODE;
+  process.env.TIMECAPSULE_TEST_MODE = '1';
+
+  try {
+    // 1. Verify RLS is enabled and forced on jobs and assets
+    const rlsCheck = await query(`
+      SELECT relname, relrowsecurity, relforcerowsecurity
+      FROM pg_class
+      WHERE relname IN ('jobs', 'assets', 'credit_reservations', 'credit_ledger', 'idempotency_keys', 'memberships')
+    `);
+    assert.equal(rlsCheck.rows.length, 6, 'All 6 RLS tables found');
+    for (const row of rlsCheck.rows) {
+      assert.equal(row.relrowsecurity, true, `${row.relname} has RLS enabled`);
+      assert.equal(row.relforcerowsecurity, true, `${row.relname} has FORCE RLS set`);
+    }
+
+    // 2. Set up Tenant A and Tenant B
+    const tenantA = await createTenant({
+      tenantId: 'tnt_rls_wrk_alpha',
+      slug: 'rls-wrk-alpha',
+      name: 'RLS Worker Alpha',
+      initialCredits: 500,
+    });
+    const tenantB = await createTenant({
+      tenantId: 'tnt_rls_wrk_beta',
+      slug: 'rls-wrk-beta',
+      name: 'RLS Worker Beta',
+      initialCredits: 500,
+    });
+
+    // 3. Register a test provider adapter that completes immediately
+    registerProviderAdapter('test-rls-prov', async (job) => {
+      return {
+        providerJobId: `test_prov_${job.job_id}`,
+        sourceUrl: 'https://cdn.timecapsule.test/artwork_rls.webp',
+        userBilledCredits: 15,
+        providerReportedCost: 8,
+        providerCostUnit: 'credits',
+        providerDetails: { adapter: 'test-rls-prov', model: job.model },
+      };
+    });
+
+    // 4. Seed a job for tenant A
+    const { job: jobA } = await createSubmissionTransaction({
+      jobId: 'job_rls_wrk_alpha_1',
+      tenantId: tenantA.tenant_id,
+      userId: 'usr_rls_wrk_a',
+      modality: 'image',
+      model: 'flux-dev',
+      resolvedProviderModel: 'flux-dev',
+      provider: 'test-rls-prov',
+      executionRoute: 'test-rls-prov:predictions/v1:flux-dev',
+      estimatedCost: 15,
+      creditsReserved: 15,
+      inputsJson: { prompt: 'Worker execution under RLS test' },
+      workflowJson: {},
+      deliveryJson: {},
+    });
+
+    assert.equal(jobA.status, 'queued');
+    assert.equal(jobA.credits_reserved, 15);
+
+    // 5. Worker claims and executes job under RLS
+    const worker = createDurableWorker({
+      workerId: 'wrk_rls_test_runner',
+      idlePollIntervalMs: 50,
+      leaseDurationMs: 10000,
+    });
+
+    const claim = await claimNextRunnableJob({ workerId: 'wrk_rls_test_runner' });
+    assert.ok(claim, 'Worker successfully claimed job under RLS (no silent row starvation)');
+    assert.equal(claim.job.job_id, jobA.job_id);
+    assert.equal(claim.job.status, 'running');
+
+    const stepRes = await worker.executeClaimedJob(claim.job);
+    assert.equal(stepRes.processed, true);
+    assert.equal(stepRes.action, 'succeeded');
+    assert.equal(stepRes.job.status, 'succeeded');
+
+    // 6. Verify persistence state: job is succeeded, output is set, reservation is settled
+    const completedJobRes = await query(
+      'SELECT status, output_json, actual_cost FROM jobs WHERE job_id = $1',
+      [jobA.job_id]
+    );
+    assert.equal(completedJobRes.rows[0].status, 'succeeded');
+    assert.ok(completedJobRes.rows[0].output_json.delivery_url.includes('/api/v1/assets/'));
+
+    const resvRes = await query(
+      'SELECT status FROM credit_reservations WHERE job_id = $1',
+      [jobA.job_id]
+    );
+    assert.equal(resvRes.rows[0].status, 'settled');
+
+    const tenantAfterRes = await query(
+      'SELECT credits_reserved FROM tenants WHERE tenant_id = $1',
+      [tenantA.tenant_id]
+    );
+    assert.equal(Number(tenantAfterRes.rows[0].credits_reserved), 0);
+
+    // 7. Verify asset was persisted in assets table
+    const assetRes = await query(
+      'SELECT asset_id, tenant_id, source_url FROM assets WHERE tenant_id = $1',
+      [tenantA.tenant_id]
+    );
+    assert.ok(assetRes.rows.length >= 1, 'Asset created for tenant A');
+    assert.equal(assetRes.rows[0].tenant_id, tenantA.tenant_id);
+
+    // 8. Verify RLS isolation under timecapsule_tenant_role
+    await withTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+
+      // Unset GUC -> sees 0 rows
+      const unsetOnJobs = await client.query('SELECT job_id FROM jobs WHERE job_id = $1', [jobA.job_id]);
+      assert.equal(unsetOnJobs.rows.length, 0, 'No jobs visible without app.tenant_id');
+
+      // Scoped to Tenant A -> sees job and asset
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+      const jobsA = await client.query('SELECT job_id FROM jobs WHERE job_id = $1', [jobA.job_id]);
+      assert.equal(jobsA.rows.length, 1, 'Tenant A sees its job under RLS');
+      const assetsA = await client.query('SELECT asset_id FROM assets WHERE tenant_id = $1', [tenantA.tenant_id]);
+      assert.ok(assetsA.rows.length >= 1, 'Tenant A sees its asset under RLS');
+
+      // Scoped to Tenant B -> sees 0 rows for Tenant A
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantB.tenant_id]);
+      const jobsB = await client.query('SELECT job_id FROM jobs WHERE job_id = $1', [jobA.job_id]);
+      assert.equal(jobsB.rows.length, 0, 'Tenant B cannot see Tenant A job under RLS');
+      const assetsB = await client.query('SELECT asset_id FROM assets WHERE tenant_id = $1', [tenantA.tenant_id]);
+      assert.equal(assetsB.rows.length, 0, 'Tenant B cannot see Tenant A asset under RLS');
+    });
+  } finally {
+    resetProviderAdapters();
+    process.env.TIMECAPSULE_TEST_MODE = prevTestMode;
+  }
 });

@@ -206,6 +206,14 @@ export async function withTenantContext(client, tenantId, callback) {
   return await callback(client);
 }
 
+/**
+ * Sets the PostgreSQL session variable `app.is_system_actor` to 'true' for system worker and admin operations.
+ */
+export async function withSystemContext(client, callback) {
+  await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+  return await callback(client);
+}
+
 export function parseSafeCreditBigInt(raw, fieldName = 'credit_amount') {
   if (raw === null || raw === undefined) return 0;
   let bi;
