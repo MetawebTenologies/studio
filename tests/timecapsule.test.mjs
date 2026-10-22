@@ -535,6 +535,47 @@ test('Track A: Branding and UI shells are rebranded to Timecapsule', () => {
   }
 });
 
+test('Track A: Forbidden-copy guard prevents verbatim Muapi taglines in UI and components', () => {
+  const uiFilesToCheck = [
+    'app/page.js',
+    'app/explore/page.js',
+    'app/pricing/page.js',
+    'app/dashboard/page.js',
+    'app/usage/page.js',
+    'app/cli/page.js',
+    'app/rankings/page.js',
+    'app/docs/page.js',
+    'app/blog/page.js',
+    'app/billing/page.js',
+    'app/referral/page.js',
+    'app/api-keys/page.js',
+    'app/workflows/page.js',
+    'components/PlatformNav.js',
+    'components/PlatformFooter.js',
+  ];
+
+  const forbiddenTaglines = [
+    'One API for All AI Models',
+    'Lowest cost API for image, video and audio generation',
+    'One API for all state-of-the-art AI models',
+    'Build, scale, and deploy generative AI workflows at the lowest cost',
+    'cdn.muapi.ai',
+  ];
+
+  for (const relPath of uiFilesToCheck) {
+    const fullPath = path.join(repoRoot, relPath);
+    if (!fs.existsSync(fullPath)) continue;
+    const content = fs.readFileSync(fullPath, 'utf8');
+
+    for (const tagline of forbiddenTaglines) {
+      assert.ok(
+        !content.toLowerCase().includes(tagline.toLowerCase()),
+        `${relPath} must not contain verbatim reference tagline '${tagline}'`
+      );
+    }
+  }
+});
+
 test('Track A: Model catalog seam preserves all 29 upstream exports and hides unconfigured self-hosted models from active pickers', () => {
   const requiredExports = [
     't2iModels',
