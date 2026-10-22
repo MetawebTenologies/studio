@@ -2,7 +2,8 @@ import { query, closePool } from '../server/db.js';
 import { reconcileAmbiguousJob } from '../server/store.js';
 
 async function main() {
-  const cmd = process.argv[2] || 'list';
+  const rawCmd = process.argv[2] || 'list';
+  const cmd = rawCmd === '--dry-run' || rawCmd === '-d' ? 'list' : rawCmd;
   try {
     if (cmd === 'list') {
       const res = await query(

@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
@@ -6,6 +7,10 @@ import ModuleStatusBadge from '@/components/ModuleStatusBadge';
 export default async function GenericModulePage({ params }) {
   const resolvedParams = await params;
   const slug = resolvedParams?.slug;
+
+  if (!slug || slug.includes('.')) {
+    notFound();
+  }
 
   const catalog = {
     workflows: {
@@ -143,32 +148,32 @@ export default async function GenericModulePage({ params }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex flex-col">
+    <div className="min-h-screen bg-[#070709] text-white flex flex-col font-sans">
       <PlatformNav activeModule={slug} />
 
-      <main className="max-w-6xl mx-auto px-6 py-12 flex-1 w-full">
+      <main className="max-w-[1440px] w-full mx-auto px-6 lg:px-8 py-8 flex-1 flex flex-col">
         {/* Module Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-8 border-b border-white/10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-6 border-b border-zinc-800/80">
           <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="px-2.5 py-1 rounded bg-[#00e5ff]/15 text-[#00e5ff] text-[11px] font-black uppercase tracking-wider border border-[#00e5ff]/30">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="px-2.5 py-1 rounded bg-blue-600/20 text-blue-400 text-[11px] font-bold uppercase tracking-wider border border-blue-500/30">
                 {meta.category}
               </span>
               <ModuleStatusBadge status={meta.status} />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight mb-2">
+            <h1 className="text-xl sm:text-3xl font-black uppercase tracking-tight mb-2 text-white">
               {meta.title}
             </h1>
-            <p className="text-white/60 text-sm max-w-2xl leading-relaxed">
+            <p className="text-zinc-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
               {meta.description}
             </p>
           </div>
 
-          <div className="flex items-center gap-3 bg-[#121217] border border-white/10 rounded-2xl p-4 self-start">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#00e5ff]" />
+          <div className="flex items-center gap-3 bg-[#111116] border border-zinc-800 rounded-xl p-3.5 self-start">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
             <div>
               <div className="text-xs font-bold text-white uppercase tracking-wider">Module Posture</div>
-              <div className="text-xs text-white/50 font-mono">
+              <div className="text-xs text-zinc-400 font-mono">
                 {meta.status === 'working' ? 'Production Ready' : meta.status === 'preview' ? 'Sample UI Preview' : 'Roadmap Planned'}
               </div>
             </div>
@@ -177,32 +182,32 @@ export default async function GenericModulePage({ params }) {
 
         {/* Feature Cards Grid matching Muapi's rich layout */}
         {meta.cards && meta.cards.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {meta.cards.map((c, i) => (
               <div
                 key={i}
-                className="bg-[#121217] border border-white/10 hover:border-[#00e5ff]/40 rounded-2xl p-6 transition-all flex flex-col justify-between group"
+                className="bg-[#111116] border border-zinc-800/80 hover:border-zinc-700 rounded-xl p-5 transition-all flex flex-col justify-between group"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#00e5ff] px-2 py-0.5 rounded bg-[#00e5ff]/10">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400 px-2 py-0.5 rounded bg-blue-900/30">
                       {c.tag}
                     </span>
-                    <span className="text-[10px] font-mono text-white/30">Feature Preview</span>
+                    <span className="text-[10px] font-mono text-zinc-500">Feature Preview</span>
                   </div>
-                  <h3 className="text-base font-bold text-white mb-2 group-hover:text-[#00e5ff] transition-colors">
+                  <h3 className="text-sm font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">
                     {c.name}
                   </h3>
-                  <p className="text-xs text-white/60 leading-relaxed mb-4">
+                  <p className="text-xs text-zinc-400 leading-relaxed mb-4">
                     {c.steps}
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                  <span className="text-[11px] text-white/40">Status: Integrated</span>
+                <div className="pt-4 border-t border-zinc-800/50 flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-500">Status: Integrated</span>
                   <Link
-                    href="/studio?mode=preview"
-                    className="text-xs font-bold text-[#00e5ff] hover:underline"
+                    href="/studio?preview=1"
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300"
                   >
                     Try in Studio →
                   </Link>
@@ -213,16 +218,16 @@ export default async function GenericModulePage({ params }) {
         )}
 
         {/* Context Explainer Banner */}
-        <div className="p-8 rounded-3xl bg-[#121217] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
+        <div className="p-6 rounded-2xl bg-[#111116] border border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl mb-8">
           <div>
-            <h4 className="text-base font-bold text-white mb-1">Looking to generate cinema or image assets now?</h4>
-            <p className="text-xs text-white/50 max-w-xl">
+            <h4 className="text-sm font-bold text-white mb-1">Looking to generate cinema or image assets now?</h4>
+            <p className="text-xs text-zinc-400 max-w-xl">
               All core Image, Video, Cinema, and Lip-Sync engines are fully active in Timecapsule Creative Studio.
             </p>
           </div>
           <Link
-            href="/studio?mode=preview"
-            className="px-6 py-3 rounded-xl bg-[#00e5ff] text-black font-black text-xs hover:opacity-90 transition-opacity whitespace-nowrap"
+            href="/studio?preview=1"
+            className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors whitespace-nowrap shadow-md"
           >
             Launch Creative Studio →
           </Link>
