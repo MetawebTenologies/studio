@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { TIMECAPSULE_BRAND } from '@/branding';
 
 export const PRIMARY_NAV = [
-  { label: 'Explore', href: '/explore' },
+  { label: 'Explore', href: '/explore', count: 627 },
   { label: 'Rankings', href: '/rankings' },
   { label: 'White-Label', href: '/white-label' },
   { label: 'Docs', href: '/docs' },
@@ -63,13 +63,18 @@ export default function PlatformNav({ activeModule = 'studio' }) {
                   key={item.label}
                   href={item.href}
                   target={item.external ? '_blank' : undefined}
-                  className={`inline-flex min-h-9 items-center text-[13px] font-semibold transition-all relative ${
+                  className={`inline-flex min-h-9 items-center gap-1.5 text-[13px] font-semibold transition-all relative ${
                     isActive
                       ? 'text-[var(--tc-color-primary,#3b82f6)] font-bold'
                       : 'text-[var(--tc-text-secondary,#475569)] hover:text-[var(--tc-text-primary,#0f172a)]'
                   }`}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.count && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-[#181820] text-zinc-400 border border-white/10 group-hover:text-white transition-colors">
+                      {item.count}
+                    </span>
+                  )}
                   {isActive && (
                     <div className="absolute -bottom-[16px] left-0 right-0 h-0.5 bg-[var(--tc-color-primary,#3b82f6)]" />
                   )}
