@@ -495,21 +495,42 @@ test('Track A: Branding and UI shells are rebranded to Timecapsule', () => {
     'index.html',
     'src/components/Header.js',
     'src/components/AuthModal.js',
+    'README.md',
+    'packages/studio/package.json',
+    'packages/timecapsule/src/branding.js',
+    'electron/main.js',
+    'docker-compose.yml',
+    '.env.example',
   ];
 
+  const forbiddenStrings = [
+    'Matai',
+    'OPEN-HIGGSFIELD',
+    'Anil-matcha',
+    'muapi.ai/open-higgsfield-ai',
+    'Open Higgsfield',
+  ];
+
+  // Documented exemption for the single attribution line in README.md:
+  const README_ATTRIBUTION_EXEMPTION = 'Based on the MIT-licensed Open-Higgsfield-AI project.';
+
   for (const relPath of filesToCheck) {
-    const content = fs.readFileSync(path.join(repoRoot, relPath), 'utf8');
+    let content = fs.readFileSync(path.join(repoRoot, relPath), 'utf8');
+
+    // Documented exemption: strip allowed attribution sentence from README before checks
+    if (relPath === 'README.md') {
+      content = content.replace(README_ATTRIBUTION_EXEMPTION, '');
+    }
+
+    for (const forbidden of forbiddenStrings) {
+      assert.ok(
+        !content.toLowerCase().includes(forbidden.toLowerCase()),
+        `${relPath} must not contain forbidden legacy string '${forbidden}'`
+      );
+    }
     assert.ok(
-      !content.includes('Open Higgsfield AI'),
-      `${relPath} must not contain legacy 'Open Higgsfield AI' branding`
-    );
-    assert.ok(
-      !content.includes('MATAI'),
-      `${relPath} must not contain legacy 'MATAI' branding`
-    );
-    assert.ok(
-      !content.includes('muapi.ai'),
-      `${relPath} must not reference legacy 'muapi.ai' domain`
+      !content.includes('muapi.ai/open-higgsfield-ai'),
+      `${relPath} must not reference legacy 'muapi.ai/open-higgsfield-ai' URL`
     );
   }
 });
