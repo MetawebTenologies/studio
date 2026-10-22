@@ -219,6 +219,9 @@ export default function RankingsPage() {
           </div>
 
           <div className="relative w-full sm:w-72">
+            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-zinc-500">
+              <BrandIcon name="search" className="w-3.5 h-3.5 text-zinc-500" />
+            </span>
             <input
               type="text"
               value={searchTerm}
@@ -226,9 +229,6 @@ export default function RankingsPage() {
               placeholder="Search model or lab..."
               className="w-full text-xs pl-8 pr-3 py-1.5 border border-white/10 rounded-lg bg-[#181820] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
             />
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-zinc-500 text-xs">
-              🔍
-            </span>
           </div>
         </div>
 
@@ -236,7 +236,7 @@ export default function RankingsPage() {
         <div className="bg-[#121217] border border-white/10 rounded-xl p-5 mb-8 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className="text-blue-400 text-sm">📊</span>
+              <BrandIcon name="chart" className="w-4 h-4 text-blue-400" />
               <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
                 Production Market Share Volume
               </h3>
@@ -288,7 +288,7 @@ export default function RankingsPage() {
         <div className="bg-[#121217] border border-white/10 rounded-xl overflow-hidden shadow-sm mb-8">
           <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#181820]/60">
             <div className="flex items-center gap-2">
-              <span className="text-amber-400 text-sm">👑</span>
+              <BrandIcon name="crown" className="w-4 h-4 text-amber-400" />
               <h2 className="text-xs font-black text-zinc-200 uppercase tracking-wider">
                 Production Model Leaderboard
               </h2>
@@ -389,7 +389,9 @@ export default function RankingsPage() {
 
         {/* Methodology Card */}
         <div className="bg-[#121217] border border-white/10 rounded-xl p-6 text-xs text-zinc-400 shadow-sm flex items-start gap-4">
-          <span className="text-xl">🛡️</span>
+          <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <BrandIcon name="shield" className="w-5 h-5 text-[#00e5ff]" />
+          </div>
           <div>
             <h3 className="font-bold text-[#f5f7fa] text-sm mb-1">
               Methodology & Transparent Benchmark Attribution
@@ -397,8 +399,11 @@ export default function RankingsPage() {
             <p className="leading-relaxed text-zinc-400 mb-2">
               Rankings reflect verified completion latency, human preference Elo ratings, and production request volume processed through Timecapsule&apos;s unified multi-provider execution gateway.
             </p>
-            <div className="flex items-center gap-4 text-zinc-500 font-mono text-[11px] flex-wrap">
-              <span>✓ Verifiable HTTP Telemetry</span>
+            <div className="flex items-center gap-4 text-zinc-400 font-mono text-[11px] flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <BrandIcon name="check" className="w-3 h-3 text-emerald-400" />
+                <span>Verifiable HTTP Telemetry</span>
+              </span>
               <span>·</span>
               <span>Durable PostgreSQL Ledger</span>
               <span>·</span>

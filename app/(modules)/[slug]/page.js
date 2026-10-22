@@ -174,27 +174,27 @@ export default async function GenericModulePage({ params }) {
         ) : (
           /* General Module Layout (Workflows, Assistant, etc.) */
           <div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-6 border-b border-white/10">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 text-[11px] font-bold uppercase tracking-wider border border-blue-200">
+                  <span className="px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 text-[11px] font-bold uppercase tracking-wider border border-blue-500/30">
                     {MODULE_CATALOG[slug].category}
                   </span>
                   <ModuleStatusBadge status={MODULE_CATALOG[slug].status} />
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-2">
+                <h1 className="text-2xl sm:text-3xl font-black text-[#f5f7fa] tracking-tight mb-2">
                   {MODULE_CATALOG[slug].title}
                 </h1>
-                <p className="text-slate-600 text-sm max-w-2xl leading-relaxed">
+                <p className="text-zinc-400 text-sm max-w-2xl leading-relaxed">
                   {MODULE_CATALOG[slug].description}
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3.5 self-start shadow-xs">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <div className="flex items-center gap-3 bg-[#121217] border border-white/10 rounded-xl p-3.5 self-start shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
                 <div>
-                  <div className="text-xs font-bold text-slate-900 uppercase tracking-wider">Module Status</div>
-                  <div className="text-xs text-slate-500 font-mono">
+                  <div className="text-xs font-bold text-[#f5f7fa] uppercase tracking-wider">Module Status</div>
+                  <div className="text-xs text-zinc-400 font-mono">
                     {MODULE_CATALOG[slug].status === 'working' ? 'Production Ready' : MODULE_CATALOG[slug].status === 'preview' ? 'Sample UI Preview' : 'Roadmap Planned'}
                   </div>
                 </div>
@@ -206,25 +206,25 @@ export default async function GenericModulePage({ params }) {
               {MODULE_CATALOG[slug].cards.map((c, i) => (
                 <div
                   key={i}
-                  className="bg-white border border-slate-200/90 hover:border-blue-400 rounded-lg p-5 transition-all flex flex-col justify-between group shadow-xs hover:shadow-md"
+                  className="bg-[#121217] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 transition-all flex flex-col justify-between group shadow-sm hover:shadow-[0_0_20px_rgba(59,130,246,0.1)]"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 px-2 py-0.5 rounded bg-blue-50">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
                         {c.tag}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Feature Preview</span>
+                      <span className="text-[10px] font-mono text-zinc-500">Feature Preview</span>
                     </div>
-                    <h2 className="text-base font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
+                    <h2 className="text-base font-bold text-[#f5f7fa] mb-2 group-hover:text-blue-400 transition-colors">
                       {c.name}
                     </h2>
-                    <p className="text-xs text-slate-600 leading-relaxed font-mono">
+                    <p className="text-xs text-zinc-400 leading-relaxed font-mono">
                       {c.steps}
                     </p>
                   </div>
-                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-zinc-500">
                     <span>Single-Tenant Pipeline</span>
-                    <span className="text-blue-600 font-semibold text-xs">Ready</span>
+                    <span className="text-blue-400 font-semibold text-xs">Ready</span>
                   </div>
                 </div>
               ))}

@@ -159,7 +159,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <span className="w-4 h-4 rounded-full border border-[#00e5ff] bg-[#00e5ff]/10 flex items-center justify-center text-[10px] text-[#00e5ff] font-bold">
-                      ✓
+                      <BrandIcon name="check" className="w-2.5 h-2.5 text-[#00e5ff]" />
                     </span>
                     <span className="text-zinc-200 font-medium">Single-tenant session</span>
                   </div>

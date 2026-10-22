@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import BrandIcon from '@/components/BrandIcon';
 
 export default function NavCreditPill() {
   const [mounted, setMounted] = useState(false);
@@ -34,7 +35,7 @@ export default function NavCreditPill() {
     // SSR / Hydration placeholder
     return (
       <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-xs font-mono font-semibold">
-        <span className="text-amber-400">⚡</span>
+        <BrandIcon name="bolt" className="w-3 h-3 text-amber-400" />
         <span>5,000 cr</span>
       </div>
     );
@@ -52,7 +53,7 @@ export default function NavCreditPill() {
           : 'Private preview credits allocation: 5,000 cr. Click to manage billing.'
       }
     >
-      <span className="text-amber-400 group-hover:scale-110 transition-transform">⚡</span>
+      <BrandIcon name="bolt" className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform" />
       <span>{displayCredits} cr</span>
     </Link>
   );

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
 
 const BRAND_PRESETS = [
   { name: 'Chrono Cyan', color: '#00e5ff', bg: '#09090b', text: '#f5f7fa' },
@@ -191,7 +192,8 @@ export default function WhiteLabelPage() {
 
                 {/* Simulated URL bar with lock */}
                 <div className="flex-1 max-w-md mx-auto bg-[#09090b] border border-white/10 rounded-md py-1 px-3 flex items-center gap-2 text-xs font-mono text-zinc-400">
-                  <span className="text-emerald-400 text-xs">🔒 https://</span>
+                  <BrandIcon name="lock" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-zinc-500">https://</span>
                   <span className="text-white font-medium truncate">{customDomain}</span>
                 </div>
 
@@ -283,8 +285,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      🎨
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="palette" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -303,8 +305,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      🌐
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="globe" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -323,8 +325,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      🎛️
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="settings" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -343,8 +345,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      📈
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="chart" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -363,8 +365,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      💳
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="card" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
                       Roadmap (Stage C)
@@ -383,8 +385,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      🧪
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="sparkle" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -403,8 +405,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      👥
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="person" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -423,8 +425,8 @@ export default function WhiteLabelPage() {
               <div className="bg-[#121217] border border-white/10 rounded-xl p-6 hover:border-[#00e5ff]/50 transition-all shadow-xs group flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-xl text-[#00e5ff]">
-                      🛡️
+                    <div className="w-10 h-10 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/20 flex items-center justify-center text-[#00e5ff]">
+                      <BrandIcon name="shield" className="w-5 h-5 text-[#00e5ff]" />
                     </div>
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       In Development
@@ -537,8 +539,9 @@ export default function WhiteLabelPage() {
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-white/10 text-[11px] text-zinc-500">
-                    💡 Margin scales dynamically as you upgrade plans and volume tiering direct with providers.
+                  <div className="mt-6 pt-4 border-t border-white/10 text-[11px] text-zinc-400 flex items-center gap-2">
+                    <BrandIcon name="sparkle" className="w-3.5 h-3.5 text-[#00e5ff] shrink-0" />
+                    <span>Margin scales dynamically as you upgrade plans and volume tiering direct with providers.</span>
                   </div>
                 </div>
               </div>
@@ -574,14 +577,38 @@ export default function WhiteLabelPage() {
                   </div>
 
                   <ul className="space-y-3 text-xs text-zinc-300 mb-8">
-                    <li className="flex items-center gap-2">✓ Up to 100 Active End Users</li>
-                    <li className="flex items-center gap-2">✓ Image & Video Studio Suites</li>
-                    <li className="flex items-center gap-2">✓ Subdomain (`slug.timecapsule.ai`)</li>
-                    <li className="flex items-center gap-2">✓ Custom Branding & Logo</li>
-                    <li className="flex items-center gap-2">✓ Configurable Credit Markup (up to 1.5x)</li>
-                    <li className="flex items-center gap-2">✓ Zero-Cost Sandbox Mode</li>
-                    <li className="flex items-center gap-2 text-zinc-600">✕ Custom Domain & SSL</li>
-                    <li className="flex items-center gap-2 text-zinc-600">✕ Reseller&apos;s Own Stripe Keys (Platform Checkout Only)</li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Up to 100 Active End Users</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Image & Video Studio Suites</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Subdomain (`slug.timecapsule.ai`)</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Custom Branding & Logo</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Configurable Credit Markup (up to 1.5x)</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Zero-Cost Sandbox Mode</span>
+                    </li>
+                    <li className="flex items-center gap-2.5 text-zinc-600">
+                      <BrandIcon name="close" className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                      <span>Custom Domain & SSL</span>
+                    </li>
+                    <li className="flex items-center gap-2.5 text-zinc-600">
+                      <BrandIcon name="close" className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                      <span>Reseller&apos;s Own Stripe Keys (Platform Checkout Only)</span>
+                    </li>
                   </ul>
                 </div>
 
@@ -610,14 +637,38 @@ export default function WhiteLabelPage() {
                   </div>
 
                   <ul className="space-y-3 text-xs text-zinc-300 mb-8">
-                    <li className="flex items-center gap-2">✓ Up to 1,000 Active End Users</li>
-                    <li className="flex items-center gap-2">✓ All 8 Studios (Cinema, Audio, Lipsync...)</li>
-                    <li className="flex items-center gap-2 font-bold text-white">✓ Custom Domain + Auto-SSL</li>
-                    <li className="flex items-center gap-2 font-bold text-white">✓ Reseller Own SMTP Email Sender</li>
-                    <li className="flex items-center gap-2">✓ Custom Credit Markups (up to 3x) & Free Grants</li>
-                    <li className="flex items-center gap-2">✓ End-User Balances & Reason Audit Log</li>
-                    <li className="flex items-center gap-2">✓ Tenant Spend Caps & Kill Switch</li>
-                    <li className="flex items-center gap-2">✓ Standard Slack & Ticket Support</li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Up to 1,000 Active End Users</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>All 8 Studios (Cinema, Audio, Lipsync...)</span>
+                    </li>
+                    <li className="flex items-center gap-2.5 font-bold text-white">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-[#00e5ff] shrink-0" />
+                      <span>Custom Domain + Auto-SSL</span>
+                    </li>
+                    <li className="flex items-center gap-2.5 font-bold text-white">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-[#00e5ff] shrink-0" />
+                      <span>Reseller Own SMTP Email Sender</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Custom Credit Markups (up to 3x) & Free Grants</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>End-User Balances & Reason Audit Log</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Tenant Spend Caps & Kill Switch</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Standard Slack & Ticket Support</span>
+                    </li>
                   </ul>
                 </div>
 
@@ -642,14 +693,38 @@ export default function WhiteLabelPage() {
                   </div>
 
                   <ul className="space-y-3 text-xs text-zinc-300 mb-8">
-                    <li className="flex items-center gap-2 font-bold text-emerald-400">✓ Unlimited End Users</li>
-                    <li className="flex items-center gap-2 font-bold text-emerald-400">✓ BYO-Stripe Checkout (Stage C · rolling out)</li>
-                    <li className="flex items-center gap-2">✓ Priority GPU Queue Execution</li>
-                    <li className="flex items-center gap-2">✓ Custom Credit Markups (Unlimited Multipliers)</li>
-                    <li className="flex items-center gap-2">✓ Custom Domain + Multi-Host Routing</li>
-                    <li className="flex items-center gap-2">✓ Dedicated Technical Account Manager</li>
-                    <li className="flex items-center gap-2">✓ Priority Engineering Support</li>
-                    <li className="flex items-center gap-2">✓ Custom Moderation Webhooks</li>
+                    <li className="flex items-center gap-2.5 font-bold text-emerald-400">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Unlimited End Users</span>
+                    </li>
+                    <li className="flex items-center gap-2.5 font-bold text-emerald-400">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>BYO-Stripe Checkout (Stage C · rolling out)</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Priority GPU Queue Execution</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Custom Credit Markups (Unlimited Multipliers)</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Custom Domain + Multi-Host Routing</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Dedicated Technical Account Manager</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Priority Engineering Support</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Custom Moderation Webhooks</span>
+                    </li>
                   </ul>
                 </div>
 
@@ -683,7 +758,9 @@ export default function WhiteLabelPage() {
 
               {waitlistSubmitted ? (
                 <div className="p-6 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-center text-xs">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center text-xl font-bold mb-3">✓</div>
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center mb-3">
+                    <BrandIcon name="check" className="w-5 h-5 text-emerald-400" />
+                  </div>
                   <h4 className="text-base font-bold text-white mb-1">Application Received</h4>
                   <p className="text-zinc-300 mb-2">
                     Thank you! We&apos;ve reserved your priority slot for <strong>{waitlistStudio || 'your studio'}</strong> on the <strong>{waitlistTier}</strong> tier.

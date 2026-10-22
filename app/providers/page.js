@@ -285,7 +285,7 @@ export default function ProvidersPage() {
         {/* Hero Section */}
         <div className="mb-10 text-center max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-black uppercase tracking-widest mb-4">
-            <span>⚡</span>
+            <span className="w-2 h-2 rounded-full bg-[#00e5ff] animate-pulse" />
             <span>Multi-Provider Unified Gateway</span>
           </div>
 

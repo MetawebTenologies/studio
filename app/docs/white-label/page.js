@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
 
 const DOCS_NAV = [
   { section: 'Get started', items: ['Introduction', 'Quick Start', 'Application Guides', 'Authentication'] },
@@ -26,7 +27,7 @@ export default function WhiteLabelDocsPage() {
           {/* Search Bar */}
           <div className="relative mb-6">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500 text-xs">
-              🔍
+              <BrandIcon name="search" className="w-3.5 h-3.5 text-zinc-500" />
             </span>
             <input
               type="text"
@@ -96,8 +97,10 @@ export default function WhiteLabelDocsPage() {
           </p>
 
           {/* Quick Notice Banner */}
-          <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs text-blue-200 mb-8 flex items-start gap-3">
-            <span className="text-base">💡</span>
+          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-200 mb-8 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+              <BrandIcon name="sparkle" className="w-4 h-4 text-[#00e5ff]" />
+            </div>
             <div>
               <p className="font-semibold text-white mb-0.5">Custom Domains Available on Growth & Scale</p>
               <p className="text-zinc-300">
@@ -192,9 +195,16 @@ export default function WhiteLabelDocsPage() {
                   setCopiedTxt(true);
                   setTimeout(() => setCopiedTxt(false), 2000);
                 }}
-                className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                {copiedTxt ? '✓ Copied Token' : 'Copy TXT Token'}
+                {copiedTxt ? (
+                  <>
+                    <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Copied Token</span>
+                  </>
+                ) : (
+                  <span>Copy TXT Token</span>
+                )}
               </button>
             </div>
 
@@ -245,9 +255,16 @@ export default function WhiteLabelDocsPage() {
                   setCopiedCname(true);
                   setTimeout(() => setCopiedCname(false), 2000);
                 }}
-                className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                {copiedCname ? '✓ Copied CNAME' : 'Copy CNAME Target'}
+                {copiedCname ? (
+                  <>
+                    <BrandIcon name="check" className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Copied CNAME</span>
+                  </>
+                ) : (
+                  <span>Copy CNAME Target</span>
+                )}
               </button>
             </div>
 
@@ -260,15 +277,18 @@ export default function WhiteLabelDocsPage() {
               <p className="text-xs text-zinc-300 leading-relaxed mb-3">
                 Once DNS propagation is detected by our background verifier, our edge router (Caddy) automatically requests and provisions a trusted <strong>Let&apos;s Encrypt</strong> TLS certificate for your hostname.
               </p>
-              <div className="p-3 rounded bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
-                <span>✓</span>
+              <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2.5">
+                <BrandIcon name="check" className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>Automatic 90-day certificate renewals with zero downtime or maintenance.</span>
               </div>
             </div>
 
             {/* Cloudflare Caveat Box */}
             <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
-              <h4 className="font-bold text-white mb-1">⚠️ Cloudflare DNS Users: Proxy Mode</h4>
+              <div className="flex items-center gap-2 mb-1.5">
+                <BrandIcon name="shield" className="w-4 h-4 text-amber-400 shrink-0" />
+                <h4 className="font-bold text-white">Cloudflare DNS Users: Proxy Mode</h4>
+              </div>
               <p className="text-zinc-300 leading-relaxed">
                 If your domain is managed on Cloudflare, set the CNAME record proxy status to <strong>DNS Only (Gray Cloud)</strong> during initial verification. If you prefer to keep Orange Cloud active, set your Cloudflare SSL/TLS encryption mode to <strong>Full (Strict)</strong>.
               </p>
@@ -335,7 +355,7 @@ Reseller Gross Profit  : $0.150 per generation (100% margin on compute)`}</pre>
             </p>
             <div className="p-4 bg-[#0c0c10] border border-white/10 rounded-lg text-xs space-y-2 text-zinc-300">
               <div className="flex items-center gap-2 font-bold text-white">
-                <span>🔐</span>
+                <BrandIcon name="lock" className="w-4 h-4 text-[#00e5ff]" />
                 <span>KMS Secret Envelope Encryption</span>
               </div>
               <p>

@@ -746,7 +746,11 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
                                         <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                                     </svg>
                                 </div>
-                                <div className="absolute top-4 right-4 text-primary animate-pulse">✨</div>
+                                <div className="absolute top-4 right-4 text-primary animate-pulse">
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                                        <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z" strokeLinejoin="round" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
                         <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
@@ -1005,7 +1009,7 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
                                     ) : generateError ? (
                                         `Error: ${generateError}`
                                     ) : (
-                                        'Generate ✨'
+                                        'Generate'
                                     )}
                                 </button>
                             </div>

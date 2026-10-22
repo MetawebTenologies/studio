@@ -4,48 +4,49 @@ import { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
+import BrandIcon from '@/components/BrandIcon';
 
 const PROVIDER_TAGS = [
-  { name: 'LLM', icon: '💬' },
-  { name: 'Gemini Omni', icon: '✨' },
-  { name: 'HappyHorse', icon: '🐎' },
-  { name: 'Seedance 2', icon: '📊' },
-  { name: 'GPT Image', icon: '🖼️' },
-  { name: 'Veo 3.1', icon: '✨' },
-  { name: 'Nano Banana', icon: '🍌' },
-  { name: 'Midjourney', icon: '🎨' },
-  { name: 'Suno', icon: '🎵' },
-  { name: 'Wan 2.7', icon: '⚡' },
-  { name: 'Qwen', icon: '👁️' },
-  { name: 'Grok', icon: '⚡' },
-  { name: 'Vidu', icon: '📹' },
-  { name: 'Seedance 1.5', icon: '📊' },
-  { name: 'Wan 2.6', icon: '⚡' },
-  { name: 'OpenAI', icon: '🧠' },
-  { name: 'Seedream', icon: '🌱' },
-  { name: 'Flux', icon: '⚡' },
-  { name: 'Minimax Hailuo', icon: '🐚' },
-  { name: 'Kling', icon: '🎬' },
-  { name: 'Google', icon: '🌟' },
+  { name: 'LLM', icon: 'speech' },
+  { name: 'Gemini Omni', icon: 'google' },
+  { name: 'HappyHorse', icon: 'sparkle' },
+  { name: 'Seedance 2', icon: 'seedance' },
+  { name: 'GPT Image', icon: 'openai' },
+  { name: 'Veo 3.1', icon: 'veo' },
+  { name: 'Nano Banana', icon: 'banana' },
+  { name: 'Midjourney', icon: 'midjourney' },
+  { name: 'Suno', icon: 'audio' },
+  { name: 'Wan 2.7', icon: 'wan' },
+  { name: 'Qwen', icon: 'qwen' },
+  { name: 'Grok', icon: 'bolt' },
+  { name: 'Vidu', icon: 'vidu' },
+  { name: 'Seedance 1.5', icon: 'seedance' },
+  { name: 'Wan 2.6', icon: 'wan' },
+  { name: 'OpenAI', icon: 'openai' },
+  { name: 'Seedream', icon: 'seedance' },
+  { name: 'Flux', icon: 'flux' },
+  { name: 'Minimax Hailuo', icon: 'minimax' },
+  { name: 'Kling', icon: 'kling' },
+  { name: 'Google', icon: 'google' },
 ];
 
 const TASK_TAGS = [
-  { name: 'Upscale Image', icon: '🔍' },
-  { name: 'Upscale Video', icon: '🎬' },
-  { name: 'Faceswap', icon: '🔄' },
-  { name: 'Background Remover', icon: '✂️' },
-  { name: 'Product', icon: '📦' },
-  { name: 'Image Extension', icon: '📐' },
-  { name: 'Skin Enhancer', icon: '👤' },
-  { name: 'Color Photo', icon: '🎨' },
-  { name: 'LoRA', icon: '🧩' },
-  { name: 'Ghibli Style', icon: '🎨' },
-  { name: 'Object Eraser', icon: '🧹' },
-  { name: 'Lipsync', icon: '👄' },
-  { name: 'Watermark', icon: '💧' },
-  { name: 'Social Scrapper', icon: '📱' },
-  { name: 'Social Media Publish', icon: '🚀' },
-  { name: 'SEO', icon: '📈' },
+  { name: 'Upscale Image', icon: 'expand' },
+  { name: 'Upscale Video', icon: 'video' },
+  { name: 'Faceswap', icon: 'swap' },
+  { name: 'Background Remover', icon: 'scissor' },
+  { name: 'Product', icon: 'product' },
+  { name: 'Image Extension', icon: 'expand' },
+  { name: 'Skin Enhancer', icon: 'person' },
+  { name: 'Color Photo', icon: 'palette' },
+  { name: 'LoRA', icon: 'lora' },
+  { name: 'Ghibli Style', icon: 'palette' },
+  { name: 'Object Eraser', icon: 'eraser' },
+  { name: 'Lipsync', icon: 'lipsync' },
+  { name: 'Watermark', icon: 'watermark' },
+  { name: 'Social Scrapper', icon: 'social' },
+  { name: 'Social Media Publish', icon: 'rocket' },
+  { name: 'SEO', icon: 'chart' },
 ];
 
 const CATEGORIES_FACET = [
@@ -96,7 +97,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#2e0854] via-[#1a0933] to-[#0c1b33]',
           accent: '#9b8cff',
           tag: 'FLUX',
-          icon: '⚡',
+          icon: 'flux',
           sample: '/samples/sample_image_1.webp',
         };
       case 'veo':
@@ -104,7 +105,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#0b1a3a] via-[#081226] to-[#050b14]',
           accent: '#00e5ff',
           tag: 'VEO 3.1',
-          icon: '✨',
+          icon: 'veo',
           sample: '/samples/demo.mp4',
         };
       case 'seedance':
@@ -112,7 +113,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#062c24] via-[#051c17] to-[#04110e]',
           accent: '#10b981',
           tag: 'SEEDANCE',
-          icon: '🎬',
+          icon: 'seedance',
           sample: '/samples/demo.mp4',
         };
       case 'nano-banana':
@@ -120,7 +121,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#3b2405] via-[#221503] to-[#0e0901]',
           accent: '#f59e0b',
           tag: 'NANO',
-          icon: '🍌',
+          icon: 'banana',
           sample: '/samples/sample_image_1.webp',
         };
       case 'lyria':
@@ -129,7 +130,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#290d3d] via-[#170724] to-[#0a0312]',
           accent: '#c084fc',
           tag: 'AUDIO',
-          icon: '🎵',
+          icon: 'audio',
           sample: '/samples/sample_image_2.webp',
         };
       case 'ideogram':
@@ -137,7 +138,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#1f2937] via-[#111827] to-[#030712]',
           accent: '#38bdf8',
           tag: 'IDEOGRAM',
-          icon: '📐',
+          icon: 'ideogram',
           sample: '/samples/sample_banner.png',
         };
       case 'wan':
@@ -145,7 +146,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#0f172a] via-[#1e293b] to-[#020617]',
           accent: '#60a5fa',
           tag: 'WAN 2.2',
-          icon: '👄',
+          icon: 'wan',
           sample: '/samples/demo.mp4',
         };
       case 'kling':
@@ -153,7 +154,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#24123a] via-[#140b20] to-[#09040e]',
           accent: '#ec4899',
           tag: 'KLING',
-          icon: '📹',
+          icon: 'kling',
           sample: '/samples/demo.mp4',
         };
       case 'openai':
@@ -161,7 +162,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#062d22] via-[#031c15] to-[#020d0a]',
           accent: '#10b981',
           tag: 'OPENAI',
-          icon: '🧠',
+          icon: 'openai',
           sample: '/samples/sample_image_2.webp',
         };
       case 'midjourney':
@@ -169,7 +170,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#2e0854] via-[#3b0764] to-[#1e1b4b]',
           accent: '#e879f9',
           tag: 'MIDJOURNEY',
-          icon: '🎨',
+          icon: 'midjourney',
           sample: '/samples/sample_image_1.webp',
         };
       default:
@@ -177,7 +178,7 @@ function ModelVisualCard({ model }) {
           gradient: 'from-[#181820] via-[#121217] to-[#09090b]',
           accent: '#00e5ff',
           tag: 'STUDIO',
-          icon: '✨',
+          icon: 'studio',
           sample: '/samples/sample_image_1.webp',
         };
     }
@@ -232,9 +233,11 @@ function ModelVisualCard({ model }) {
               : 'opacity-0'
           }`}
         >
-          {isVideo ? '▶ Loop' : '✦ Preview'}
+          {isVideo ? 'Loop' : 'Preview'}
         </span>
-        <span className="text-sm opacity-90 drop-shadow-md">{style.icon}</span>
+        <div className="w-5 h-5 rounded flex items-center justify-center bg-black/40 backdrop-blur-xs border border-white/10">
+          <BrandIcon name={style.icon} className="w-3 h-3 text-white/90" />
+        </div>
       </div>
 
       {/* Center Graphic Motif (visible when not hovered) */}
@@ -616,8 +619,9 @@ export default function ExplorePage() {
               </div>
 
               {/* Cinematic 3D Product Headline */}
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tight text-white max-w-3xl leading-snug drop-shadow-sm">
-                🎬 Seedance 2.5 Native Cinematic Video — Now Live on Timecapsule
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tight text-white max-w-3xl leading-snug drop-shadow-sm flex flex-wrap items-center gap-3">
+                <span>Seedance 2.5 Native Cinematic Video</span>
+                <span className="text-[#00e5ff] font-mono text-xs sm:text-sm tracking-widest font-bold">/ NOW LIVE</span>
               </h1>
 
               {/* 2-line Description */}
@@ -631,7 +635,7 @@ export default function ExplorePage() {
               <Link
                 href="/explore"
                 data-keep-light="true"
-                className="px-5 py-3 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-sm shadow-md"
+                className="px-5 py-3 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-[#00e5ff] hover:text-black transition-all duration-200 rounded-sm shadow-md"
               >
                 Explore Collection
               </Link>
@@ -658,39 +662,39 @@ export default function ExplorePage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search models..."
-            className="w-full h-12 bg-[#121217] border border-white/10 rounded-[4px] pl-11 pr-4 text-sm text-[#f5f7fa] placeholder:text-zinc-500 focus:outline-none focus:border-blue-500 shadow-xs transition-colors"
+            className="w-full h-12 bg-[#121217] border border-white/10 rounded-[4px] pl-11 pr-4 text-sm text-[#f5f7fa] placeholder:text-zinc-500 focus:outline-none focus:border-[#00e5ff] shadow-xs transition-colors"
           />
         </div>
 
-        {/* Chip System Group 1 (Provider/Model Chips — Dark Surface + Icon) */}
+        {/* Chip System Group 1 (Provider/Model Chips — Dark Surface + Vector Icon) */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 text-xs">
           {PROVIDER_TAGS.map((tag) => (
             <button
               key={tag.name}
               onClick={() => setSearch(tag.name)}
-              className="bg-[#121217] hover:bg-[#181820] border border-white/10 text-zinc-300 hover:text-[#f5f7fa] hover:border-blue-500/50 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold"
+              className="bg-[#121217] hover:bg-[#181820] border border-white/10 text-zinc-300 hover:text-[#f5f7fa] hover:border-[#00e5ff]/50 px-3 py-1.5 rounded-full flex items-center gap-2 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold group cursor-pointer"
             >
-              <span>{tag.icon}</span>
+              <BrandIcon name={tag.icon} className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#00e5ff] transition-colors" />
               <span>{tag.name}</span>
             </button>
           ))}
           <button
             onClick={() => setSearch('')}
-            className="text-blue-500 hover:text-blue-400 text-xs font-semibold whitespace-nowrap px-2"
+            className="text-[#00e5ff] hover:text-cyan-300 text-xs font-semibold whitespace-nowrap px-2 cursor-pointer transition-colors"
           >
             See all providers →
           </button>
         </div>
 
-        {/* Chip System Group 2 (Tool Chips — Dark Surface + Icon) */}
+        {/* Chip System Group 2 (Tool Chips — Dark Surface + Vector Icon) */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-4 text-xs">
           {TASK_TAGS.map((tag) => (
             <button
               key={tag.name}
               onClick={() => setSearch(tag.name)}
-              className="bg-[#121217] hover:bg-[#181820] border border-white/10 text-zinc-300 hover:text-[#f5f7fa] hover:border-blue-500/50 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold"
+              className="bg-[#121217] hover:bg-[#181820] border border-white/10 text-zinc-300 hover:text-[#f5f7fa] hover:border-[#00e5ff]/50 px-3 py-1.5 rounded-full flex items-center gap-2 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold group cursor-pointer"
             >
-              <span>{tag.icon}</span>
+              <BrandIcon name={tag.icon} className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#00e5ff] transition-colors" />
               <span>{tag.name}</span>
             </button>
           ))}
@@ -780,7 +784,7 @@ export default function ExplorePage() {
                             : 'border-zinc-700 bg-[#121217]'
                         }`}
                       >
-                        {isSelected && '✓'}
+                        {isSelected && <BrandIcon name="check" className="w-2.5 h-2.5 text-white" />}
                       </span>
                       <span className="truncate">{cat.label}</span>
                     </div>

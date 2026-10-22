@@ -428,24 +428,24 @@ console.log('SSE Stream:', job.events_url);`;
           <div className="inline-flex bg-[#181820] p-1 rounded-lg border border-white/10">
             <button
               onClick={() => setActiveTab('playground')}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 activeTab === 'playground'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <span>⚡</span>
+              <BrandIcon name="bolt" className="w-3.5 h-3.5" />
               <span>Playground</span>
             </button>
             <button
               onClick={() => setActiveTab('api')}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 activeTab === 'api'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <span>{'</>'}</span>
+              <BrandIcon name="code" className="w-3.5 h-3.5" />
               <span>API Reference</span>
             </button>
           </div>
@@ -469,9 +469,9 @@ console.log('SSE Stream:', job.events_url);`;
                   <button
                     type="button"
                     onClick={handleRandomPrompt}
-                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer transition-colors"
+                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
-                    <span>🎲</span>
+                    <BrandIcon name="dice" className="w-3.5 h-3.5" />
                     <span>Surprise Me</span>
                   </button>
                 </div>
@@ -616,7 +616,7 @@ console.log('SSE Stream:', job.events_url);`;
                     </>
                   ) : (
                     <>
-                      <span>⚡</span>
+                      <BrandIcon name="bolt" className="w-3.5 h-3.5" />
                       <span>Generate</span>
                     </>
                   )}
@@ -632,7 +632,7 @@ console.log('SSE Stream:', job.events_url);`;
                   onClick={() => setErrorMessage(null)}
                   className="text-rose-400 hover:text-white ml-2 text-xs font-bold"
                 >
-                  ✕
+                  <BrandIcon name="close" className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
@@ -815,9 +815,16 @@ console.log('SSE Stream:', job.events_url);`;
                     apiLang === 'curl' ? curlCode : apiLang === 'python' ? pythonCode : nodeCode
                   )
                 }
-                className="px-3 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-mono transition-colors cursor-pointer flex items-center gap-1"
+                className="px-3 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-mono transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                <span>{copiedCode ? '✓ Copied' : 'Copy'}</span>
+                {copiedCode ? (
+                  <>
+                    <BrandIcon name="check" className="w-3 h-3 text-emerald-400" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <span>Copy</span>
+                )}
               </button>
             </div>
 

@@ -340,9 +340,12 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
                 <button
                   type="button"
                   onClick={handleDone}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
                 >
-                  ✓ Done ({count})
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span>Done ({count})</span>
                 </button>
               )}
               <button
@@ -947,7 +950,11 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                     <polyline points="21 15 16 10 5 21" />
                   </svg>
                 </div>
-                <div className="absolute top-4 right-4 text-primary animate-pulse">✨</div>
+                <div className="absolute top-4 right-4 text-primary animate-pulse">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z" strokeLinejoin="round" />
+                  </svg>
+                </div>
               </div>
             </div>
             <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
@@ -1156,7 +1163,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                   ) : generateError ? (
                     `Error: ${generateError}`
                   ) : (
-                    "Generate ✨"
+                    "Generate"
                   )}
                 </button>
               </div>

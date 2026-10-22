@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ImageStudio, VideoStudio, LipSyncStudio, CinemaStudio } from 'studio';
 import { TIMECAPSULE_BRAND } from '@/branding';
 import ApiKeyModal from './ApiKeyModal';
+import BrandIcon from '@/components/BrandIcon';
 
 const TABS = [
   { id: 'library', label: 'Library' },
@@ -393,9 +394,10 @@ export default function StandaloneShell({ hideHeader = false }) {
             </span>
             <button
               onClick={() => setShowSettings(true)}
-              className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer"
+              className="text-white/60 hover:text-white text-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              ⚙ Settings
+              <BrandIcon name="settings" className="w-3.5 h-3.5" />
+              <span>Settings</span>
             </button>
           </div>
         </header>
@@ -431,9 +433,10 @@ export default function StandaloneShell({ hideHeader = false }) {
             </span>
             <button
               onClick={() => setShowSettings(true)}
-              className="text-white/50 hover:text-white transition-colors cursor-pointer"
+              className="text-white/50 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              ⚙ Settings
+              <BrandIcon name="settings" className="w-3.5 h-3.5" />
+              <span>Settings</span>
             </button>
           </div>
         </div>
