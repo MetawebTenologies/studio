@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import {
   query,
   withTransaction,
+  withSystemContext,
+  withTenantContext,
   parseSafeCreditBigInt,
   assertValidCreditUnits,
   assertDisposableTestDatabase,
@@ -289,6 +291,7 @@ export async function createSubmissionTransaction({
   });
 
   return withTransaction(async (client) => {
+    await withSystemContext(client, async () => {});
     // Ensure a 0-balance tenant row exists if never seeded, then acquire row lock (Lock #1: tenants)
     await client.query(
       `INSERT INTO tenants (tenant_id, credits_balance, credits_reserved)
@@ -470,31 +473,37 @@ export async function createSubmissionTransaction({
 
 export async function getJob(jobId) {
   if (!jobId) return null;
-  const res = await query('SELECT * FROM jobs WHERE job_id = $1', [jobId]);
-  if (res.rowCount === 0) return null;
-  return formatJobRow(res.rows[0]);
+  return withSystemContext(async (client) => {
+    const res = await client.query('SELECT * FROM jobs WHERE job_id = $1', [jobId]);
+    if (res.rowCount === 0) return null;
+    return formatJobRow(res.rows[0]);
+  });
 }
 
 export async function getJobPrivateProviderDetails(jobId) {
   if (!jobId) return null;
-  const res = await query(
-    'SELECT job_id, provider, provider_job_id, execution_route, provider_details_private_json FROM jobs WHERE job_id = $1',
-    [jobId]
-  );
-  if (res.rowCount === 0) return null;
-  return res.rows[0].provider_details_private_json || {};
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      'SELECT job_id, provider, provider_job_id, execution_route, provider_details_private_json FROM jobs WHERE job_id = $1',
+      [jobId]
+    );
+    if (res.rowCount === 0) return null;
+    return res.rows[0].provider_details_private_json || {};
+  });
 }
 
 export async function listJobs(tenantId, limit = 50) {
   const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
-  const res = await query(
-    `SELECT * FROM jobs
-     WHERE tenant_id = $1
-     ORDER BY created_at DESC, job_id DESC
-     LIMIT $2`,
-    [tenantId, safeLimit]
-  );
-  return res.rows.map(formatJobRow);
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT * FROM jobs
+       WHERE tenant_id = $1
+       ORDER BY created_at DESC, job_id DESC
+       LIMIT $2`,
+      [tenantId, safeLimit]
+    );
+    return res.rows.map(formatJobRow);
+  });
 }
 
 /**
@@ -514,7 +523,7 @@ export async function claimNextRunnableJob({ workerId, leaseDurationMs = 30000 }
   const safeLeaseMs = Math.max(25, Number(leaseDurationMs) || 30000);
 
   return withTransaction(async (client) => {
-    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+    await withSystemContext(client, async () => {});
     const candidateRes = await client.query(
       `SELECT j.*
        FROM jobs j
@@ -977,7 +986,7 @@ export async function completeJobSuccess({
     : [validatedMedia.url];
 
   return withTransaction(async (client) => {
-    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+    await withSystemContext(client, async () => {});
     // Resolve tenantId if not passed
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
@@ -1274,7 +1283,7 @@ export async function completeJobFailure({
   providerDetails = null,
 }) {
   return withTransaction(async (client) => {
-    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+    await withSystemContext(client, async () => {});
     let resolvedTenantId = tenantId;
     if (!resolvedTenantId) {
       const lookupRes = await client.query(
@@ -1560,32 +1569,36 @@ export async function registerAsset(assetRecord) {
   const storageType =
     assetRecord.storage_type || (isInline ? 'inline_data_url' : 'external_url_reference');
 
-  const res = await query(
-    `INSERT INTO assets (
-       asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, filename, status, url
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, $9, $10, $11)
-     RETURNING *`,
-    [
-      assetId,
-      assetRecord.tenant_id,
-      assetRecord.job_id || null,
-      assetRecord.modality || 'image',
-      assetRecord.content_type || 'application/octet-stream',
-      storageType,
-      assetRecord.provider || null,
-      assetRecord.source_url,
-      assetRecord.filename || null,
-      assetRecord.status || 'reference_registered',
-      assetUrl,
-    ]
-  );
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `INSERT INTO assets (
+         asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, durable, private, source_url, filename, status, url
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, TRUE, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        assetId,
+        assetRecord.tenant_id,
+        assetRecord.job_id || null,
+        assetRecord.modality || 'image',
+        assetRecord.content_type || 'application/octet-stream',
+        storageType,
+        assetRecord.provider || null,
+        assetRecord.source_url,
+        assetRecord.filename || null,
+        assetRecord.status || 'reference_registered',
+        assetUrl,
+      ]
+    );
 
-  return formatAssetRow(res.rows[0]);
+    return formatAssetRow(res.rows[0]);
+  });
 }
 
 export async function getAsset(assetId) {
   if (!assetId) return null;
-  const res = await query('SELECT * FROM assets WHERE asset_id = $1', [assetId]);
-  if (res.rowCount === 0) return null;
-  return formatAssetRow(res.rows[0]);
+  return withSystemContext(async (client) => {
+    const res = await client.query('SELECT * FROM assets WHERE asset_id = $1', [assetId]);
+    if (res.rowCount === 0) return null;
+    return formatAssetRow(res.rows[0]);
+  });
 }

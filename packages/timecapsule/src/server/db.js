@@ -196,20 +196,48 @@ export async function withTransaction(fn) {
 }
 
 /**
- * Sets the PostgreSQL session variable `app.tenant_id` for GUC-based Row Level Security isolation.
+ * Sets the PostgreSQL session role to `timecapsule_tenant_role` and session variable `app.tenant_id`
+ * for GUC-based Row Level Security isolation. Supports either (client, tenantId, callback) or (tenantId, callback).
  */
-export async function withTenantContext(client, tenantId, callback) {
+export async function withTenantContext(clientOrCallback, tenantIdOrMaybeCallback, maybeCallback) {
+  if (typeof clientOrCallback === 'string' && typeof tenantIdOrMaybeCallback === 'function') {
+    const tenantId = clientOrCallback;
+    const callback = tenantIdOrMaybeCallback;
+    return withTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      return await callback(client);
+    });
+  }
+
+  const client = clientOrCallback;
+  const tenantId = tenantIdOrMaybeCallback;
+  const callback = maybeCallback;
+
   if (!tenantId) {
     throw new Error('tenantId is required for withTenantContext');
   }
+  await client.query('SET LOCAL ROLE timecapsule_tenant_role');
   await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
   return await callback(client);
 }
 
 /**
- * Sets the PostgreSQL session variable `app.is_system_actor` to 'true' for system worker and admin operations.
+ * Assumes `timecapsule_system_role` via SET LOCAL ROLE and sets `app.is_system_actor` to 'true'
+ * for system worker and admin operations under RLS. Supports either (client, callback) or (callback).
  */
-export async function withSystemContext(client, callback) {
+export async function withSystemContext(clientOrCallback, maybeCallback) {
+  if (typeof clientOrCallback === 'function') {
+    return withTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE timecapsule_system_role');
+      await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+      return await clientOrCallback(client);
+    });
+  }
+
+  const client = clientOrCallback;
+  const callback = maybeCallback;
+  await client.query('SET LOCAL ROLE timecapsule_system_role');
   await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
   return await callback(client);
 }

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query, withTransaction } from './db.js';
+import { query, withTransaction, withSystemContext, withTenantContext } from './db.js';
 
 export async function createTenant({
   tenantId,
@@ -17,6 +17,7 @@ export async function createTenant({
   const normalizedSlug = slug ? String(slug).toLowerCase().trim() : null;
 
   return withTransaction(async (client) => {
+    await withSystemContext(client, async () => {});
     const res = await client.query(
       `INSERT INTO tenants (
         tenant_id, slug, name, plan, status, branding, legal, flags, spend_ceiling_credits, credits_balance, credits_reserved
@@ -173,37 +174,43 @@ export async function createMembership({
   status = 'active',
 }) {
   const id = membershipId || `mem_${crypto.randomBytes(8).toString('hex')}`;
-  const res = await query(
-    `INSERT INTO memberships (membership_id, user_id, tenant_id, role, status)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = EXCLUDED.role, status = EXCLUDED.status, updated_at = NOW()
-     RETURNING membership_id, user_id, tenant_id, role, status, created_at, updated_at`,
-    [id, userId, tenantId, role, status]
-  );
-  return res.rows[0];
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `INSERT INTO memberships (membership_id, user_id, tenant_id, role, status)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = EXCLUDED.role, status = EXCLUDED.status, updated_at = NOW()
+       RETURNING membership_id, user_id, tenant_id, role, status, created_at, updated_at`,
+      [id, userId, tenantId, role, status]
+    );
+    return res.rows[0];
+  });
 }
 
 export async function getMembership(userId, tenantId) {
   if (!userId || !tenantId) return null;
-  const res = await query(
-    `SELECT membership_id, user_id, tenant_id, role, status, created_at, updated_at
-     FROM memberships WHERE user_id = $1 AND tenant_id = $2`,
-    [userId, tenantId]
-  );
-  return res.rows[0] || null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT membership_id, user_id, tenant_id, role, status, created_at, updated_at
+       FROM memberships WHERE user_id = $1 AND tenant_id = $2`,
+      [userId, tenantId]
+    );
+    return res.rows[0] || null;
+  });
 }
 
 export async function listMembershipsForTenant(tenantId) {
   if (!tenantId) return [];
-  const res = await query(
-    `SELECT m.membership_id, m.user_id, m.tenant_id, m.role, m.status, u.email, m.created_at
-     FROM memberships m
-     JOIN users u ON u.user_id = m.user_id
-     WHERE m.tenant_id = $1
-     ORDER BY m.created_at ASC`,
-    [tenantId]
-  );
-  return res.rows;
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT m.membership_id, m.user_id, m.tenant_id, m.role, m.status, u.email, m.created_at
+       FROM memberships m
+       JOIN users u ON u.user_id = m.user_id
+       WHERE m.tenant_id = $1
+       ORDER BY m.created_at ASC`,
+      [tenantId]
+    );
+    return res.rows;
+  });
 }
 
 export async function seedTenantWithAdmin({

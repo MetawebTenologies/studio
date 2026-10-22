@@ -5,6 +5,7 @@ import {
   query,
   withTransaction,
   withTenantContext,
+  withSystemContext,
   runMigrations,
   closePool,
   assertDisposableTestDatabase,
@@ -40,6 +41,7 @@ import {
   createSubmissionTransaction,
   claimNextRunnableJob,
   listJobs,
+  getJob,
 } from '../packages/timecapsule/src/server/store.js';
 import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js';
 import {
@@ -739,6 +741,290 @@ test('Condition 1 Integration: Worker claims and executes jobs under Row Level S
       const assetsB = await client.query('SELECT asset_id FROM assets WHERE tenant_id = $1', [tenantA.tenant_id]);
       assert.equal(assetsB.rows.length, 0, 'Tenant B cannot see Tenant A asset under RLS');
     });
+  } finally {
+    resetProviderAdapters();
+    process.env.TIMECAPSULE_TEST_MODE = prevTestMode;
+  }
+});
+
+test('P0-1 / S8 Negative Test 1: Fail-open killer - non-tenant connection with no GUC sees zero rows', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_failopen_test',
+    slug: 'failopen-test',
+    name: 'FailOpen Test Studio',
+    initialCredits: 500,
+  });
+
+  const { job } = await createSubmissionTransaction({
+    jobId: 'job_failopen_1',
+    tenantId: tenant.tenant_id,
+    userId: 'usr_failopen',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'failopen check' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  await withTransaction(async (client) => {
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tc_untrusted_client') THEN
+          CREATE ROLE tc_untrusted_client NOINHERIT;
+        END IF;
+      END $$;
+    `);
+    await client.query('GRANT USAGE ON SCHEMA public TO tc_untrusted_client');
+    await client.query('GRANT SELECT ON jobs, assets, credit_reservations, credit_ledger, idempotency_keys, memberships TO tc_untrusted_client');
+
+    // Switch to unprivileged client with no GUC set
+    await client.query('SET LOCAL ROLE tc_untrusted_client');
+
+    const jobCheck = await client.query('SELECT count(*) FROM jobs');
+    assert.equal(Number(jobCheck.rows[0].count), 0, 'Fail-open killer: jobs query returns 0 rows');
+
+    const assetCheck = await client.query('SELECT count(*) FROM assets');
+    assert.equal(Number(assetCheck.rows[0].count), 0, 'Fail-open killer: assets query returns 0 rows');
+
+    const memCheck = await client.query('SELECT count(*) FROM memberships');
+    assert.equal(Number(memCheck.rows[0].count), 0, 'Fail-open killer: memberships query returns 0 rows');
+
+    const resvCheck = await client.query('SELECT count(*) FROM credit_reservations');
+    assert.equal(Number(resvCheck.rows[0].count), 0, 'Fail-open killer: credit_reservations query returns 0 rows');
+
+    const ledgerCheck = await client.query('SELECT count(*) FROM credit_ledger');
+    assert.equal(Number(ledgerCheck.rows[0].count), 0, 'Fail-open killer: credit_ledger query returns 0 rows');
+
+    const idemCheck = await client.query('SELECT count(*) FROM idempotency_keys');
+    assert.equal(Number(idemCheck.rows[0].count), 0, 'Fail-open killer: idempotency_keys query returns 0 rows');
+  });
+});
+
+test('P0-1 / S8 Negative Test 2: GUC escalation - tenant role setting app.is_system_actor cannot bypass RLS', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenantA = await createTenant({
+    tenantId: 'tnt_guc_a',
+    slug: 'guc-a',
+    name: 'Tenant A',
+    initialCredits: 500,
+  });
+
+  const tenantB = await createTenant({
+    tenantId: 'tnt_guc_b',
+    slug: 'guc-b',
+    name: 'Tenant B',
+    initialCredits: 500,
+  });
+
+  const { job: jobA } = await createSubmissionTransaction({
+    jobId: 'job_guc_a_1',
+    tenantId: tenantA.tenant_id,
+    userId: 'usr_guc_a',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'A artwork' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  const { job: jobB } = await createSubmissionTransaction({
+    jobId: 'job_guc_b_1',
+    tenantId: tenantB.tenant_id,
+    userId: 'usr_guc_b',
+    modality: 'image',
+    model: 'flux-dev',
+    resolvedProviderModel: 'flux-dev',
+    provider: 'muapi',
+    executionRoute: 'muapi:predictions/v1:flux-dev',
+    estimatedCost: 10,
+    creditsReserved: 10,
+    inputsJson: { prompt: 'B artwork' },
+    workflowJson: {},
+    deliveryJson: {},
+  });
+
+  await withTransaction(async (client) => {
+    await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+
+    // Attempt escalation by setting app.is_system_actor = 'true'
+    await client.query("SELECT set_config('app.is_system_actor', 'true', true)");
+
+    // Case 1: tenant GUC unset + is_system_actor = true -> sees 0 rows (cannot view all jobs)
+    const unsetWithEscalation = await client.query('SELECT job_id FROM jobs');
+    assert.equal(unsetWithEscalation.rows.length, 0, 'Cannot see any jobs without app.tenant_id even with is_system_actor=true');
+
+    // Case 2: tenant GUC set to Tenant A + is_system_actor = true -> sees ONLY Tenant A jobs, zero Tenant B jobs
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+    const tenantAJobs = await client.query('SELECT job_id FROM jobs');
+    assert.equal(tenantAJobs.rows.length, 1, 'Sees only Tenant A job');
+    assert.equal(tenantAJobs.rows[0].job_id, jobA.job_id);
+
+    const bDirectQuery = await client.query('SELECT job_id FROM jobs WHERE job_id = $1', [jobB.job_id]);
+    assert.equal(bDirectQuery.rows.length, 0, 'Cannot see Tenant B job despite is_system_actor=true');
+  });
+});
+
+test('P0-1 / S8 Negative Test 3: Membership escape - cross-tenant membership read/write denied under RLS', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const { tenant: tenantA, user: userA, membership: memA } = await seedTenantWithAdmin({
+    tenantId: 'tnt_mem_esc_a',
+    slug: 'mem-esc-a',
+    name: 'Tenant Mem A',
+    adminEmail: 'admin-a@example.com',
+    initialCredits: 100,
+  });
+
+  const { tenant: tenantB, user: userB, membership: memB } = await seedTenantWithAdmin({
+    tenantId: 'tnt_mem_esc_b',
+    slug: 'mem-esc-b',
+    name: 'Tenant Mem B',
+    adminEmail: 'admin-b@example.com',
+    initialCredits: 100,
+  });
+
+  await withTransaction(async (client) => {
+    await client.query('SET LOCAL ROLE timecapsule_tenant_role');
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA.tenant_id]);
+
+    // Read escape: Tenant A cannot see Tenant B memberships
+    const bMemberships = await client.query(
+      'SELECT * FROM memberships WHERE tenant_id = $1',
+      [tenantB.tenant_id]
+    );
+    assert.equal(bMemberships.rows.length, 0, 'Tenant A sees 0 memberships for Tenant B');
+
+    // Write escape: Tenant A cannot insert a membership for Tenant B
+    await assert.rejects(
+      async () => {
+        await client.query(
+          `INSERT INTO memberships (membership_id, user_id, tenant_id, role, status)
+           VALUES ('mem_escape_injected', $1, $2, 'tenant_admin', 'active')`,
+          [userA.user_id, tenantB.tenant_id]
+        );
+      },
+      (err) => {
+        return err.message.includes('row-level security policy') || err.code === '42501';
+      },
+      'Cross-tenant membership insertion violates RLS WITH CHECK'
+    );
+  });
+});
+
+test('P0-1 / S8 Negative Test 4: Worker running under RLS via system context - claims and processes jobs across tenants', async (t) => {
+  const prevTestMode = process.env.TIMECAPSULE_TEST_MODE;
+  process.env.TIMECAPSULE_TEST_MODE = '1';
+
+  try {
+    assertDisposableTestDatabase();
+    await resetStoreForTests();
+    await runMigrations();
+
+    const tenantA = await createTenant({
+      tenantId: 'tnt_wrk_rls_a',
+      slug: 'wrk-rls-a',
+      name: 'Worker RLS Tenant A',
+      initialCredits: 500,
+    });
+
+    const tenantB = await createTenant({
+      tenantId: 'tnt_wrk_rls_b',
+      slug: 'wrk-rls-b',
+      name: 'Worker RLS Tenant B',
+      initialCredits: 500,
+    });
+
+    registerProviderAdapter('muapi', async (job) => {
+      return {
+        providerJobId: `muapi_worker_cross_${job.job_id}`,
+        sourceUrl: 'https://cdn.timecapsule.test/outputs/cross_tenant_gen.png',
+        userBilledCredits: Number(job.credits_reserved) || 15,
+        providerReportedCost: 0.002,
+        providerCostUnit: 'USD',
+        providerDetails: { adapter: 'muapi', model: job.model },
+      };
+    });
+
+    const { job: jobA } = await createSubmissionTransaction({
+      jobId: 'job_wrk_cross_a',
+      tenantId: tenantA.tenant_id,
+      userId: 'usr_wrk_a',
+      modality: 'image',
+      model: 'flux-dev',
+      resolvedProviderModel: 'flux-dev',
+      provider: 'muapi',
+      executionRoute: 'muapi:predictions/v1:flux-dev',
+      estimatedCost: 15,
+      creditsReserved: 15,
+      inputsJson: { prompt: 'Cross tenant test A' },
+      workflowJson: {},
+      deliveryJson: {},
+    });
+
+    const { job: jobB } = await createSubmissionTransaction({
+      jobId: 'job_wrk_cross_b',
+      tenantId: tenantB.tenant_id,
+      userId: 'usr_wrk_b',
+      modality: 'image',
+      model: 'flux-dev',
+      resolvedProviderModel: 'flux-dev',
+      provider: 'muapi',
+      executionRoute: 'muapi:predictions/v1:flux-dev',
+      estimatedCost: 20,
+      creditsReserved: 20,
+      inputsJson: { prompt: 'Cross tenant test B' },
+      workflowJson: {},
+      deliveryJson: {},
+    });
+
+    // Execute durable worker claiming jobs across tenants via withSystemContext
+    const worker = createDurableWorker({
+      workerId: 'wrk_cross_tenant_runner',
+      idlePollIntervalMs: 50,
+      leaseDurationMs: 10000,
+    });
+
+    // Claim and process first job (from tenant A)
+    const claim1 = await claimNextRunnableJob({ workerId: 'wrk_cross_tenant_runner' });
+    assert.ok(claim1, 'Worker claimed first job under RLS');
+    assert.equal(claim1.job.job_id, jobA.job_id);
+    const step1 = await worker.executeClaimedJob(claim1.job);
+    assert.equal(step1.processed, true);
+    assert.equal(step1.job.status, 'succeeded');
+
+    // Claim and process second job (from tenant B)
+    const claim2 = await claimNextRunnableJob({ workerId: 'wrk_cross_tenant_runner' });
+    assert.ok(claim2, 'Worker claimed second job under RLS');
+    assert.equal(claim2.job.job_id, jobB.job_id);
+    const step2 = await worker.executeClaimedJob(claim2.job);
+    assert.equal(step2.processed, true);
+    assert.equal(step2.job.status, 'succeeded');
+
+    // Verify both jobs are succeeded in the DB
+    const finalJobA = await getJob(jobA.job_id);
+    const finalJobB = await getJob(jobB.job_id);
+    assert.equal(finalJobA.status, 'succeeded');
+    assert.equal(finalJobB.status, 'succeeded');
   } finally {
     resetProviderAdapters();
     process.env.TIMECAPSULE_TEST_MODE = prevTestMode;
