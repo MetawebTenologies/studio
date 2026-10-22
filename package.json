@@ -3,6 +3,7 @@
   "description": "Timecapsule — Multimodal AI cinema, video, image, and lip-sync studio",
   "private": true,
   "version": "1.0.0",
+  "main": "electron/main.js",
   "workspaces": [
     "packages/studio",
     "packages/timecapsule"
