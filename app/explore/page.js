@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
@@ -58,305 +58,331 @@ const TASK_TAGS = [
   { name: 'Object Eraser', icon: '🧹' },
   { name: 'Lipsync', icon: '👄' },
   { name: 'Watermark', icon: '💧' },
-  { name: 'Social Scrapper', icon: '🕸️' },
-  { name: 'Social Media Publish', icon: '📢' },
-  { name: 'SEO', icon: '📈' },
 ];
 
 const CATEGORIES_FACET = [
   { id: 'all', label: 'All Categories', count: 622 },
   { id: 'i2v', label: 'Image to Video', count: 137 },
-  { id: 't2t', label: 'Text Generation', count: 92 },
+  { id: 'llm', label: 'Text Generation', count: 92 },
   { id: 't2v', label: 'Text to Video', count: 91 },
   { id: 'i2i', label: 'Image Editing', count: 81 },
   { id: 't2i', label: 'Text to Image', count: 76 },
   { id: 'v2v', label: 'Video Editing', count: 61 },
-  { id: 'llm', label: 'LLM', count: 51 },
+  { id: 'llm_core', label: 'LLM', count: 51 },
   { id: 'audio', label: 'AI Audio', count: 25 },
   { id: 'lora', label: 'LoRA Support', count: 17 },
   { id: 'training', label: 'Training', count: 13 },
   { id: 'lipsync', label: 'Lipsync', count: 13 },
   { id: '3d', label: 'Image to 3D', count: 7 },
   { id: 'other', label: 'other', count: 6 },
-  { id: 'text3d', label: 'Text to 3D', count: 3 },
-];
-
-// Rich model descriptions and discounts matching Muapi layout
-const CURATED_MODELS = [
-  {
-    id: 'flux-3-klein-edit-image',
-    name: 'flux-3-klein-edit-image',
-    category: 'IMAGE EDITING',
-    originalPrice: '$0.0100',
-    price: '$0.009',
-    discount: '11%',
-    description: 'Edit one to ten reference images with Black Forest Labs FLUX 3 Klein using natural-language instruction. Choose 1K, 2K, or 4K output.',
-    provider: 'timecapsule',
-    thumb: CINEMA_THUMBNAILS[0],
-  },
-  {
-    id: 'flux-3-klein-text-to-image',
-    name: 'flux-3-klein-text-to-image',
-    category: 'TEXT TO IMAGE',
-    originalPrice: '$0.0100',
-    price: '$0.009',
-    discount: '11%',
-    description: 'Generate images with Black Forest Labs FLUX 3 Klein through a single asynchronous API. Choose 1K, 2K, or 4K output, nine aspect ratios, PNG/JPEG/WebP format.',
-    provider: 'timecapsule',
-    thumb: CINEMA_THUMBNAILS[1],
-  },
-  {
-    id: 'lyria-2',
-    name: 'lyria-2',
-    category: 'AI AUDIO',
-    originalPrice: '$0.0687',
-    price: '$0.060',
-    discount: '11%',
-    description: "Lyria 2 is Google's instrumental music generation model. Describe the style and mood in a text prompt and get a roughly 30-second instrumental track as an MP3.",
-    provider: 'google',
-    thumb: CINEMA_THUMBNAILS[2],
-  },
-  {
-    id: 'lyria-3',
-    name: 'lyria-3',
-    category: 'AI AUDIO',
-    originalPrice: '$0.0444',
-    price: '$0.040',
-    discount: '10%',
-    description: 'Lyria 3 generates short, high-quality music clips of up to 30 seconds from a text prompt — perfect for jingles, intros, loops and background tracks.',
-    provider: 'google',
-    thumb: CINEMA_THUMBNAILS[3],
-  },
-  {
-    id: 'lyria-3-pro',
-    name: 'lyria-3-pro',
-    category: 'AI AUDIO',
-    originalPrice: '$0.0880',
-    price: '$0.080',
-    discount: '11%',
-    description: 'Lyria 3 Pro is Google flagship music model: describe a genre, mood, instruments and structure and it composes a full-length song of up to three minutes.',
-    provider: 'google',
-    thumb: CINEMA_THUMBNAILS[4],
-  },
-  {
-    id: 'fish-s2-1-pro',
-    name: 'fish-s2-1-pro',
-    category: 'AI AUDIO',
-    originalPrice: '$0.0167',
-    price: '$0.015',
-    discount: '11%',
-    description: 'Fish Audio S2.1 Pro is a high-fidelity text-to-speech model built for long-form narration. Send up to 10,000 characters in one request and get back natural audio.',
-    provider: 'fish-audio',
-    thumb: CINEMA_THUMBNAILS[5],
-  },
-  {
-    id: 'elevenlabs-v4',
-    name: 'elevenlabs-v4',
-    category: 'AI AUDIO',
-    originalPrice: '$0.0880',
-    price: '$0.080',
-    discount: '11%',
-    description: 'Eleven v4 is ElevenLabs latest text-to-speech model, delivering highly expressive, natural single-voice narration. Send up to 2,000 characters and get back ultra-realistic audio.',
-    provider: 'elevenlabs',
-    thumb: CINEMA_THUMBNAILS[6],
-  },
-  {
-    id: 'ideogram-v4',
-    name: 'ideogram-v4',
-    category: 'TEXT TO IMAGE',
-    originalPrice: '$0.0667',
-    price: '$0.060',
-    discount: '11%',
-    description: "Ideogram 4.0 is Ideogram's latest text-to-image model, built for sharp, legible typography, clean graphic design and photorealistic scenes.",
-    provider: 'ideogram',
-    thumb: CINEMA_THUMBNAILS[7],
-  },
-  {
-    id: 'seedance-2-5-pro',
-    name: 'seedance-2-5-pro-t2v',
-    category: 'TEXT TO VIDEO',
-    originalPrice: '$0.2400',
-    price: '$0.170',
-    discount: '28%',
-    description: "ByteDance's next-gen Seedance 2.5 with text-to-video, multi-camera consistency, and 720p cinematic motion up to 30 seconds.",
-    provider: 'bytedance',
-    thumb: CINEMA_THUMBNAILS[8],
-  },
-  {
-    id: 'veo-3-1-fast-t2v',
-    name: 'veo-3-1-fast-text-to-video',
-    category: 'TEXT TO VIDEO',
-    originalPrice: '$0.1800',
-    price: '$0.150',
-    discount: '17%',
-    description: "Google's Veo 3.1 cinematic text-to-video engine with 1080p photorealistic lighting and director-level camera controls.",
-    provider: 'kie',
-    thumb: CINEMA_THUMBNAILS[9],
-  },
-  {
-    id: 'nano-banana-pro',
-    name: 'nano-banana-pro',
-    category: 'TEXT TO IMAGE',
-    originalPrice: '$0.0200',
-    price: '$0.015',
-    discount: '25%',
-    description: 'Ultra-fast high-detail portrait and cinematic character engine with zero-leak credit ledgers.',
-    provider: 'muapi',
-    thumb: CINEMA_THUMBNAILS[10],
-  },
-  {
-    id: 'wan-2-2-speech-to-video',
-    name: 'wan-2-2-speech-to-video',
-    category: 'LIP SYNC',
-    originalPrice: '$0.1500',
-    price: '$0.120',
-    discount: '20%',
-    description: 'Precise phoneme-to-viseme lip synchronization supporting multi-lingual vocal tracks and realistic head motion.',
-    provider: 'muapi',
-    thumb: CINEMA_THUMBNAILS[11],
-  },
+  { id: 't3d', label: 'Text to 3D', count: 3 },
 ];
 
 export default function ExplorePage() {
-  const [catalog, setCatalog] = useState(null);
-  const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [search, setSearch] = useState('');
   const [activeMainTab, setActiveMainTab] = useState('models');
 
-  useEffect(() => {
-    fetch('/api/v1/models')
-      .then((r) => r.json())
-      .then((data) => setCatalog(data))
-      .catch(() => {});
-  }, []);
-
-  // Merge live API catalog models with our rich curated display
-  const allModels = useMemo(() => {
-    if (!catalog?.catalog) return CURATED_MODELS;
-
-    const apiModels = [
-      ...(catalog.catalog.t2i || []),
-      ...(catalog.catalog.t2v || []),
-      ...(catalog.catalog.i2i || []),
-      ...(catalog.catalog.i2v || []),
-      ...(catalog.catalog.lipsync || []),
-    ];
-
-    const mappedApi = apiModels.map((m, idx) => {
-      const existing = CURATED_MODELS.find((c) => c.id === m.id);
-      if (existing) return existing;
-      const catUpper = (m.modality || 'IMAGE').toUpperCase();
-      return {
-        id: m.id,
-        name: m.id,
-        category: catUpper === 'T2V' ? 'TEXT TO VIDEO' : catUpper === 'I2V' ? 'IMAGE TO VIDEO' : catUpper === 'T2I' ? 'TEXT TO IMAGE' : catUpper,
-        originalPrice: `$${((m.credits_per_unit || 15) * 0.001 * 1.2).toFixed(3)}`,
-        price: `$${((m.credits_per_unit || 15) * 0.001).toFixed(3)}`,
-        discount: '11%',
-        description: `High-fidelity ${m.modality || 'multimodal'} generative pipeline powered by ${m.provider || 'Timecapsule'}. Supports full batch automation.`,
-        provider: m.provider || 'timecapsule',
-        thumb: CINEMA_THUMBNAILS[idx % CINEMA_THUMBNAILS.length],
-      };
-    });
-
-    const combined = [...CURATED_MODELS];
-    for (const item of mappedApi) {
-      if (!combined.some((c) => c.id === item.id)) {
-        combined.push(item);
-      }
-    }
-    return combined;
-  }, [catalog]);
+  // Authoritative catalog models with editorial metadata
+  const allModels = useMemo(() => [
+    {
+      id: 'flux-3-klein-edit-image',
+      name: 'flux-3-klein-edit-image',
+      category: 'IMAGE EDITING',
+      catId: 'i2i',
+      price: '$0.009',
+      originalPrice: '$0.0108',
+      discount: '11%',
+      provider: 'timecapsule',
+      description: 'Edit reference images with Black Forest Labs FLUX 3 Klein using precise prompt instructions.',
+      thumb: CINEMA_THUMBNAILS[0],
+    },
+    {
+      id: 'flux-3-klein-text-to-image',
+      name: 'flux-3-klein-text-to-image',
+      category: 'TEXT TO IMAGE',
+      catId: 't2i',
+      price: '$0.009',
+      originalPrice: '$0.0108',
+      discount: '11%',
+      provider: 'timecapsule',
+      description: 'Generate photorealistic images with Black Forest Labs FLUX 3 Klein via asynchronous API. Choose 1K, 2K, or 4K.',
+      thumb: CINEMA_THUMBNAILS[1],
+    },
+    {
+      id: 'lyria-2',
+      name: 'lyria-2',
+      category: 'AI AUDIO',
+      catId: 'audio',
+      price: '$0.060',
+      originalPrice: '$0.0687',
+      discount: '11%',
+      provider: 'google',
+      description: 'Google Instrumental music generation model. Describe the style and mood in a prompt and get studio-grade audio.',
+      thumb: CINEMA_THUMBNAILS[2],
+    },
+    {
+      id: 'lyria-3',
+      name: 'lyria-3',
+      category: 'AI AUDIO',
+      catId: 'audio',
+      price: '$0.040',
+      originalPrice: '$0.0444',
+      discount: '10%',
+      provider: 'google',
+      description: 'High-fidelity short music clips of up to 30 seconds for creative transitions, themes, and intros.',
+      thumb: CINEMA_THUMBNAILS[3],
+    },
+    {
+      id: 'lyria-3-pro',
+      name: 'lyria-3-pro',
+      category: 'AI AUDIO',
+      catId: 'audio',
+      price: '$0.080',
+      originalPrice: '$0.0888',
+      discount: '11%',
+      provider: 'google',
+      description: 'Google flagship music model: describe genre, mood, instruments, and arrangement structure for full compositions.',
+      thumb: CINEMA_THUMBNAILS[4],
+    },
+    {
+      id: 'fish-s2-1-pro',
+      name: 'fish-s2-1-pro',
+      category: 'AI AUDIO',
+      catId: 'audio',
+      price: '$0.015',
+      originalPrice: '$0.0167',
+      discount: '11%',
+      provider: 'fishaudio',
+      description: 'Fish Audio S2.1 Pro is a high-fidelity text-to-speech model built for long-form narration. Up to 10,000 characters.',
+      thumb: CINEMA_THUMBNAILS[5],
+    },
+    {
+      id: 'elevenlabs-v4',
+      name: 'elevenlabs-v4',
+      category: 'AI AUDIO',
+      catId: 'audio',
+      price: '$0.080',
+      originalPrice: '$0.0888',
+      discount: '11%',
+      provider: 'elevenlabs',
+      description: 'Eleven v4 text-to-speech engine delivering nuanced expressive narration with multi-lingual voice cloning.',
+      thumb: CINEMA_THUMBNAILS[6],
+    },
+    {
+      id: 'ideogram-v4',
+      name: 'ideogram-v4',
+      category: 'TEXT TO IMAGE',
+      catId: 't2i',
+      price: '$0.060',
+      originalPrice: '$0.0667',
+      discount: '11%',
+      provider: 'ideogram',
+      description: 'Ideogram 4.0 generation engine, optimized for clean typographic rendering, logos, and graphic layouts.',
+      thumb: CINEMA_THUMBNAILS[7],
+    },
+    {
+      id: 'seedance-2-5-pro-t2v',
+      name: 'seedance-2-5-pro-t2v',
+      category: 'TEXT TO VIDEO',
+      catId: 't2v',
+      price: '$0.170',
+      originalPrice: '$0.2400',
+      discount: '28%',
+      provider: 'bytedance',
+      description: 'ByteDance next-gen Seedance 2.5 with cinematic multi-camera motion consistency and 720p output.',
+      thumb: CINEMA_THUMBNAILS[8],
+    },
+    {
+      id: 'veo-3-1-fast-text-to-video',
+      name: 'veo-3-1-fast-text-to-video',
+      category: 'TEXT TO VIDEO',
+      catId: 't2v',
+      price: '$0.150',
+      originalPrice: '$0.1800',
+      discount: '17%',
+      provider: 'kie',
+      description: 'Google Veo 3.1 cinematic text-to-video with photorealistic lighting and director-level camera controls.',
+      thumb: CINEMA_THUMBNAILS[9],
+    },
+    {
+      id: 'nano-banana-pro',
+      name: 'nano-banana-pro',
+      category: 'TEXT TO IMAGE',
+      catId: 't2i',
+      price: '$0.015',
+      originalPrice: '$0.0200',
+      discount: '25%',
+      provider: 'muapi',
+      description: 'Ultra-fast high-detail portrait and cinematic character engine with verified idempotency ledger.',
+      thumb: CINEMA_THUMBNAILS[10],
+    },
+    {
+      id: 'wan-2-2-speech-to-video',
+      name: 'wan-2-2-speech-to-video',
+      category: 'LIP SYNC',
+      catId: 'lipsync',
+      price: '$0.120',
+      originalPrice: '$0.1500',
+      discount: '20%',
+      provider: 'muapi',
+      description: 'Precise phoneme-to-viseme lip synchronization supporting multi-lingual vocal tracks and realistic head motion.',
+      thumb: CINEMA_THUMBNAILS[11],
+    },
+    {
+      id: 'seedance-pro-t2v',
+      name: 'seedance-pro-t2v',
+      category: 'TEXT TO VIDEO',
+      catId: 't2v',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'muapi',
+      description: 'High-fidelity video generative pipeline powered by Muapi. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[12],
+    },
+    {
+      id: 'veo3.1-fast-text-to-video',
+      name: 'veo3.1-fast-text-to-video',
+      category: 'TEXT TO VIDEO',
+      catId: 't2v',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'kie',
+      description: 'High-fidelity video generative pipeline powered by Kie. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[13],
+    },
+    {
+      id: 'nano-banana-pro-edit',
+      name: 'nano-banana-pro-edit',
+      category: 'IMAGE EDITING',
+      catId: 'i2i',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'muapi',
+      description: 'High-fidelity i2i generative pipeline powered by Muapi. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[14],
+    },
+    {
+      id: 'seedance-pro-i2v',
+      name: 'seedance-pro-i2v',
+      category: 'IMAGE TO VIDEO',
+      catId: 'i2v',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'muapi',
+      description: 'High-fidelity i2v generative pipeline powered by Muapi. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[15],
+    },
+    {
+      id: 'veo3.1-fast-image-to-video',
+      name: 'veo3.1-fast-image-to-video',
+      category: 'IMAGE TO VIDEO',
+      catId: 'i2v',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'kie',
+      description: 'High-fidelity i2v generative pipeline powered by Kie. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[16],
+    },
+    {
+      id: 'infinitetalk-image-to-video',
+      name: 'infinitetalk-image-to-video',
+      category: 'LIPSYNC',
+      catId: 'lipsync',
+      price: '$0.015',
+      originalPrice: '$0.018',
+      discount: '11%',
+      provider: 'muapi',
+      description: 'High-fidelity lipsync generative pipeline powered by Muapi. Supports full batch automation.',
+      thumb: CINEMA_THUMBNAILS[17],
+    },
+  ], []);
 
   const filteredModels = useMemo(() => {
     return allModels.filter((m) => {
-      const q = search.toLowerCase();
+      const matchesCat =
+        selectedCategory === 'all' ||
+        m.catId === selectedCategory ||
+        (selectedCategory === 'i2v' && m.catId === 'i2v') ||
+        (selectedCategory === 't2v' && m.catId === 't2v');
+
       const matchesSearch =
         !search ||
-        m.name.toLowerCase().includes(q) ||
-        m.category.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q);
+        m.name.toLowerCase().includes(search.toLowerCase()) ||
+        m.description.toLowerCase().includes(search.toLowerCase()) ||
+        m.provider.toLowerCase().includes(search.toLowerCase()) ||
+        m.category.toLowerCase().includes(search.toLowerCase());
 
-      if (!matchesSearch) return false;
-
-      if (selectedCategory === 'all') return true;
-      if (selectedCategory === 'i2v') return m.category.includes('IMAGE TO VIDEO');
-      if (selectedCategory === 't2v') return m.category.includes('TEXT TO VIDEO');
-      if (selectedCategory === 't2i') return m.category.includes('TEXT TO IMAGE');
-      if (selectedCategory === 'i2i') return m.category.includes('IMAGE EDITING');
-      if (selectedCategory === 'audio') return m.category.includes('AUDIO');
-      if (selectedCategory === 'lipsync') return m.category.includes('LIP');
-      return true;
+      return matchesCat && matchesSearch;
     });
-  }, [allModels, search, selectedCategory]);
+  }, [allModels, selectedCategory, search]);
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--tc-bg-page,#f8fafc)] text-[var(--tc-text-primary,#0f172a)] flex flex-col font-sans transition-colors">
       <PlatformNav activeModule="explore" />
 
-      {/* Main Container - Exact Muapi Alignment */}
-      <div className="max-w-[1440px] w-full mx-auto px-6 lg:px-8 py-6 flex-1 flex flex-col">
-        {/* Hero Announcement Billboard */}
-        <section className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-[#121217] p-8 md:p-12 mb-8 shadow-2xl">
-          {/* Subtle Studio Lighting Backdrop */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black via-zinc-950/80 to-transparent pointer-events-none z-0" />
-          <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <main className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 xl:px-0 py-6 flex-1 flex flex-col">
+        {/* Billboard Announcement Banner — Faithful Muapi Placement */}
+        <div className="w-full relative overflow-hidden rounded-md border border-slate-800 bg-[#070709] text-white p-6 sm:p-8 lg:p-10 mb-6 shadow-md">
+          {/* Subtle accent glow */}
+          <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-blue-600/20 via-indigo-600/10 to-transparent pointer-events-none" />
 
-          <div className="relative z-10 max-w-3xl">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="bg-blue-600 text-white font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded">
-                NEW RELEASE
-              </span>
-              <span className="bg-zinc-800 text-zinc-400 font-bold text-[10px] px-2.5 py-1 rounded border border-zinc-700/60">
-                V12
-              </span>
-              <ModuleStatusBadge status="working" />
+          <div className="relative z-10 flex flex-col justify-between min-h-[160px]">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-widest border border-blue-500/40">
+                  New Release v12
+                </span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/40">
+                  Working
+                </span>
+              </div>
+
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-tight text-white max-w-3xl leading-snug">
+                🎬 Seedance 2.5 at a 28% Discount — Now Live on Timecapsule!
+              </h1>
+
+              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed mt-2.5">
+                ByteDance&apos;s next-gen Seedance 2.5 is available on Timecapsule, with text-to-video, image-to-video, first/last-frame, and multi-reference endpoints. Generate up to 30-second clips at 480p/720p, starting from $0.17/sec — up to 28% cheaper than other providers.
+              </p>
             </div>
 
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight uppercase leading-none mb-4">
-              🎬 SEEDANCE 2.5 AT A 28% DISCOUNT — NOW LIVE ON TIMECAPSULE!
-            </h1>
-
-            <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed mb-6 max-w-2xl font-normal">
-              ByteDance's next-gen Seedance 2.5 is available on Timecapsule, with text-to-video, image-to-video, first/last-frame, and multi-reference (Omni) endpoints. Generate up to 30-second clips at 480p/720p, starting from $0.17/sec — up to 28% cheaper than other providers.
-            </p>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSelectedCategory('t2v')}
-                className="bg-white hover:bg-zinc-200 text-black font-extrabold text-xs px-6 py-2.5 rounded-lg transition-colors uppercase tracking-wider shadow-lg"
+            <div className="flex flex-wrap items-center gap-3 mt-6">
+              <Link
+                href="/explore"
+                className="px-4 py-2.5 bg-white text-black font-black text-[11px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-sm shadow-xs"
               >
-                EXPLORE COLLECTION
-              </button>
+                Explore Collection
+              </Link>
               <Link
                 href="/studio?preview=1"
-                className="bg-zinc-800/90 hover:bg-zinc-700 text-white font-bold text-xs px-6 py-2.5 rounded-lg border border-zinc-700 transition-colors uppercase tracking-wider"
+                className="px-4 py-2.5 bg-white/10 text-white font-bold text-[11px] uppercase tracking-widest hover:bg-white/20 transition-all duration-200 rounded-sm border border-white/20"
               >
-                TRY IN STUDIO
+                Try in Studio
               </Link>
             </div>
           </div>
+        </div>
 
-          {/* Carousel Pagination Dots */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="w-2 h-2 rounded-full bg-zinc-600" />
-            <span className="w-2 h-2 rounded-full bg-zinc-600" />
+        {/* Global Search Bar */}
+        <div className="w-full relative mb-3">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
           </div>
-        </section>
-
-        {/* Full-Width Search Bar */}
-        <div className="w-full bg-[#121216] border border-zinc-800 focus-within:border-zinc-700 rounded-xl px-4 py-3 flex items-center gap-3 text-sm text-zinc-300 mb-4 transition-colors">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-500">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search models..."
-            className="bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none w-full font-normal"
+            className="w-full h-12 bg-white border border-slate-200/90 rounded-[4px] pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 shadow-xs transition-colors"
           />
         </div>
 
@@ -366,7 +392,7 @@ export default function ExplorePage() {
             <button
               key={tag.name}
               onClick={() => setSearch(tag.name.replace(' Models', ''))}
-              className="bg-[#131317] hover:bg-[#1c1c22] border border-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap"
+              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold"
             >
               <span>{tag.icon}</span>
               <span>{tag.name}</span>
@@ -374,7 +400,7 @@ export default function ExplorePage() {
           ))}
           <button
             onClick={() => setSearch('')}
-            className="text-blue-400 hover:text-blue-300 text-xs font-semibold whitespace-nowrap px-2"
+            className="text-blue-600 hover:text-blue-700 text-xs font-semibold whitespace-nowrap px-2"
           >
             See all providers →
           </button>
@@ -386,7 +412,7 @@ export default function ExplorePage() {
             <button
               key={tag.name}
               onClick={() => setSearch(tag.name)}
-              className="bg-[#131317] hover:bg-[#1c1c22] border border-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap"
+              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all whitespace-nowrap shadow-xs text-[11px] font-semibold"
             >
               <span>{tag.icon}</span>
               <span>{tag.name}</span>
@@ -394,50 +420,50 @@ export default function ExplorePage() {
           ))}
         </div>
 
-        {/* Top Category Tabs */}
-        <div className="flex items-center gap-2 my-4 border-b border-zinc-800/80 pb-3">
+        {/* Top Category Filter Tabs */}
+        <div className="flex items-center gap-2 my-2 border-b border-slate-200/80 pb-3">
           <button
             onClick={() => setActiveMainTab('models')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
               activeMainTab === 'models'
-                ? 'bg-blue-600 text-white'
-                : 'bg-[#131317] text-zinc-400 hover:text-white border border-zinc-800'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
             }`}
           >
             AI Models <span className="opacity-80">622</span>
           </button>
           <button
             onClick={() => setActiveMainTab('lead')}
-            className="bg-[#131317] text-zinc-400 hover:text-white border border-zinc-800 px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+            className="bg-white text-slate-600 hover:text-slate-900 border border-slate-200 px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all"
           >
-            Lead Enrichment <span className="opacity-60">20</span>
+            Lead Enrichment <span className="text-slate-400">20</span>
           </button>
           <button
             onClick={() => setActiveMainTab('seo')}
-            className="bg-[#131317] text-zinc-400 hover:text-white border border-zinc-800 px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+            className="bg-white text-slate-600 hover:text-slate-900 border border-slate-200 px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all"
           >
-            SEO <span className="opacity-60">28</span>
+            SEO <span className="text-slate-400">28</span>
           </button>
           <button
             onClick={() => setActiveMainTab('social')}
-            className="bg-[#131317] text-zinc-400 hover:text-white border border-zinc-800 px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+            className="bg-white text-slate-600 hover:text-slate-900 border border-slate-200 px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all"
           >
-            Social <span className="opacity-60">10</span>
+            Social <span className="text-slate-400">10</span>
           </button>
           <button
             onClick={() => setActiveMainTab('scraping')}
-            className="bg-[#131317] text-zinc-400 hover:text-white border border-zinc-800 px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+            className="bg-white text-slate-600 hover:text-slate-900 border border-slate-200 px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all"
           >
-            Scraping <span className="opacity-60">4</span>
+            Scraping <span className="text-slate-400">4</span>
           </button>
         </div>
 
-        {/* 2-Column Explorer Section - Exact Muapi Two-Column Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-8 mt-2">
-          {/* Left Sidebar: CATEGORY filter */}
+        {/* 2-Column Explorer Section — 240px Facet Sidebar + 1fr Main Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-8 mt-4">
+          {/* Left Sidebar: CATEGORY Facet */}
           <aside className="w-full shrink-0">
-            <h3 className="text-white font-bold text-xs uppercase tracking-wider">Category</h3>
-            <p className="text-zinc-500 text-xs mt-0.5 mb-4">
+            <h3 className="text-slate-900 font-bold text-xs uppercase tracking-wider">Category</h3>
+            <p className="text-slate-500 text-xs mt-0.5 mb-4">
               Showing {filteredModels.length} of {allModels.length} models
             </p>
 
@@ -448,25 +474,25 @@ export default function ExplorePage() {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                    className={`w-full flex items-center justify-between py-1.5 px-2 rounded-md text-left text-xs transition-colors ${
                       isSelected
-                        ? 'bg-zinc-800/80 text-white font-semibold'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                        ? 'bg-blue-50 text-blue-700 font-bold'
+                        : 'text-slate-700 hover:bg-slate-100/70 hover:text-slate-900'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5 truncate">
                       <span
-                        className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
+                        className={`w-4 h-4 rounded-[3px] border flex items-center justify-center text-[10px] font-bold ${
                           isSelected
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'border-zinc-700 bg-zinc-900'
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-slate-300 bg-white'
                         }`}
                       >
                         {isSelected && '✓'}
                       </span>
-                      <span>{cat.label}</span>
+                      <span className="truncate">{cat.label}</span>
                     </div>
-                    <span className="text-zinc-500 text-[11px] font-mono">{cat.count}</span>
+                    <span className="text-slate-400 text-[11px] font-mono">{cat.count}</span>
                   </button>
                 );
               })}
@@ -476,105 +502,102 @@ export default function ExplorePage() {
           {/* Right Main Grid: FEATURED MODELS */}
           <main className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-white font-bold text-sm uppercase tracking-wider">Featured Models</h2>
+              <h2 className="text-slate-900 font-bold text-sm uppercase tracking-wider">Featured Models</h2>
               <div className="flex items-center gap-2">
-                <span className="bg-[#121216] border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-300 flex items-center gap-2 cursor-pointer">
+                <span className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-700 flex items-center gap-2 cursor-pointer shadow-xs">
                   <span>Newly Added</span>
-                  <span className="text-[10px] text-zinc-500">▾</span>
+                  <span className="text-[10px] text-slate-400">▾</span>
                 </span>
               </div>
             </div>
 
-            {/* 2-Column Horizontal Cards Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* 2-Column Horizontal Cards Grid — Exact Muapi Card Structure */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               {filteredModels.map((m) => (
-                <div
+                <Link
                   key={m.id}
-                  className="bg-[#111116] hover:bg-[#15151c] border border-zinc-800/80 hover:border-zinc-700 rounded-xl overflow-hidden flex flex-row transition-all duration-150 group cursor-pointer h-36 sm:h-40 relative"
+                  href={`/${m.id}`}
+                  className="flex bg-white border border-slate-200/90 rounded-[6px] overflow-hidden group hover:border-blue-500/60 hover:shadow-md transition-all duration-300 min-h-[160px]"
                 >
-                  {/* Left Thumbnail Image */}
-                  <div className="w-36 sm:w-44 shrink-0 h-full relative overflow-hidden bg-zinc-900">
+                  {/* Left Media Thumbnail with Absolute Discount Badge */}
+                  <div className="w-32 aspect-square shrink-0 overflow-hidden relative bg-slate-100 flex items-center justify-center">
                     <img
                       src={m.thumb}
                       alt={m.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     {m.discount && (
-                      <span className="absolute top-2 left-2 bg-[#e6fc15] text-black font-black text-[10px] px-1.5 py-0.5 rounded shadow">
+                      <div className="absolute top-2 left-2 bg-[#D9FF00] text-black text-[10px] font-black px-1.5 py-0.5 rounded-sm shadow-xs">
                         {m.discount}
-                      </span>
+                      </div>
                     )}
                   </div>
 
-                  {/* Right Details */}
-                  <div className="p-3.5 flex flex-col justify-between flex-1 min-w-0">
+                  {/* Right Details Panel */}
+                  <div className="flex-1 p-3.5 sm:p-4 flex flex-col justify-between min-w-0">
                     <div>
-                      {/* Top Category & Pricing */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold text-blue-400 tracking-wider uppercase truncate">
+                      {/* Top Category & Price Row */}
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest truncate">
                           {m.category}
                         </span>
                         <div className="flex items-center gap-1.5 shrink-0 text-xs">
                           {m.originalPrice && (
-                            <span className="line-through text-zinc-500 font-mono text-[11px]">
+                            <span className="text-[11px] text-slate-400 line-through opacity-60 font-bold">
                               {m.originalPrice}
                             </span>
                           )}
-                          <span className="text-emerald-400 font-bold font-mono">
+                          <span className="text-[13px] font-black text-[#22C55E]">
                             {m.price}
                           </span>
                         </div>
                       </div>
 
-                      {/* Title */}
-                      <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate mt-1">
+                      {/* Model Name Heading */}
+                      <h2 className="text-[14px] sm:text-[15px] font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight break-words mt-1">
                         {m.name}
-                      </h4>
+                      </h2>
 
-                      {/* Description */}
-                      <p className="text-xs text-zinc-400 line-clamp-2 mt-1 leading-relaxed">
+                      {/* Model Description */}
+                      <p className="text-[12px] text-slate-600 line-clamp-2 sm:line-clamp-3 leading-relaxed font-medium mt-1">
                         {m.description}
                       </p>
                     </div>
 
-                    {/* Bottom Metadata & Action */}
-                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-[11px] text-zinc-500">
-                      <span className="truncate">Provider: <span className="text-zinc-300">{m.provider}</span></span>
-                      <Link
-                        href="/studio?preview=1"
-                        className="text-blue-400 hover:text-blue-300 font-semibold text-xs flex items-center gap-1"
-                      >
+                    {/* Footer Provider & Action */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-400 mt-2">
+                      <span className="truncate">
+                        Provider: <span className="text-slate-700 font-semibold">{m.provider}</span>
+                      </span>
+                      <span className="text-blue-600 group-hover:text-blue-700 font-bold text-xs flex items-center gap-0.5">
                         Try Model →
-                      </Link>
+                      </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </main>
         </div>
 
         {/* Browse AI Models by Category Section */}
-        <section className="mt-16 pt-10 border-t border-zinc-800/80">
-          <h2 className="text-white font-bold text-base mb-6">Browse AI Models by Category</h2>
+        <section className="mt-16 pt-10 border-t border-slate-200">
+          <h2 className="text-slate-900 font-bold text-base mb-6">Browse AI Models by Category</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-xs">
-            {/* Text to Image */}
+            {/* Text to image */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">Text to Image</h3>
-                <span className="text-zinc-500 hover:text-zinc-300 cursor-pointer">View all →</span>
+              <div className="flex items-center justify-between mb-3 text-slate-800 font-semibold">
+                <span>Text to image</span>
+                <Link href="/explore" className="text-blue-600 hover:underline text-[11px]">View all →</Link>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  'Nano Banana', 'Gpt Image 2 Text To Image', 'Flux Schnell', 'Ideogram V3 T2I',
-                  'Nano Banana 2', 'Nano Banana Pro', 'Flux Dev', 'Z Image Turbo', 'Bytedance Seedream 5.0 Pro'
-                ].map((tag) => (
+              <div className="flex flex-wrap gap-2">
+                {['Nano Banana', 'Gpt Image 2 Text To Image', 'Flux Schnell', 'Ideogram V3 T2I', 'Nano Banana 2', 'Nano Banana Pro', 'Flux Dev', 'Z Image Turbo', 'Bytedance Seedream 5.0 Pro'].map((t) => (
                   <button
-                    key={tag}
-                    onClick={() => setSearch(tag)}
-                    className="bg-[#121216] border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white px-2.5 py-1 rounded text-[11px]"
+                    key={t}
+                    onClick={() => setSearch(t)}
+                    className="px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] transition-colors shadow-xs"
                   >
-                    {tag}
+                    {t}
                   </button>
                 ))}
               </div>
@@ -582,21 +605,18 @@ export default function ExplorePage() {
 
             {/* Text to Video */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">Text to Video</h3>
-                <span className="text-zinc-500 hover:text-zinc-300 cursor-pointer">View all →</span>
+              <div className="flex items-center justify-between mb-3 text-slate-800 font-semibold">
+                <span>Text to Video</span>
+                <Link href="/explore" className="text-blue-600 hover:underline text-[11px]">View all →</Link>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  'Seedance Lite T2v', 'Seedance 2 T2v', 'Seedance 2 Mini Omni Reference', 'Wan3.0 Spicy Text To Video',
-                  'Grok Imagine Text To Video', 'Seedance 2.5 Text To Video', 'Kling V3.0 Standard Text To Video', 'Wan2.2 Text To Video'
-                ].map((tag) => (
+              <div className="flex flex-wrap gap-2">
+                {['Seedance Lite T2v', 'Seedance 2 T2v', 'Seedance 2 Mini Omni Reference', 'Wan3.0 Spicy Text To Video', 'Grok Imagine Text To Video', 'Seedance 2.5 Text To Video', 'Kling V3.0 Standard Text To Video', 'Wan2.2 Text To Video'].map((t) => (
                   <button
-                    key={tag}
-                    onClick={() => setSearch(tag)}
-                    className="bg-[#121216] border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white px-2.5 py-1 rounded text-[11px]"
+                    key={t}
+                    onClick={() => setSearch(t)}
+                    className="px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] transition-colors shadow-xs"
                   >
-                    {tag}
+                    {t}
                   </button>
                 ))}
               </div>
@@ -604,28 +624,25 @@ export default function ExplorePage() {
 
             {/* Image to Video */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">Image to Video</h3>
-                <span className="text-zinc-500 hover:text-zinc-300 cursor-pointer">View all →</span>
+              <div className="flex items-center justify-between mb-3 text-slate-800 font-semibold">
+                <span>Image to Video</span>
+                <Link href="/explore" className="text-blue-600 hover:underline text-[11px]">View all →</Link>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  'Grok Imagine Image To Video', 'Seedance 2.5 Omni Reference', 'Seedance 2.5 Spicy Omni Reference',
-                  'Wan3.0 Spicy Reference To Video', 'Wan3.0 Reference To Video', 'Kling V3.0 Pro Image To Video', 'Seedance 2 I2v'
-                ].map((tag) => (
+              <div className="flex flex-wrap gap-2">
+                {['Grok Imagine Image To Video', 'Seedance 2.5 Omni Reference', 'Seedance 2.5 Spicy Omni Reference', 'Wan3.0 Spicy Reference To Video', 'Wan3.0 Reference To Video', 'Kling V3.0 Pro Image To Video', 'Seedance 2 I2v'].map((t) => (
                   <button
-                    key={tag}
-                    onClick={() => setSearch(tag)}
-                    className="bg-[#121216] border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white px-2.5 py-1 rounded text-[11px]"
+                    key={t}
+                    onClick={() => setSearch(t)}
+                    className="px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] transition-colors shadow-xs"
                   >
-                    {tag}
+                    {t}
                   </button>
                 ))}
               </div>
             </div>
           </div>
         </section>
-      </div>
+      </main>
 
       <PlatformFooter />
     </div>
