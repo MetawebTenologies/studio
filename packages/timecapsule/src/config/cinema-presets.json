@@ -1,0 +1,134 @@
+{
+  "version": "1.0.0",
+  "cameras": [
+    {
+      "id": "modular-8k",
+      "name": "Modular 8K Digital",
+      "prompt": "modular 8K digital cinema camera",
+      "preview": "/assets/cinema/modular_8k_digital.webp"
+    },
+    {
+      "id": "full-frame-cine",
+      "name": "Full-Frame Cine Digital",
+      "prompt": "full-frame digital cinema camera",
+      "preview": "/assets/cinema/full_frame_cine_digital.webp"
+    },
+    {
+      "id": "70mm-film",
+      "name": "Grand Format 70mm Film",
+      "prompt": "grand format 70mm film camera",
+      "preview": "/assets/cinema/grand_format_70mm_film.webp"
+    },
+    {
+      "id": "studio-s35",
+      "name": "Studio Digital S35",
+      "prompt": "Super 35 studio digital camera",
+      "preview": "/assets/cinema/studio_digital_s35.webp"
+    },
+    {
+      "id": "classic-16mm",
+      "name": "Classic 16mm Film",
+      "prompt": "classic 16mm film camera",
+      "preview": "/assets/cinema/classic_16mm_film.webp"
+    },
+    {
+      "id": "premium-large-format",
+      "name": "Premium Large Format Digital",
+      "prompt": "premium large-format digital cinema camera",
+      "preview": "/assets/cinema/premium_large_format_digital.webp"
+    }
+  ],
+  "lenses": [
+    {
+      "id": "creative-tilt",
+      "name": "Creative Tilt Lens",
+      "prompt": "creative tilt lens effect",
+      "preview": "/assets/cinema/creative_tilt_lens.webp"
+    },
+    {
+      "id": "compact-anamorphic",
+      "name": "Compact Anamorphic",
+      "prompt": "compact anamorphic lens",
+      "preview": "/assets/cinema/compact_anamorphic.webp"
+    },
+    {
+      "id": "extreme-macro",
+      "name": "Extreme Macro",
+      "prompt": "extreme macro lens",
+      "preview": "/assets/cinema/extreme_macro.webp"
+    },
+    {
+      "id": "70s-prime",
+      "name": "70s Cinema Prime",
+      "prompt": "1970s cinema prime lens",
+      "preview": "/assets/cinema/70s_cinema_prime.webp"
+    },
+    {
+      "id": "classic-anamorphic",
+      "name": "Classic Anamorphic",
+      "prompt": "classic anamorphic lens",
+      "preview": "/assets/cinema/classic_anamorphic.webp"
+    },
+    {
+      "id": "premium-modern-prime",
+      "name": "Premium Modern Prime",
+      "prompt": "premium modern prime lens",
+      "preview": "/assets/cinema/premium_modern_prime.webp"
+    },
+    {
+      "id": "warm-cinema-prime",
+      "name": "Warm Cinema Prime",
+      "prompt": "warm-toned cinema prime lens",
+      "preview": "/assets/cinema/warm_cinema_prime.webp"
+    },
+    {
+      "id": "swirl-bokeh-portrait",
+      "name": "Swirl Bokeh Portrait",
+      "prompt": "swirl bokeh portrait lens",
+      "preview": "/assets/cinema/swirl_bokeh_portrait.webp"
+    },
+    {
+      "id": "vintage-prime",
+      "name": "Vintage Prime",
+      "prompt": "vintage prime lens",
+      "preview": "/assets/cinema/vintage_prime.webp"
+    },
+    {
+      "id": "halation-diffusion",
+      "name": "Halation Diffusion",
+      "prompt": "halation diffusion filter",
+      "preview": "/assets/cinema/halation_diffusion.webp"
+    },
+    {
+      "id": "clinical-sharp-prime",
+      "name": "Clinical Sharp Prime",
+      "prompt": "ultra-sharp clinical prime lens",
+      "preview": "/assets/cinema/clinical_sharp_prime.webp"
+    }
+  ],
+  "focal_lengths": [
+    { "mm": 8, "perspective": "ultra-wide perspective" },
+    { "mm": 14, "perspective": "wide-angle perspective" },
+    { "mm": 24, "perspective": "wide-angle dynamic perspective" },
+    { "mm": 35, "perspective": "natural cinematic perspective" },
+    { "mm": 50, "perspective": "standard portrait perspective" },
+    { "mm": 85, "perspective": "classic portrait perspective" }
+  ],
+  "apertures": [
+    {
+      "value": "f/1.4",
+      "effect": "shallow depth of field, creamy bokeh",
+      "preview": "/assets/cinema/f_1_4.webp"
+    },
+    {
+      "value": "f/4",
+      "effect": "balanced depth of field",
+      "preview": "/assets/cinema/f_4.webp"
+    },
+    {
+      "value": "f/11",
+      "effect": "deep focus clarity, sharp foreground to background",
+      "preview": "/assets/cinema/f_11.webp"
+    }
+  ]
+}

@@ -66,7 +66,22 @@ export default function ModelPlayground({
   providerFamily = 'flux',
   defaultPrompt = '',
   estimatedCredits = 15,
+  capabilities = null,
 }) {
+  const isVideo =
+    capabilities?.modality === 'video' ||
+    capabilities?.modality === 'i2v' ||
+    modelCategory.toLowerCase().includes('video') ||
+    slug.includes('video') ||
+    slug.includes('t2v') ||
+    slug.includes('i2v') ||
+    slug.includes('veo') ||
+    slug.includes('seedance');
+
+  const defaultAr = capabilities?.default_aspect_ratio || (isVideo ? '16:9' : '1:1');
+  const defaultRes = capabilities?.default_resolution || (isVideo ? '720p' : '1k');
+  const defaultDur = capabilities?.default_duration || 5;
+
   // Navigation / Mode state
   const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'api'
   const [apiLang, setApiLang] = useState('curl'); // 'curl' | 'python' | 'node'
@@ -75,10 +90,17 @@ export default function ModelPlayground({
   // Form State
   const [prompt, setPrompt] = useState(defaultPrompt || SAMPLE_PROMPTS[0]);
   const [negativePrompt, setNegativePrompt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState('16:9');
-  const [resolution, setResolution] = useState('1080p');
+  const [aspectRatio, setAspectRatio] = useState(defaultAr);
+  const [resolution, setResolution] = useState(defaultRes);
   const [quality, setQuality] = useState('standard');
+  const [duration, setDuration] = useState(defaultDur);
+  const [referenceImages, setReferenceImages] = useState([]);
+  const [savedUploads, setSavedUploads] = useState([]);
+  const [showUploadPicker, setShowUploadPicker] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Execution State Machine
   // 'idle' | 'authenticating' | 'submitting' | 'queued' | 'processing' | 'completed' | 'failed'
@@ -101,13 +123,19 @@ export default function ModelPlayground({
 
   const eventSourceRef = useRef(null);
 
-  const isVideo =
-    modelCategory.toLowerCase().includes('video') ||
-    slug.includes('video') ||
-    slug.includes('t2v') ||
-    slug.includes('i2v') ||
-    slug.includes('veo') ||
-    slug.includes('seedance');
+  const fetchUploads = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/uploads?limit=30');
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && Array.isArray(data.uploads)) {
+          setSavedUploads(data.uploads);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Check initial session
   useEffect(() => {
@@ -121,6 +149,7 @@ export default function ModelPlayground({
           if (data.credits) {
             setCreditsBalance(data.credits.available_credits ?? data.credits.balance);
           }
+          fetchUploads();
         }
         setAuthChecked(true);
       })
@@ -134,7 +163,73 @@ export default function ModelPlayground({
         eventSourceRef.current.close();
       }
     };
-  }, []);
+  }, [fetchUploads]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/v1/uploads', {
+        method: 'POST',
+        headers: {
+          'X-Timecapsule-CSRF': '1',
+        },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+      const newRef = {
+        asset_id: data.asset_id,
+        url: data.url || data.delivery_url,
+        filename: file.name,
+      };
+      setReferenceImages((prev) => [...prev, newRef]);
+      fetchUploads();
+    } catch (err) {
+      setUploadError(err.message || 'File upload failed');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveReference = (index) => {
+    setReferenceImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSelectSavedUpload = (u) => {
+    if (referenceImages.some((r) => r.url === u.url || r.asset_id === u.asset_id)) return;
+    const maxRefs = capabilities?.max_reference_images || 4;
+    if (referenceImages.length >= maxRefs) return;
+    setReferenceImages((prev) => [
+      ...prev,
+      {
+        asset_id: u.asset_id,
+        url: u.url,
+        filename: u.filename,
+      },
+    ]);
+  };
+
+  const handleDeleteSavedUpload = async (assetId, e) => {
+    e?.stopPropagation?.();
+    try {
+      await fetch(`/api/v1/uploads/${assetId}`, {
+        method: 'DELETE',
+        headers: { 'X-Timecapsule-CSRF': '1' },
+      });
+      setSavedUploads((prev) => prev.filter((u) => u.asset_id !== assetId));
+      setReferenceImages((prev) => prev.filter((r) => r.asset_id !== assetId));
+    } catch {
+      // ignore
+    }
+  };
 
   const handleRandomPrompt = () => {
     const next = SAMPLE_PROMPTS[Math.floor(Math.random() * SAMPLE_PROMPTS.length)];
@@ -248,6 +343,7 @@ export default function ModelPlayground({
     setErrorMessage(null);
 
     try {
+      const refUrls = referenceImages.map((img) => img.url).filter(Boolean);
       const payload = {
         model: slug,
         params: {
@@ -255,6 +351,8 @@ export default function ModelPlayground({
           aspect_ratio: aspectRatio,
           resolution,
           quality,
+          ...(refUrls.length > 0 ? { image_urls: refUrls, images_list: refUrls, image_url: refUrls[0] } : {}),
+          ...(capabilities?.allowed_durations?.length > 0 ? { duration_seconds: Number(duration), duration: Number(duration) } : {}),
           ...(negativePrompt ? { negative_prompt: negativePrompt } : {}),
         },
       };
@@ -381,6 +479,10 @@ export default function ModelPlayground({
   };
 
   // Generate dynamic API code examples
+  const refUrls = referenceImages.map((img) => img.url).filter(Boolean);
+  const refSnippetJson = refUrls.length > 0 ? `,\n      "image_urls": ${JSON.stringify(refUrls)}` : '';
+  const durSnippetJson = capabilities?.allowed_durations?.length > 0 ? `,\n      "duration": ${duration}` : '';
+
   const curlCode = `curl -X POST https://api.timecapsule.ai/api/v1/generations \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -389,9 +491,24 @@ export default function ModelPlayground({
     "params": {
       "prompt": "${prompt.replace(/"/g, '\\"')}",
       "aspect_ratio": "${aspectRatio}",
-      "resolution": "${resolution}"
+      "resolution": "${resolution}"${refSnippetJson}${durSnippetJson}
     }
   }'`;
+
+  const pythonPayload = JSON.stringify(
+    {
+      model: slug,
+      params: {
+        prompt,
+        aspect_ratio: aspectRatio,
+        resolution,
+        ...(refUrls.length > 0 ? { image_urls: refUrls } : {}),
+        ...(capabilities?.allowed_durations?.length > 0 ? { duration } : {}),
+      },
+    },
+    null,
+    4
+  );
 
   const pythonCode = `import requests
 
@@ -400,14 +517,7 @@ headers = {
     "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
 }
-payload = {
-    "model": "${slug}",
-    "params": {
-        "prompt": """${prompt}""",
-        "aspect_ratio": "${aspectRatio}",
-        "resolution": "${resolution}"
-    }
-}
+payload = ${pythonPayload}
 
 response = requests.post(url, json=payload, headers=headers)
 job = response.json()
@@ -427,7 +537,7 @@ const res = await fetch('https://api.timecapsule.ai/api/v1/generations', {
     params: {
       prompt: ${JSON.stringify(prompt)},
       aspect_ratio: '${aspectRatio}',
-      resolution: '${resolution}',
+      resolution: '${resolution}',${refSnippetJson}${durSnippetJson}
     },
   }),
 });
@@ -561,6 +671,137 @@ console.log('SSE Stream:', job.events_url);`;
               />
             </div>
 
+            {/* Reference Images Section (if supported by model) */}
+            {capabilities?.supports_reference_images && (
+              <div className="bg-[#181820]/60 border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                      <span>Reference Images</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
+                        {referenceImages.length} / {capabilities.max_reference_images || 4}
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Multi-reference input for character consistency and identity conditioning.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={isUploading || referenceImages.length >= (capabilities.max_reference_images || 4)}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {isUploading ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>+ Upload New</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUploadPicker(!showUploadPicker)}
+                      className="px-3 py-1.5 rounded-lg bg-[#20202a] hover:bg-[#282835] text-zinc-300 text-xs font-medium border border-white/10 transition-colors cursor-pointer"
+                    >
+                      {showUploadPicker ? 'Hide History' : 'Browse History'}
+                    </button>
+                  </div>
+                </div>
+
+                {uploadError && (
+                  <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
+                    {uploadError}
+                  </div>
+                )}
+
+                {/* Selected Reference Thumbnails */}
+                {referenceImages.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    {referenceImages.map((ref, idx) => (
+                      <div
+                        key={idx}
+                        className="relative rounded-lg overflow-hidden border border-blue-500/40 bg-black/40 aspect-square group"
+                      >
+                        <img src={ref.url} alt={ref.filename || `Reference ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-blue-500 text-black text-[10px] font-black uppercase tracking-wider shadow-sm">
+                          Ref #{idx + 1}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveReference(idx)}
+                          className="absolute top-1.5 right-1.5 w-5 h-5 rounded bg-black/80 hover:bg-red-500 text-white flex items-center justify-center transition-colors cursor-pointer"
+                          title="Remove reference"
+                        >
+                          ✕
+                        </button>
+                        <div className="absolute bottom-0 inset-x-0 bg-black/70 px-2 py-1 text-[9px] text-zinc-300 truncate">
+                          {ref.filename || `ref_${idx + 1}.png`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 border border-dashed border-white/10 rounded-lg text-center text-xs text-zinc-500 mb-3">
+                    No reference images selected. Upload portraits or choose from history below.
+                  </div>
+                )}
+
+                {/* Face & Biometric Consent Notice */}
+                <div className="px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-[10px] text-zinc-400 leading-snug">
+                  <span className="font-semibold text-zinc-300">Identity Consent:</span> Ensure you have explicit rights and consent for uploaded reference portraits. Assets are kept private to your tenant workspace.
+                </div>
+
+                {/* Saved Uploads Drawer */}
+                {showUploadPicker && (
+                  <div className="mt-4 pt-3 border-t border-white/10">
+                    <div className="text-xs font-bold text-zinc-300 mb-2">Previous Uploads History</div>
+                    {savedUploads.length === 0 ? (
+                      <div className="text-xs text-zinc-500 py-2">No previous uploads found in your tenant workspace.</div>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-44 overflow-y-auto pr-1">
+                        {savedUploads.map((u) => {
+                          const isSelected = referenceImages.some((r) => r.url === u.url || r.asset_id === u.asset_id);
+                          return (
+                            <div
+                              key={u.asset_id}
+                              onClick={() => handleSelectSavedUpload(u)}
+                              className={`relative rounded-md overflow-hidden border aspect-square cursor-pointer group transition-all ${
+                                isSelected ? 'border-blue-500 ring-2 ring-blue-500/30 opacity-60' : 'border-white/10 hover:border-white/30'
+                              }`}
+                            >
+                              <img src={u.url} alt={u.filename || 'Upload'} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteSavedUpload(u.asset_id, e)}
+                                title="Delete from server history"
+                                className="absolute top-1 right-1 w-4 h-4 rounded bg-red-600/90 text-white text-[9px] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Aspect Ratio Selector */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -569,33 +810,26 @@ console.log('SSE Stream:', job.events_url);`;
                 </label>
                 <span className="text-[11px] text-zinc-400 font-mono">{aspectRatio}</span>
               </div>
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { label: '1:1', desc: 'Square' },
-                  { label: '16:9', desc: 'Cinema' },
-                  { label: '9:16', desc: 'Reels' },
-                  { label: '4:3', desc: 'Classic' },
-                  { label: '21:9', desc: 'UltraWide' },
-                ].map((item) => (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {(capabilities?.allowed_aspect_ratios || ['1:1', '16:9', '9:16', '4:3', '21:9']).map((ratio) => (
                   <button
-                    key={item.label}
+                    key={ratio}
                     type="button"
-                    onClick={() => setAspectRatio(item.label)}
+                    onClick={() => setAspectRatio(ratio)}
                     className={`py-2 px-1 text-center rounded-lg border transition-all cursor-pointer ${
-                      aspectRatio === item.label
+                      aspectRatio === ratio
                         ? 'bg-blue-600/20 border-blue-500 text-blue-300 shadow-xs'
                         : 'bg-[#181820] border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
                     }`}
                   >
-                    <div className="text-xs font-bold">{item.label}</div>
-                    <div className="text-[9px] text-zinc-500 uppercase">{item.desc}</div>
+                    <div className="text-xs font-bold">{ratio}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Resolution & Quality Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Resolution, Quality & Duration Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-zinc-200 uppercase tracking-wider mb-1.5">
                   Resolution
@@ -603,11 +837,13 @@ console.log('SSE Stream:', job.events_url);`;
                 <select
                   value={resolution}
                   onChange={(e) => setResolution(e.target.value)}
-                  className="w-full bg-[#181820] border border-white/10 rounded-lg p-2.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full bg-[#181820] border border-white/10 rounded-lg p-2.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 transition-colors uppercase"
                 >
-                  <option value="720p">720p Standard Fast</option>
-                  <option value="1080p">1080p Full HD (Master)</option>
-                  <option value="4k">4K Ultra HD Fidelity</option>
+                  {(capabilities?.allowed_resolutions || ['720p', '1080p', '4k']).map((res) => (
+                    <option key={res} value={res}>
+                      {res}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -618,13 +854,34 @@ console.log('SSE Stream:', job.events_url);`;
                 <select
                   value={quality}
                   onChange={(e) => setQuality(e.target.value)}
-                  className="w-full bg-[#181820] border border-white/10 rounded-lg p-2.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full bg-[#181820] border border-white/10 rounded-lg p-2.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 transition-colors capitalize"
                 >
-                  <option value="standard">Production (Balanced)</option>
-                  <option value="preview">Fast Preview Draft</option>
-                  <option value="high">Maximum Detail (2x Steps)</option>
+                  {(capabilities?.allowed_qualities || ['standard', 'high', 'ultra']).map((q) => (
+                    <option key={q} value={q}>
+                      {q}
+                    </option>
+                  ))}
                 </select>
               </div>
+
+              {capabilities?.allowed_durations?.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-200 uppercase tracking-wider mb-1.5">
+                    Duration
+                  </label>
+                  <select
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    className="w-full bg-[#181820] border border-white/10 rounded-lg p-2.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    {capabilities.allowed_durations.map((d) => (
+                      <option key={d} value={d}>
+                        {d} seconds
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Advanced Parameters Accordion */}

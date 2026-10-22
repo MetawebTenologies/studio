@@ -2,7 +2,7 @@ import {
   requireSession,
   verifyMutationOrigin,
 } from '../../../../packages/timecapsule/src/server/auth.js';
-import { registerAsset } from '../../../../packages/timecapsule/src/server/store.js';
+import { registerAsset, listTenantUploads } from '../../../../packages/timecapsule/src/server/store.js';
 import { uploadFileToMuapi } from '../../../../packages/timecapsule/src/server/adapters/muapi.js';
 import { uploadFileToKie } from '../../../../packages/timecapsule/src/server/adapters/kie.js';
 import { validateExternalMediaUrl } from '../../../../packages/timecapsule/src/server/media.js';
@@ -19,6 +19,122 @@ export const ALLOWED_UPLOAD_MIME_LIMITS = Object.freeze({
   'audio/wav': 25 * 1024 * 1024, // 25 MB
   'audio/x-wav': 25 * 1024 * 1024, // 25 MB
 });
+
+export function validateFileMagicBytes(buffer, contentType) {
+  if (!buffer || buffer.length < 4) {
+    const err = new Error('Upload payload is too short to verify file signature');
+    err.code = 'INVALID_FILE_SIGNATURE';
+    err.statusCode = 415;
+    throw err;
+  }
+
+  const mime = String(contentType || '').trim().toLowerCase();
+
+  if (mime === 'image/png') {
+    if (
+      buffer.length < 8 ||
+      buffer[0] !== 0x89 ||
+      buffer[1] !== 0x50 ||
+      buffer[2] !== 0x4e ||
+      buffer[3] !== 0x47 ||
+      buffer[4] !== 0x0d ||
+      buffer[5] !== 0x0a ||
+      buffer[6] !== 0x1a ||
+      buffer[7] !== 0x0a
+    ) {
+      const err = new Error('File signature does not match image/png (invalid PNG header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  if (mime === 'image/jpeg') {
+    if (buffer.length < 3 || buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
+      const err = new Error('File signature does not match image/jpeg (invalid JPEG header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  if (mime === 'image/webp') {
+    if (
+      buffer.length < 12 ||
+      buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+      buffer.toString('ascii', 8, 12) !== 'WEBP'
+    ) {
+      const err = new Error('File signature does not match image/webp (missing RIFF/WEBP header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  if (mime === 'video/mp4' || mime === 'video/quicktime') {
+    if (buffer.length >= 8 && buffer.toString('ascii', 4, 8) === 'ftyp') {
+      return true;
+    }
+    if (
+      mime === 'video/quicktime' &&
+      buffer.length >= 8 &&
+      (buffer.toString('ascii', 4, 8) === 'moov' || buffer.toString('ascii', 4, 8) === 'wide')
+    ) {
+      return true;
+    }
+    const err = new Error(`File signature does not match ${mime} (missing ftyp/moov atom)`);
+    err.code = 'MAGIC_BYTE_MISMATCH';
+    err.statusCode = 415;
+    throw err;
+  }
+
+  if (mime === 'video/webm') {
+    if (
+      buffer.length < 4 ||
+      buffer[0] !== 0x1a ||
+      buffer[1] !== 0x45 ||
+      buffer[2] !== 0xdf ||
+      buffer[3] !== 0xa3
+    ) {
+      const err = new Error('File signature does not match video/webm (missing EBML header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  if (mime === 'audio/wav' || mime === 'audio/x-wav') {
+    if (
+      buffer.length < 12 ||
+      buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+      buffer.toString('ascii', 8, 12) !== 'WAVE'
+    ) {
+      const err = new Error('File signature does not match audio/wav (missing RIFF/WAVE header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3') {
+    const hasId3 = buffer.length >= 3 && buffer.toString('ascii', 0, 3) === 'ID3';
+    const hasFrameSync = buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
+    if (!hasId3 && !hasFrameSync) {
+      const err = new Error('File signature does not match audio/mpeg (missing ID3/MPEG header)');
+      err.code = 'MAGIC_BYTE_MISMATCH';
+      err.statusCode = 415;
+      throw err;
+    }
+    return true;
+  }
+
+  return true;
+}
 
 function parseDataUrlPayload(dataUrl, declaredContentType) {
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
@@ -154,6 +270,8 @@ export async function POST(request) {
       );
     }
 
+    validateFileMagicBytes(buffer, contentType);
+
     const provider = resolveUploadProvider(requestedProvider);
     const hasProviderKey =
       provider === 'muapi'
@@ -178,6 +296,7 @@ export async function POST(request) {
 
       const asset = await registerAsset({
         tenant_id: session.tenant_id,
+        user_id: session.user_id,
         provider,
         source_url: dataUrl,
         modality: 'upload',
@@ -217,6 +336,7 @@ export async function POST(request) {
 
     const asset = await registerAsset({
       tenant_id: session.tenant_id,
+      user_id: session.user_id,
       provider,
       source_url: remoteUrl,
       modality: 'upload',
@@ -249,6 +369,53 @@ export async function POST(request) {
       {
         error: err.message || 'Upload failed',
         code: err.code || 'UPLOAD_ERROR',
+      },
+      {
+        status: err.statusCode || err.status || 500,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
+    );
+  }
+}
+
+export async function GET(request) {
+  try {
+    const session = await requireSession(request);
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '50', 10)), 100);
+    const cursor = searchParams.get('cursor') || null;
+
+    const uploads = await listTenantUploads({
+      tenant_id: session.tenant_id,
+      user_id: session.user_id,
+      limit,
+      cursor,
+    });
+
+    return Response.json(
+      {
+        ok: true,
+        tenant_id: session.tenant_id,
+        uploads: uploads.map((u) => ({
+          asset_id: u.asset_id,
+          url: u.url,
+          source_url: u.source_url,
+          filename: u.filename,
+          content_type: u.content_type,
+          created_at: u.created_at,
+          thumbnail_url: u.thumbnail_url,
+          metadata: u.metadata,
+        })),
+      },
+      {
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      }
+    );
+  } catch (err) {
+    return Response.json(
+      {
+        error: err.message || 'Failed to list uploads',
+        code: err.code || 'LIST_UPLOADS_ERROR',
       },
       {
         status: err.statusCode || err.status || 500,

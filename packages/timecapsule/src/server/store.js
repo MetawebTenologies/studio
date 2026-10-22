@@ -95,6 +95,7 @@ function formatAssetRow(row) {
   return {
     asset_id: row.asset_id,
     tenant_id: row.tenant_id,
+    user_id: row.user_id || null,
     job_id: row.job_id,
     modality: row.modality,
     content_type: row.content_type,
@@ -107,6 +108,9 @@ function formatAssetRow(row) {
     filename: row.filename,
     status: row.status,
     url: row.url,
+    thumbnail_url: row.thumbnail_url || null,
+    metadata: row.metadata_json || {},
+    deleted_at: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
   };
 }
@@ -1574,18 +1578,21 @@ export async function registerAsset(assetRecord) {
   return withSystemContext(async (client) => {
     const res = await client.query(
       `INSERT INTO assets (
-         asset_id, tenant_id, job_id, modality, content_type, storage_type, provider, request_id, durable, private, source_url, filename, status, url
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, TRUE, $9, $10, $11, $12)
+         asset_id, tenant_id, user_id, job_id, modality, content_type, storage_type, provider, request_id, thumbnail_url, metadata_json, durable, private, source_url, filename, status, url
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE, TRUE, $12, $13, $14, $15)
        RETURNING *`,
       [
         assetId,
         assetRecord.tenant_id,
+        assetRecord.user_id || null,
         assetRecord.job_id || null,
         assetRecord.modality || 'image',
         assetRecord.content_type || 'application/octet-stream',
         storageType,
         assetRecord.provider || null,
         assetRecord.request_id || null,
+        assetRecord.thumbnail_url || null,
+        JSON.stringify(assetRecord.metadata || {}),
         assetRecord.source_url,
         assetRecord.filename || null,
         assetRecord.status || 'reference_registered',
@@ -1597,11 +1604,55 @@ export async function registerAsset(assetRecord) {
   });
 }
 
-export async function getAsset(assetId) {
+export async function getAsset(assetId, options = {}) {
   if (!assetId) return null;
+  const includeDeleted = Boolean(options.includeDeleted);
   return withSystemContext(async (client) => {
-    const res = await client.query('SELECT * FROM assets WHERE asset_id = $1', [assetId]);
+    const query = includeDeleted
+      ? 'SELECT * FROM assets WHERE asset_id = $1'
+      : 'SELECT * FROM assets WHERE asset_id = $1 AND deleted_at IS NULL';
+    const res = await client.query(query, [assetId]);
     if (res.rowCount === 0) return null;
     return formatAssetRow(res.rows[0]);
+  });
+}
+
+export async function listTenantUploads({ tenant_id, user_id = null, limit = 50, cursor = null } = {}) {
+  if (!tenant_id) throw new Error('tenant_id is required to list uploads');
+  const maxLimit = Math.min(Math.max(1, Number(limit) || 50), 100);
+  return withSystemContext(async (client) => {
+    const params = [tenant_id, maxLimit];
+    let query = `
+      SELECT * FROM assets
+      WHERE tenant_id = $1
+        AND deleted_at IS NULL
+        AND modality IN ('upload', 'image')
+    `;
+    if (user_id) {
+      params.push(user_id);
+      query += ` AND (user_id = $${params.length} OR user_id IS NULL)`;
+    }
+    if (cursor) {
+      params.push(cursor);
+      query += ` AND created_at < $${params.length}`;
+    }
+    query += ` ORDER BY created_at DESC LIMIT $2`;
+
+    const res = await client.query(query, params);
+    return res.rows.map(formatAssetRow);
+  });
+}
+
+export async function softDeleteAsset({ tenant_id, asset_id }) {
+  if (!tenant_id || !asset_id) throw new Error('tenant_id and asset_id are required');
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `UPDATE assets
+       SET deleted_at = NOW()
+       WHERE tenant_id = $1 AND asset_id = $2 AND deleted_at IS NULL
+       RETURNING asset_id`,
+      [tenant_id, asset_id]
+    );
+    return res.rowCount > 0;
   });
 }

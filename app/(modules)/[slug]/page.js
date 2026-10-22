@@ -4,6 +4,7 @@ import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
 import ModuleStatusBadge from '@/components/ModuleStatusBadge';
 import ModelPlayground from '@/components/ModelPlayground';
+import { getModelCapabilities } from '../../../packages/timecapsule/src/models/capabilities.js';
 
 export default async function GenericModulePage({ params }) {
   const resolvedParams = await params;
@@ -12,6 +13,8 @@ export default async function GenericModulePage({ params }) {
   if (!slug || slug.includes('.')) {
     notFound();
   }
+
+  const capabilities = getModelCapabilities(slug);
 
   // Pre-configured module metadata
   const MODULE_CATALOG = {
@@ -170,6 +173,7 @@ export default async function GenericModulePage({ params }) {
             providerName={providerName}
             providerFamily={providerFamily}
             estimatedCredits={estimatedCredits}
+            capabilities={capabilities}
           />
         ) : (
           /* General Module Layout (Workflows, Assistant, etc.) */

@@ -2,96 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateImage } from '../kie.js';
-
-// ─── Constants (inlined from promptUtils) ───────────────────────────────────
-
-const CAMERA_MAP = {
-    "Modular 8K Digital": "modular 8K digital cinema camera",
-    "Full-Frame Cine Digital": "full-frame digital cinema camera",
-    "Grand Format 70mm Film": "grand format 70mm film camera",
-    "Studio Digital S35": "Super 35 studio digital camera",
-    "Classic 16mm Film": "classic 16mm film camera",
-    "Premium Large Format Digital": "premium large-format digital cinema camera"
-};
-
-const LENS_MAP = {
-    "Creative Tilt Lens": "creative tilt lens effect",
-    "Compact Anamorphic": "compact anamorphic lens",
-    "Extreme Macro": "extreme macro lens",
-    "70s Cinema Prime": "1970s cinema prime lens",
-    "Classic Anamorphic": "classic anamorphic lens",
-    "Premium Modern Prime": "premium modern prime lens",
-    "Warm Cinema Prime": "warm-toned cinema prime lens",
-    "Swirl Bokeh Portrait": "swirl bokeh portrait lens",
-    "Vintage Prime": "vintage prime lens",
-    "Halation Diffusion": "halation diffusion filter",
-    "Clinical Sharp Prime": "ultra-sharp clinical prime lens"
-};
-
-const FOCAL_PERSPECTIVE = {
-    8: "ultra-wide perspective",
-    14: "wide-angle perspective",
-    24: "wide-angle dynamic perspective",
-    35: "natural cinematic perspective",
-    50: "standard portrait perspective",
-    85: "classic portrait perspective"
-};
-
-const APERTURE_EFFECT = {
-    "f/1.4": "shallow depth of field, creamy bokeh",
-    "f/4": "balanced depth of field",
-    "f/11": "deep focus clarity, sharp foreground to background"
-};
-
-const ASSET_URLS = {
-    "Modular 8K Digital": "/assets/cinema/modular_8k_digital.webp",
-    "Full-Frame Cine Digital": "/assets/cinema/full_frame_cine_digital.webp",
-    "Grand Format 70mm Film": "/assets/cinema/grand_format_70mm_film.webp",
-    "Studio Digital S35": "/assets/cinema/studio_digital_s35.webp",
-    "Classic 16mm Film": "/assets/cinema/classic_16mm_film.webp",
-    "Premium Large Format Digital": "/assets/cinema/premium_large_format_digital.webp",
-    "Creative Tilt Lens": "/assets/cinema/creative_tilt_lens.webp",
-    "Compact Anamorphic": "/assets/cinema/compact_anamorphic.webp",
-    "Extreme Macro": "/assets/cinema/extreme_macro.webp",
-    "70s Cinema Prime": "/assets/cinema/70s_cinema_prime.webp",
-    "Classic Anamorphic": "/assets/cinema/classic_anamorphic.webp",
-    "Premium Modern Prime": "/assets/cinema/premium_modern_prime.webp",
-    "Warm Cinema Prime": "/assets/cinema/warm_cinema_prime.webp",
-    "Swirl Bokeh Portrait": "/assets/cinema/swirl_bokeh_portrait.webp",
-    "Vintage Prime": "/assets/cinema/vintage_prime.webp",
-    "Halation Diffusion": "/assets/cinema/halation_diffusion.webp",
-    "Clinical Sharp Prime": "/assets/cinema/clinical_sharp_prime.webp",
-    "f/1.4": "/assets/cinema/f_1_4.webp",
-    "f/4": "/assets/cinema/f_4.webp",
-    "f/11": "/assets/cinema/f_11.webp"
-};
+import {
+  CAMERA_MAP,
+  LENS_MAP,
+  FOCAL_PERSPECTIVE,
+  APERTURE_EFFECT,
+  ASSET_URLS,
+  CAMERAS,
+  LENSES,
+  FOCAL_LENGTHS,
+  APERTURES,
+  buildNanoBananaPrompt,
+} from '../../../timecapsule/src/models/cinema.js';
 
 const ASPECT_RATIOS = ['16:9', '21:9', '9:16', '1:1', '4:5'];
 const RESOLUTIONS = ['1K', '2K', '4K'];
-const CAMERAS = Object.keys(CAMERA_MAP);
-const LENSES = Object.keys(LENS_MAP);
-const FOCAL_LENGTHS = Object.keys(FOCAL_PERSPECTIVE).map(k => parseInt(k));
-const APERTURES = Object.keys(APERTURE_EFFECT);
-
-function buildNanoBananaPrompt(basePrompt, camera, lens, focalLength, aperture) {
-    const cameraDesc = CAMERA_MAP[camera] || camera;
-    const lensDesc = LENS_MAP[lens] || lens;
-    const perspective = FOCAL_PERSPECTIVE[focalLength] || "";
-    const depthEffect = APERTURE_EFFECT[aperture] || "";
-    const qualityTags = ["professional photography", "ultra-detailed", "8K resolution"];
-    const parts = [
-        basePrompt,
-        `shot on a ${cameraDesc}`,
-        `using a ${lensDesc} at ${focalLength}mm ${perspective ? `(${perspective})` : ''}`,
-        `aperture ${aperture}`,
-        depthEffect,
-        "cinematic lighting",
-        "natural color science",
-        "high dynamic range",
-        qualityTags.join(", ")
-    ];
-    return parts.filter(p => p && p.trim() !== "").join(", ");
-}
 
 // ─── Dropdown ────────────────────────────────────────────────────────────────
 

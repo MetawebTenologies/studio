@@ -1,18 +1,24 @@
 # Timecapsule Studio — From imagination to motion
 
-Timecapsule Studio is a cinematic AI workspace for turning ideas into images, motion, and creative workflows with a secure managed BFF boundary. Native server-side adapters for Muapi and Kie are built in with zero silent model substitutions.
+Timecapsule Studio is a cinematic AI workspace for turning ideas into images, motion, and creative workflows with a secure managed Backend-For-Frontend (BFF) boundary, durable PostgreSQL transactional queue, and tenant-isolated Row Level Security.
 
-Based on the MIT-licensed Open-Higgsfield-AI project.
+Based on the MIT-licensed Open-Higgsfield-AI project. Reimplemented with a production-grade multi-tenant backend, double-entry credit ledger, and fail-closed provider seams.
 
 ---
 
 ## Features
 
-- **Multimodal Generation Studios**: Specialized studios for Cinema (lens, camera angle, lighting, film stocks), Video generation (T2V, I2V), Image creation (T2I, I2I), and LipSync audio sync.
-- **BFF Architecture**: Secure Backend-For-Frontend boundary (`/api/v1/*`) ensuring provider API keys never touch the client browser.
-- **Durable PostgreSQL Queue & Accounting**: Transactional credit reservation, lease claims, fencing tokens, ambiguous-submission reconciliation, and idempotency protection.
-- **Provider Adapters**: First-class support for Muapi and Kie generation backends with zero silent model substitutions.
-- **Real-Time Job Streaming**: SSE event replays with PostgreSQL-backed monotonic event sequencing.
+- **Multimodal Generation Studios (`/studio`)**: Dedicated creative suites for Cinema (cameras, lenses, apertures, film stocks), Video generation (T2V, I2V), Image creation (T2I, I2I), and LipSync audio sync with persistent upload history and multi-reference consistency badges.
+- **Dynamic Model Playground (`/[slug]`)**: Interactive playground dynamically driven by unified model capabilities schemas (aspect ratios, resolutions, qualities, durations) with auto-generated cURL, Python, and Node.js SDK code snippets.
+- **White-Label & Multi-Tenancy**: Full tenant isolation via PostgreSQL Row Level Security (RLS) with session GUC scoping (`app.current_tenant_id`), custom subdomain routing, and sanitized branding configuration endpoints (`/api/v1/tenant/config`).
+- **Security & Integrity Guarantees**:
+  - **Fail-Closed Role Hardening**: Hardened `timecapsule_system_role` and `timecapsule_tenant_role` preventing fail-open access, GUC escalation, or membership escapes.
+  - **Double-Entry Credit Ledger**: Append-only transactional accounting (`credit_ledger`, `credit_reservations`) with settlement math and refund protection.
+  - **Lease-Fenced Queue Workers**: Durable background execution with monotonic fencing tokens and crash recovery (`reconciling_submission`).
+  - **Server-Side File Validation**: Strict MIME and magic-number byte signature inspection rejecting spoofed or malicious uploads.
+  - **Fail-Closed Model Pinning**: Zero silent substitutions or fallback drift.
+- **Real-Time Job Streaming**: Server-Sent Events (SSE) with PostgreSQL-backed monotonic event sequence replays (`Last-Event-ID`).
+- **Desktop Application Shell**: Cross-platform desktop distribution built on Electron (`electron/`).
 
 ---
 

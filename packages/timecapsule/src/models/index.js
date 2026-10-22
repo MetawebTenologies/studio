@@ -15,6 +15,7 @@ import {
   getSupportedReleaseModel,
   resolveReleaseRoute,
 } from './release-catalog.js';
+import { getModelCapabilities } from './capabilities.js';
 
 export {
   SUPPORTED_RELEASE_MODELS,
@@ -24,6 +25,7 @@ export {
   PROVIDER_DOCUMENTATION_REGISTRY,
   getSupportedReleaseModel,
   resolveReleaseRoute,
+  getModelCapabilities,
 };
 
 export const timecapsuleNativeModels = {

@@ -46,6 +46,29 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
   const panelRef = useRef(null);
   const triggerRef = useRef(null);
 
+  // Fetch persistent uploads on mount
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/v1/uploads?limit=50')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data?.ok || !Array.isArray(data.uploads)) return;
+        setUploadHistory(
+          data.uploads.map((u) => ({
+            id: u.asset_id,
+            name: u.filename || 'upload.png',
+            url: u.url,
+            thumbnail: u.thumbnail_url || u.url,
+            progress: 100,
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Close on outside click
   useEffect(() => {
     if (!panelOpen) return;
@@ -179,7 +202,14 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
     e.stopPropagation();
     if (entry.localUrl) URL.revokeObjectURL(entry.localUrl);
     setUploadHistory((prev) => prev.filter((h) => h.id !== entry.id));
-    
+
+    if (entry.id && !entry.id.includes('.')) {
+      fetch(`/api/v1/uploads/${entry.id}`, {
+        method: 'DELETE',
+        headers: { 'X-Timecapsule-CSRF': '1' },
+      }).catch(() => {});
+    }
+
     const next = selectedEntries.filter((s) => s.url !== entry.url);
     if (next.length !== selectedEntries.length) {
       setSelectedEntries(next);
@@ -455,6 +485,11 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
               })}
             </div>
           )}
+
+          {/* Face & Reference Consent Notice */}
+          <div className="mt-3 px-2.5 py-2 bg-white/5 border border-white/5 rounded-lg text-[10px] text-zinc-400 leading-snug">
+            <span className="font-semibold text-zinc-300">Identity Consent:</span> Ensure you have explicit rights and consent for uploaded reference portraits. Assets are kept private to your tenant workspace.
+          </div>
 
           {/* Bottom bar for multi-select */}
           {isMulti && hasSelection && (
