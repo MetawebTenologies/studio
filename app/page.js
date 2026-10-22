@@ -130,23 +130,33 @@ export default function HomePage() {
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
           </div>
 
-          <div className="relative z-10 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="relative z-10 max-w-[1020px] w-full mx-auto px-4 sm:px-6">
+            <div className="flex flex-col lg:flex-row items-center justify-center gap-0">
               
-              {/* Left Model Circuit Rail (Right-Aligned, Clean Text + Brand Icon) */}
-              <div className="max-lg:hidden lg:col-span-3 flex flex-col gap-3.5 pr-2">
+              {/* Left Model Circuit Rail (Right-Aligned, Clean Text + Brand Icon + Connecting Bus) */}
+              <div className="hidden lg:flex flex-col justify-between w-[240px] shrink-0 gap-3">
                 {LEFT_PROVIDERS.map((item, idx) => {
                   const isHovered = hoveredModel === item.name;
+                  const pathD =
+                    idx === 0 ? 'M 0 10 H 22 L 40 16 H 80' :
+                    idx === 1 ? 'M 0 10 H 28 L 44 16 H 80' :
+                    idx === 2 ? 'M 0 10 H 34 L 48 16 H 80' :
+                    idx >= 3 && idx <= 6 ? 'M 0 10 H 80' :
+                    idx === 7 ? 'M 0 10 H 34 L 48 4 H 80' :
+                    idx === 8 ? 'M 0 10 H 28 L 44 4 H 80' :
+                    'M 0 10 H 22 L 40 4 H 80';
+                  const circleY = (idx <= 2) ? 16 : (idx >= 7) ? 4 : 10;
+
                   return (
                     <Link
                       key={item.name}
                       href={`/${item.id}`}
                       onMouseEnter={() => setHoveredModel(item.name)}
                       onMouseLeave={() => setHoveredModel(null)}
-                      className="group flex items-center justify-end gap-3 transition-all duration-200 cursor-pointer select-none"
+                      className="group flex items-center justify-end gap-2.5 transition-all duration-200 cursor-pointer select-none"
                     >
                       <span
-                        className={`text-xs font-bold tracking-tight transition-colors duration-200 ${
+                        className={`text-[12px] font-bold tracking-tight transition-colors duration-200 text-right truncate ${
                           isHovered
                             ? 'text-[#00e5ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]'
                             : 'text-zinc-300 group-hover:text-white'
@@ -155,7 +165,7 @@ export default function HomePage() {
                         {item.name}
                       </span>
                       <span
-                        className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all duration-200 ${
+                        className={`w-7 h-7 rounded-md border flex items-center justify-center shrink-0 transition-all duration-200 ${
                           isHovered
                             ? 'bg-[#00e5ff]/20 border-[#00e5ff] text-[#00e5ff] shadow-[0_0_12px_rgba(0,229,255,0.3)]'
                             : 'bg-[#121217] border-white/10 text-zinc-400 group-hover:text-[#00e5ff] group-hover:border-white/20'
@@ -164,26 +174,20 @@ export default function HomePage() {
                         <BrandIcon name={item.slug} className="w-3.5 h-3.5" />
                       </span>
 
-                      {/* SVG Circuit Connector Line Flowing Inward */}
-                      <svg className="w-16 lg:w-24 h-5 shrink-0 overflow-visible" viewBox="0 0 80 20" fill="none">
+                      {/* SVG Circuit Connector Line Flowing Inward Directly to Gateway Box */}
+                      <svg className="w-20 h-5 shrink-0 overflow-visible" viewBox="0 0 80 20" fill="none">
                         <path
-                          d={
-                            idx <= 2
-                              ? 'M0 10 H30 L45 16 H75'
-                              : idx >= 7
-                              ? 'M0 10 H30 L45 4 H75'
-                              : 'M0 10 H75'
-                          }
-                          stroke={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.14)'}
+                          d={pathD}
+                          stroke={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.25)'}
                           strokeWidth={isHovered ? '2' : '1.25'}
                           strokeLinecap="round"
                           className="transition-colors duration-200"
                         />
                         <circle
-                          cx="75"
-                          cy={idx <= 2 ? '16' : idx >= 7 ? '4' : '10'}
-                          r={isHovered ? '3' : '2'}
-                          fill={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.25)'}
+                          cx="80"
+                          cy={circleY}
+                          r={isHovered ? '3.5' : '2'}
+                          fill={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.45)'}
                           className="transition-all duration-200"
                         />
                       </svg>
@@ -192,88 +196,97 @@ export default function HomePage() {
                 })}
               </div>
 
-              {/* Center Core Hero Gateway (High-Contrast, Authoritative Typography) */}
-              <div className="lg:col-span-6 text-center px-2 sm:px-4 flex flex-col items-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-[#00e5ff] text-[11px] font-bold uppercase tracking-wider mb-6">
-                  <span className="w-2 h-2 rounded-full bg-[#00e5ff] animate-ping" />
-                  Direct Multi-Provider AI Gateway
-                </div>
+              {/* Center Core Hero Gateway (Centrally Positioned & Visually Unified) */}
+              <div className="relative w-full lg:w-[540px] shrink-0 text-center px-6 sm:px-8 py-8 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[#0c0c12]/90 backdrop-blur-md shadow-[0_0_50px_rgba(0,229,255,0.05)]">
+                {/* Subtle Central Core Motherboard Aura */}
+                <div className="absolute inset-0 bg-gradient-to-b from-[#00e5ff]/[0.05] via-transparent to-[#9b8cff]/[0.02] rounded-2xl pointer-events-none" />
 
-                <h1 className="text-4xl sm:text-5xl lg:text-[56px] font-black tracking-tight text-[#f5f7fa] leading-[1.1] mb-5">
-                  One API for{' '}
-                  <span className="bg-gradient-to-r from-[#00e5ff] via-[#38bdf8] to-[#c084fc] bg-clip-text text-transparent">
-                    All AI Models
-                  </span>
-                </h1>
+                <div className="relative z-10 flex flex-col items-center">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-[#00e5ff] text-[11px] font-bold uppercase tracking-wider mb-5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+                    Direct Multi-Provider AI Gateway
+                  </div>
 
-                <p className="text-sm sm:text-base text-zinc-300 max-w-lg mx-auto leading-relaxed mb-8">
-                  Lowest cost multi-provider API for generative video, photorealistic images, and audio synthesis with zero vendor lock-in.
-                </p>
+                  <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-black tracking-tight text-[#f5f7fa] leading-[1.15] mb-4">
+                    One API for{' '}
+                    <span className="bg-gradient-to-r from-[#00e5ff] via-[#38bdf8] to-[#c084fc] bg-clip-text text-transparent">
+                      All AI Models
+                    </span>
+                  </h1>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-md mb-8">
-                  <Link
-                    href="/explore"
-                    className="w-full sm:w-auto px-7 py-3 rounded-full bg-[#00e5ff] hover:bg-[#38bdf8] text-[#08080a] font-extrabold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:shadow-[0_0_25px_rgba(0,229,255,0.5)] cursor-pointer text-center"
-                  >
-                    Start Building
-                  </Link>
-                  <Link
-                    href="/docs"
-                    className="w-full sm:w-auto px-7 py-3 rounded-full bg-[#121217] hover:bg-[#181820] border border-white/20 text-[#f5f7fa] hover:border-white/40 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
-                  >
-                    Read Documentation
-                  </Link>
-                </div>
+                  <p className="text-xs sm:text-sm text-zinc-300 max-w-md mx-auto leading-relaxed mb-6">
+                    Lowest cost multi-provider API for generative video, photorealistic images, and audio synthesis with zero vendor lock-in.
+                  </p>
 
-                {/* Sub-Headline Trust Metric Chips */}
-                <div className="flex items-center justify-center gap-4 text-[11px] font-mono text-zinc-400 flex-wrap">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Fail-Closed Safety
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff]" />
-                    Double-Entry Ledger
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                    Multi-Tenant RLS
-                  </span>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mb-6">
+                    <Link
+                      href="/explore"
+                      className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-[#00e5ff] hover:bg-[#38bdf8] text-[#08080a] font-extrabold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:shadow-[0_0_25px_rgba(0,229,255,0.5)] cursor-pointer text-center whitespace-nowrap"
+                    >
+                      Start Building
+                    </Link>
+                    <Link
+                      href="/docs"
+                      className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-[#121217] hover:bg-[#181820] border border-white/20 text-[#f5f7fa] hover:border-white/40 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer text-center whitespace-nowrap"
+                    >
+                      Read Documentation
+                    </Link>
+                  </div>
+
+                  {/* Sub-Headline Trust Metric Chips */}
+                  <div className="flex items-center justify-center gap-3 text-[11px] font-mono text-zinc-400 flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      Fail-Closed Safety
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff]" />
+                      Double-Entry Ledger
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                      Multi-Tenant RLS
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Right Model Circuit Rail (Left-Aligned, Brand Icon + Clean Text) */}
-              <div className="max-lg:hidden lg:col-span-3 flex flex-col gap-3.5 pl-2">
+              {/* Right Model Circuit Rail (Left-Aligned, Brand Icon + Clean Text + Connecting Bus) */}
+              <div className="hidden lg:flex flex-col justify-between w-[240px] shrink-0 gap-3">
                 {RIGHT_PROVIDERS.map((item, idx) => {
                   const isHovered = hoveredModel === item.name;
+                  const pathD =
+                    idx === 0 ? 'M 80 10 H 58 L 40 16 H 0' :
+                    idx === 1 ? 'M 80 10 H 52 L 36 16 H 0' :
+                    idx === 2 ? 'M 80 10 H 46 L 32 16 H 0' :
+                    idx >= 3 && idx <= 6 ? 'M 80 10 H 0' :
+                    idx === 7 ? 'M 80 10 H 46 L 32 4 H 0' :
+                    idx === 8 ? 'M 80 10 H 52 L 36 4 H 0' :
+                    'M 80 10 H 58 L 40 4 H 0';
+                  const circleY = (idx <= 2) ? 16 : (idx >= 7) ? 4 : 10;
+
                   return (
                     <Link
                       key={item.name}
                       href={`/${item.id}`}
                       onMouseEnter={() => setHoveredModel(item.name)}
                       onMouseLeave={() => setHoveredModel(null)}
-                      className="group flex items-center justify-start gap-3 transition-all duration-200 cursor-pointer select-none"
+                      className="group flex items-center justify-start gap-2.5 transition-all duration-200 cursor-pointer select-none"
                     >
-                      {/* SVG Circuit Connector Line Flowing Outward */}
-                      <svg className="w-16 lg:w-24 h-5 shrink-0 overflow-visible" viewBox="0 0 80 20" fill="none">
+                      {/* SVG Circuit Connector Line Flowing Outward Directly from Gateway Box */}
+                      <svg className="w-20 h-5 shrink-0 overflow-visible" viewBox="0 0 80 20" fill="none">
                         <circle
-                          cx="5"
-                          cy={idx <= 2 ? '16' : idx >= 7 ? '4' : '10'}
-                          r={isHovered ? '3' : '2'}
-                          fill={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.25)'}
+                          cx="0"
+                          cy={circleY}
+                          r={isHovered ? '3.5' : '2'}
+                          fill={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.45)'}
                           className="transition-all duration-200"
                         />
                         <path
-                          d={
-                            idx <= 2
-                              ? 'M5 16 H35 L50 10 H80'
-                              : idx >= 7
-                              ? 'M5 4 H35 L50 10 H80'
-                              : 'M5 10 H80'
-                          }
-                          stroke={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.14)'}
+                          d={pathD}
+                          stroke={isHovered ? '#00e5ff' : 'rgba(255,255,255,0.25)'}
                           strokeWidth={isHovered ? '2' : '1.25'}
                           strokeLinecap="round"
                           className="transition-colors duration-200"
@@ -281,7 +294,7 @@ export default function HomePage() {
                       </svg>
 
                       <span
-                        className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all duration-200 ${
+                        className={`w-7 h-7 rounded-md border flex items-center justify-center shrink-0 transition-all duration-200 ${
                           isHovered
                             ? 'bg-[#00e5ff]/20 border-[#00e5ff] text-[#00e5ff] shadow-[0_0_12px_rgba(0,229,255,0.3)]'
                             : 'bg-[#121217] border-white/10 text-zinc-400 group-hover:text-[#00e5ff] group-hover:border-white/20'
@@ -290,7 +303,7 @@ export default function HomePage() {
                         <BrandIcon name={item.slug} className="w-3.5 h-3.5" />
                       </span>
                       <span
-                        className={`text-xs font-bold tracking-tight transition-colors duration-200 ${
+                        className={`text-[12px] font-bold tracking-tight transition-colors duration-200 text-left truncate ${
                           isHovered
                             ? 'text-[#00e5ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]'
                             : 'text-zinc-300 group-hover:text-white'
@@ -378,19 +391,19 @@ export default function HomePage() {
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link
                 href="/explore"
-                className="px-6 py-2.5 bg-[#00e5ff] hover:bg-[#38bdf8] text-[#08080a] rounded-full text-xs font-extrabold uppercase tracking-wider transition-colors shadow-sm"
+                className="inline-flex items-center justify-center px-6 py-2.5 bg-[#00e5ff] hover:bg-[#38bdf8] text-[#08080a] rounded-full text-xs font-extrabold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap cursor-pointer"
               >
                 Start Building
               </Link>
               <Link
                 href="/docs"
-                className="px-6 py-2.5 bg-[#121217] border border-white/15 hover:border-white/30 text-zinc-200 hover:text-white rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
+                className="inline-flex items-center justify-center px-6 py-2.5 bg-[#121217] border border-white/15 hover:border-white/30 text-zinc-200 hover:text-white rounded-full text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer"
               >
                 Read Documentation
               </Link>
               <Link
                 href="/providers"
-                className="px-6 py-2.5 text-[#00e5ff] hover:underline text-xs font-bold uppercase tracking-wider transition-colors"
+                className="inline-flex items-center justify-center px-6 py-2.5 text-[#00e5ff] hover:underline text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer"
               >
                 View all providers →
               </Link>

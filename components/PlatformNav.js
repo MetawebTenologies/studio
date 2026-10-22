@@ -54,7 +54,7 @@ export default function PlatformNav({ activeModule = 'studio', showSubnav = true
             </span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-6" aria-label="Main Navigation">
+          <nav className="hidden md:flex items-center gap-3.5 lg:gap-6 whitespace-nowrap" aria-label="Main Navigation">
             {PRIMARY_NAV.map((item) => {
               const isActive =
                 pathname === item.href ||

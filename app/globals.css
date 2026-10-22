@@ -2,11 +2,14 @@
 @import "./themes/theme.muapi.css";
 @import "./themes/theme.timecapsule.css";
 @config "../tailwind.config.js";
-@source "../app";
-@source "../components";
-@source "../packages/studio/src";
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
+@source "./**/*.{js,jsx,ts,tsx}";
+@source "../components/**/*.{js,jsx,ts,tsx}";
+@source "../packages/studio/src/**/*.{js,jsx,ts,tsx}";
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+}
 
 body {
   background: var(--tc-bg-page, #f8fafc);
