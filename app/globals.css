@@ -12,8 +12,8 @@
 }
 
 body {
-  background: var(--tc-bg-page, #f8fafc);
-  color: var(--tc-text-primary, #0f172a);
+  background: var(--tc-bg-page, #08080a);
+  color: var(--tc-text-primary, #f5f7fa);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }
 

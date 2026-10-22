@@ -44,7 +44,7 @@ export default function PlatformNav({ activeModule = 'studio', showSubnav = true
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-lg bg-[#09090b] border border-white/10 flex items-center justify-center p-1.5 shadow-sm group-hover:border-[#00e5ff]/50 transition-colors">
-              <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+              <svg viewBox="0 0 240 240" width="20" height="20" className="w-full h-full" fill="none">
                 <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
                 <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
               </svg>

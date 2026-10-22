@@ -10,16 +10,16 @@ export default function PlatformFooter() {
           <div className="col-span-2 sm:col-span-3 lg:col-span-1 pr-4">
             <Link href="/explore" className="flex items-center gap-2 mb-3 group">
               <div className="w-7 h-7 rounded-lg bg-[#09090b] border border-white/10 flex items-center justify-center p-1 shadow-xs group-hover:border-[#00e5ff]/50 transition-colors">
-                <svg viewBox="0 0 240 240" className="w-full h-full" fill="none">
+                <svg viewBox="0 0 240 240" width="20" height="20" className="w-full h-full" fill="none">
                   <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA" />
                   <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF" />
                 </svg>
               </div>
-              <span className="text-[var(--tc-text-primary,#0f172a)] font-extrabold text-sm tracking-wider uppercase">
+              <span className="text-[var(--tc-text-primary,#f5f7fa)] font-extrabold text-sm tracking-wider uppercase">
                 {TIMECAPSULE_BRAND.name}
               </span>
             </Link>
-            <p className="text-[var(--tc-text-secondary,#475569)] text-xs leading-relaxed mb-5">
+            <p className="text-[var(--tc-text-secondary,#94a3b8)] text-xs leading-relaxed mb-5">
               Self-hostable multimodal studio for generative cinema, video, image, and speech pipelines with durable queue orchestration.
             </p>
             <div className="flex items-center gap-2">
