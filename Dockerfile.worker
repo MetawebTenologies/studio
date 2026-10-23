@@ -1,0 +1,33 @@
+# Multi-stage production container for Timecapsule Durable Background Worker
+# Uses Node.js 22 Active LTS (Jod) - replaces end-of-life Node.js 20
+
+FROM node:22-alpine AS base
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# 1. Dependencies layer
+FROM base AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/studio/package.json ./packages/studio/
+COPY packages/timecapsule/package.json ./packages/timecapsule/
+RUN npm ci --omit=dev
+
+# 2. Production worker runner
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Create unprivileged worker user
+RUN addgroup --system --gid 1002 workergroup && \
+    adduser --system --uid 1002 workeruser
+
+COPY --from=deps /app/package.json /app/package-lock.json ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY packages/timecapsule ./packages/timecapsule
+
+USER workeruser
+
+# Worker processes PostgreSQL tasks with lease fencing and handles SIGTERM/SIGINT gracefully
+CMD ["node", "packages/timecapsule/src/scripts/worker-cli.js"]
