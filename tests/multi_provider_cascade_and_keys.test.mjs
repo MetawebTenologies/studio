@@ -339,7 +339,7 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
           immediateCompletion: {
             sourceUrl: 'https://cdn.timecapsule.test/replicate_output.webp',
             outputs: ['https://cdn.timecapsule.test/replicate_output.webp'],
-            userBilledCredits: 15,
+            userBilledCredits: 10,
             providerReportedCost: 0.003,
             providerCostUnit: 'usd',
           },
@@ -349,7 +349,7 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
       poll: async () => {},
     });
 
-    // Submit job (15 credits estimated)
+    // Submit job (10 credits estimated)
     const session = {
       tenant_id: tenantId,
       user_id: userId,
@@ -370,7 +370,7 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
     });
 
     assert.strictEqual(submittedJob.status, 'queued');
-    assert.strictEqual(submittedJob.credits_reserved, 15);
+    assert.strictEqual(submittedJob.credits_reserved, 10);
     assert.strictEqual(submittedJob.provider, 'muapi');
 
     // Run durable worker to execute the cascade
@@ -393,7 +393,7 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
     const finalJob = await getJob(submittedJob.job_id);
     assert.strictEqual(finalJob.status, 'succeeded');
     assert.strictEqual(finalJob.provider, 'replicate');
-    assert.strictEqual(finalJob.user_billed_credits, 15);
+    assert.strictEqual(finalJob.user_billed_credits, 10);
     assert.strictEqual(finalJob.output.url, 'https://cdn.timecapsule.test/replicate_output.webp');
 
     // Verify cascade events recorded in job_events audit trail
@@ -409,12 +409,12 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
     assert.strictEqual(cascadeEvents[1].data.from_provider, 'fal');
     assert.strictEqual(cascadeEvents[1].data.to_provider, 'replicate');
 
-    // Verify credit ledger: EXACTLY 1 reserve, EXACTLY 1 settle (1000 - 15 = 985, reserved = 0)
+    // Verify credit ledger: EXACTLY 1 reserve, EXACTLY 1 settle (1000 - 10 = 990, reserved = 0)
     const tenantRes = await query(
       'SELECT credits_balance, credits_reserved FROM tenants WHERE tenant_id = $1',
       [tenantId]
     );
-    assert.strictEqual(Number(tenantRes.rows[0].credits_balance), 985);
+    assert.strictEqual(Number(tenantRes.rows[0].credits_balance), 990);
     assert.strictEqual(Number(tenantRes.rows[0].credits_reserved), 0);
 
     resetProviderAdapters();
@@ -510,7 +510,7 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
         providerJobId: `task_${Date.now()}`,
         immediateCompletion: {
           sourceUrl: 'https://cdn.timecapsule.test/http_output.webp',
-          userBilledCredits: 15,
+          userBilledCredits: Number(job.credits_reserved) || 10,
         },
       }),
       poll: async () => {},

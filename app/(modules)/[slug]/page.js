@@ -6,6 +6,7 @@ import ModuleStatusBadge from '@/components/ModuleStatusBadge';
 import ModelPlayground from '@/components/ModelPlayground';
 import AppsTemplateRegistry from '@/components/AppsTemplateRegistry';
 import { getModelCapabilities } from '../../../packages/timecapsule/src/models/capabilities.js';
+import { getEstimatedCreditsForModel } from '../../../packages/timecapsule/src/models/index.js';
 
 export default async function GenericModulePage({ params }) {
   const resolvedParams = await params;
@@ -113,8 +114,9 @@ export default async function GenericModulePage({ params }) {
   const isAudio = slug.includes('audio') || slug.includes('music') || slug.includes('lyria') || slug.includes('suno') || slug.includes('fish');
   const isLipsync = slug.includes('lipsync') || slug.includes('sync');
   const modelCategory = isVideo ? 'Video Generation' : isAudio ? 'AI Audio' : isLipsync ? 'Lip Sync' : 'Image Generation';
-  const modelPrice = isVideo ? '$0.150' : isAudio ? '$0.040' : '$0.009';
-  const estimatedCredits = isVideo ? 150 : isAudio ? 40 : 15;
+  const modality = isVideo ? 'video' : isAudio ? 'audio' : isLipsync ? 'lipsync' : 'image';
+  const estimatedCredits = getEstimatedCreditsForModel(slug, modality);
+  const modelPrice = `$${(estimatedCredits * 0.004).toFixed(3)}`;
 
   let providerName = 'Verified Gateway';
   let providerFamily = 'studio';

@@ -144,14 +144,14 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_image_resolution_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits: 15,
+      base_credits: 10,
       by_resolution: {
-        '1k': 15,
-        '2k': 25,
-        '4k': 40,
+        '1k': 10,
+        '2k': 15,
+        '4k': 25,
       },
     },
-    estimatedCredits: 15,
+    estimatedCredits: 10,
     inputs: {
       prompt: {
         type: 'string',
@@ -210,14 +210,14 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_i2i_resolution_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits: 20,
+      base_credits: 15,
       by_resolution: {
-        '1k': 20,
-        '2k': 30,
-        '4k': 45,
+        '1k': 15,
+        '2k': 20,
+        '4k': 30,
       },
     },
-    estimatedCredits: 20,
+    estimatedCredits: 15,
     inputs: {
       prompt: {
         type: 'string',
@@ -282,10 +282,10 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_video_duration_resolution_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits_5s_720p: 120,
-      base_credits_5s_1080p: 180,
+      base_credits_5s_720p: 350,
+      base_credits_5s_1080p: 450,
     },
-    estimatedCredits: 120,
+    estimatedCredits: 350,
     inputs: {
       prompt: {
         type: 'string',
@@ -354,10 +354,10 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_video_duration_resolution_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits_5s_720p: 120,
-      base_credits_5s_1080p: 180,
+      base_credits_5s_720p: 350,
+      base_credits_5s_1080p: 450,
     },
-    estimatedCredits: 120,
+    estimatedCredits: 350,
     inputs: {
       prompt: {
         type: 'string',
@@ -428,9 +428,9 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_veo_fast_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits: 150,
+      base_credits: 450,
     },
-    estimatedCredits: 150,
+    estimatedCredits: 450,
     inputs: {
       prompt: {
         type: 'string',
@@ -496,9 +496,9 @@ export const SUPPORTED_RELEASE_MODELS = [
     credit_estimate_policy: {
       policy_id: 'tier_veo_fast_v1',
       pricing_policy_version: PRICING_POLICY_VERSION,
-      base_credits: 150,
+      base_credits: 450,
     },
-    estimatedCredits: 150,
+    estimatedCredits: 450,
     inputs: {
       prompt: {
         type: 'string',

@@ -46,7 +46,7 @@ export const timecapsuleNativeModels = {
       verification_status: 'disabled',
       verified_worker: false,
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
-      estimatedCredits: 25,
+      estimatedCredits: 15,
       inputs: {
         prompt: {
           type: 'string',
@@ -86,7 +86,7 @@ export const timecapsuleNativeModels = {
       verification_status: 'disabled',
       verified_worker: false,
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
-      estimatedCredits: 240,
+      estimatedCredits: 350,
       inputs: {
         prompt: {
           type: 'string',
@@ -135,7 +135,7 @@ export const timecapsuleNativeModels = {
       status_reason: 'Self-hosted GPU worker execution is not configured or verified.',
       imageField: 'image_url',
       hasPrompt: true,
-      estimatedCredits: 240,
+      estimatedCredits: 350,
       inputs: {
         prompt: {
           type: 'string',
@@ -425,9 +425,9 @@ export const getEstimatedCreditsForModel = (modelId = '', modality = 'image', pa
       const duration = Number(params.duration || params.duration_seconds || 5);
       const base =
         res === '1080p' || res === '4k'
-          ? policy.base_credits_5s_1080p || 180
-          : policy.base_credits_5s_720p || 120;
-      return Math.max(60, Math.round(base * (duration / 5)));
+          ? policy.base_credits_5s_1080p || 450
+          : policy.base_credits_5s_720p || 350;
+      return Math.max(100, Math.round(base * (duration / 5)));
     }
     if (Number.isFinite(policy.base_credits)) {
       return policy.base_credits;
@@ -439,14 +439,17 @@ export const getEstimatedCreditsForModel = (modelId = '', modality = 'image', pa
   if (found && Number.isFinite(found.estimatedCredits)) {
     return found.estimatedCredits;
   }
-  if (modality === 'video' || modality === 'i2v' || modality === 'v2v' || modality === 'lipsync') {
+  if (modality === 'video' || modality === 'i2v' || modality === 'v2v') {
     const duration = Number(params.duration || params.duration_seconds || 5);
-    const base = res === '1080p' || res === '4k' ? 180 : 120;
-    return Math.max(60, Math.round(base * (duration / 5)));
+    const base = res === '1080p' || res === '4k' ? 450 : 350;
+    return Math.max(100, Math.round(base * (duration / 5)));
   }
-  if (res === '4k') return 40;
-  if (res === '2k') return 25;
-  return 15;
+  if (modality === 'lipsync') {
+    return 30;
+  }
+  if (res === '4k') return 25;
+  if (res === '2k') return 15;
+  return 10;
 };
 
 export const registerTimecapsuleModel = (category, modelSpec) => {

@@ -2322,7 +2322,7 @@ test('Template Registry Track: Server-side prompt synthesis, parameter snapshot,
     assert.equal(job.model, 'nano-banana-pro', 'Model forced to template model_id (nano-banana-pro)');
     assert.equal(job.provider, 'muapi');
     assert.equal(job.execution_route, 'muapi:predictions/v1:nano-banana-pro');
-    assert.equal(job.credits_reserved, 15, 'Base 1K resolution reserves exactly 15 credits under tier_image_resolution_v1');
+    assert.equal(job.credits_reserved, 10, 'Base 1K resolution reserves exactly 10 credits under tier_image_resolution_v1');
 
     // Verify snapshot in job inputs
     assert.equal(job.inputs.template_slug, 'product-concept-pro');
@@ -2395,12 +2395,12 @@ test('Template Registry Track: Idempotency replay across template edits/archival
     const initialJob = initialRes.job;
     assert.ok(initialJob.job_id);
 
-    // Initial tenant reservation is exactly 15 credits
+    // Initial tenant reservation is exactly 10 credits
     const balanceAfterInitial = await withTenantContext(tenant.tenant_id, async (client) => {
       const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
       return res.rows[0];
     });
-    assert.equal(Number(balanceAfterInitial.credits_reserved), 15);
+    assert.equal(Number(balanceAfterInitial.credits_reserved), 10);
 
     // 2. Modify the template in app_templates (alter prompt_template AND set status = 'archived')
     await withSystemContext(async (client) => {
@@ -2437,7 +2437,7 @@ test('Template Registry Track: Idempotency replay across template edits/archival
       const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
       return res.rows[0];
     });
-    assert.equal(Number(balanceAfterReplay.credits_reserved), 15, 'Reserved credits remain unchanged at 15');
+    assert.equal(Number(balanceAfterReplay.credits_reserved), 10, 'Reserved credits remain unchanged at 10');
 
     // 4. Changing the template under the same idempotency key returns 409
     await assert.rejects(
@@ -2483,12 +2483,12 @@ test('Template Registry Track: Idempotency replay across template edits/archival
       'Changing user prompt under same idempotency key must reject with 409 IDEMPOTENCY_PAYLOAD_MISMATCH'
     );
 
-    // Reserved credits still remain unchanged at 15
+    // Reserved credits still remain unchanged at 10
     const balanceFinal = await withTenantContext(tenant.tenant_id, async (client) => {
       const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
       return res.rows[0];
     });
-    assert.equal(Number(balanceFinal.credits_reserved), 15, 'No extra credits reserved on rejected mismatched requests');
+    assert.equal(Number(balanceFinal.credits_reserved), 10, 'No extra credits reserved on rejected mismatched requests');
   } finally {
     process.env.MUAPI_API_KEY = originalEnv;
     // Restore starter templates

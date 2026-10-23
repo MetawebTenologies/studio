@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useTransition } from 'react';
+import { useState, useEffect, useRef, useTransition, useMemo } from 'react';
 import Link from 'next/link';
 import BrandIcon from '@/components/BrandIcon';
 
@@ -65,7 +65,7 @@ export default function ModelPlayground({
   providerName = 'Verified Gateway',
   providerFamily = 'flux',
   defaultPrompt = '',
-  estimatedCredits = 15,
+  estimatedCredits = 10,
   capabilities = null,
 }) {
   const isVideo =
@@ -101,6 +101,27 @@ export default function ModelPlayground({
   const [uploadError, setUploadError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const fileInputRef = useRef(null);
+
+  const currentCredits = useMemo(() => {
+    const policy = capabilities?.credit_estimate_policy;
+    if (policy) {
+      const res = String(resolution || '1k').toLowerCase();
+      if (policy.by_resolution && policy.by_resolution[res] !== undefined) {
+        return policy.by_resolution[res];
+      }
+      if (policy.policy_id === 'tier_video_duration_resolution_v1') {
+        const base =
+          res === '1080p' || res === '4k'
+            ? policy.base_credits_5s_1080p || 450
+            : policy.base_credits_5s_720p || 350;
+        return Math.max(100, Math.round(base * (Number(duration || 5) / 5)));
+      }
+      if (Number.isFinite(policy.base_credits)) {
+        return policy.base_credits;
+      }
+    }
+    return estimatedCredits;
+  }, [capabilities, resolution, duration, estimatedCredits]);
 
   // Execution State Machine
   // 'idle' | 'authenticating' | 'submitting' | 'queued' | 'processing' | 'completed' | 'failed'
@@ -643,7 +664,7 @@ console.log('SSE Stream:', job.events_url);`;
           <div className="text-left md:text-right">
             <div className="text-[11px] text-zinc-400 font-medium">Model Price</div>
             <div className="text-xl font-black text-emerald-400 font-mono">{modelPrice}</div>
-            <div className="text-[10px] text-zinc-500">~{estimatedCredits} credits / run</div>
+            <div className="text-[10px] text-zinc-500">~{currentCredits} credits / run</div>
           </div>
 
           {/* Segmented [Playground | API Reference] Toggle */}
@@ -952,7 +973,7 @@ console.log('SSE Stream:', job.events_url);`;
             <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="text-xs text-zinc-400">
-                  Cost: <span className="font-bold text-emerald-400 font-mono">{estimatedCredits} credits</span>
+                  Cost: <span className="font-bold text-emerald-400 font-mono">{currentCredits} credits</span>
                 </div>
                 {creditsBalance !== null && (
                   <div className="text-xs text-zinc-500 font-mono">
@@ -1346,7 +1367,7 @@ console.log('SSE Stream:', job.events_url);`;
 {`{
   "job_id": "job_01j7b9c9z4",
   "status": "queued",
-  "credits_reserved": ${estimatedCredits},
+  "credits_reserved": ${currentCredits},
   "estimated_cost": "${modelPrice}",
   "events_url": "/api/v1/generations/job_01j7b9c9z4/events",
   "provider": "${providerFamily}",

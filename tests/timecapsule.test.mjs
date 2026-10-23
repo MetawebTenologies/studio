@@ -1278,15 +1278,15 @@ test('Checkpoint 2 (Persistence & Multi-Process): Jobs, reservations, and idempo
 
       assert.equal(created.deduplicated, false);
       assert.equal(created.job.status, 'queued');
-      assert.equal(created.job.credits_reserved, 180);
+      assert.equal(created.job.credits_reserved, 450);
 
       // Simulate API server restart by closing the PostgreSQL connection pool completely
       await closePool();
 
       const creditsAfterRestart = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
       assert.equal(creditsAfterRestart.total_credits, 1000);
-      assert.equal(creditsAfterRestart.reserved_credits, 180);
-      assert.equal(creditsAfterRestart.available_credits, 820);
+      assert.equal(creditsAfterRestart.reserved_credits, 450);
+      assert.equal(creditsAfterRestart.available_credits, 550);
 
       // Spawn a separate second Node process that submits the same idempotency key and reads state
       const childScript = `
@@ -1324,8 +1324,8 @@ test('Checkpoint 2 (Persistence & Multi-Process): Jobs, reservations, and idempo
       const childOut = JSON.parse(stdout.trim());
       assert.equal(childOut.deduplicated, true);
       assert.equal(childOut.jobId, created.job.job_id);
-      assert.equal(childOut.credits.available_credits, 820);
-      assert.equal(childOut.credits.reserved_credits, 180);
+      assert.equal(childOut.credits.available_credits, 550);
+      assert.equal(childOut.credits.reserved_credits, 450);
     }
   );
 });
@@ -1365,8 +1365,8 @@ test('Checkpoint 2 (Idempotency & Concurrency): Concurrent duplicate submissions
       assert.equal(nonDeduplicatedCount, 1, 'Exactly one submission creates the job');
 
       const credits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
-      assert.equal(credits.reserved_credits, 180);
-      assert.equal(credits.available_credits, 820);
+      assert.equal(credits.reserved_credits, 450);
+      assert.equal(credits.available_credits, 550);
 
       // 2. Same key with different payload returns 409 IDEMPOTENCY_PAYLOAD_MISMATCH
       await assert.rejects(
@@ -1389,7 +1389,7 @@ test('Checkpoint 2 (Idempotency & Concurrency): Concurrent duplicate submissions
           submitGenerationJob({
             session,
             idempotencyKey: 'idem_rollback_clean',
-            body: payload, // costs 180, balance is 100
+            body: payload, // costs 450, balance is 100
           }),
         (err) => err.code === 'INSUFFICIENT_CREDITS' && err.statusCode === 402
       );
@@ -1428,8 +1428,8 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
       TIMECAPSULE_DEFAULT_PROVIDER: 'kie',
     },
     async () => {
-      // Balance = 400. Each job reserves 180. At most 2 of 6 concurrent submissions can succeed (2 * 180 = 360 <= 400).
-      await resetStoreForTests(400);
+      // Balance = 1000. Each job reserves 450. At most 2 of 6 concurrent submissions can succeed (2 * 450 = 900 <= 1000).
+      await resetStoreForTests(1000);
       const session = verifySessionToken(issuePreviewSessionToken());
 
       const outcomes = await Promise.allSettled(
@@ -1448,18 +1448,18 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
 
       const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
       const rejected = outcomes.filter((o) => o.status === 'rejected');
-      assert.equal(fulfilled.length, 2, 'Exactly 2 reservations of 180 fit into 400 credits');
+      assert.equal(fulfilled.length, 2, 'Exactly 2 reservations of 450 fit into 1000 credits');
       assert.equal(rejected.length, 4);
       for (const r of rejected) {
         assert.equal(r.reason.code, 'INSUFFICIENT_CREDITS');
       }
 
       const creditsMid = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
-      assert.equal(creditsMid.total_credits, 400);
-      assert.equal(creditsMid.reserved_credits, 360);
-      assert.equal(creditsMid.available_credits, 40);
+      assert.equal(creditsMid.total_credits, 1000);
+      assert.equal(creditsMid.reserved_credits, 900);
+      assert.equal(creditsMid.available_credits, 100);
 
-      // Claim first job and test settlement at higher cost (capped at reserved = 180, never overdrafts)
+      // Claim first job and test settlement at higher cost (capped at reserved = 450, never overdrafts)
       const claim1 = await claimNextRunnableJob({ workerId: 'wrk_settle_test' });
       assert.ok(claim1 && !claim1.reconciliationRequired);
       const job1Id = claim1.job.job_id;
@@ -1472,13 +1472,13 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token1,
         providerJobId: 'prov_task_1',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/1.mp4',
-        userBilledCredits: 9999, // Exceeds reserved 180 -> must cap at 180
+        userBilledCredits: 9999, // Exceeds reserved 450 -> must cap at 450
         providerReportedCost: 14.5,
         providerCostUnit: 'kie_credits',
       });
       assert.equal(settled1.alreadyTerminal, false);
-      assert.equal(settled1.job.user_billed_credits, 180);
-      assert.equal(settled1.job.actual_cost, 180);
+      assert.equal(settled1.job.user_billed_credits, 450);
+      assert.equal(settled1.job.actual_cost, 450);
       assert.equal(settled1.job.provider_reported_cost, 14.5);
       assert.equal(settled1.job.provider_cost_unit, 'kie_credits');
 
@@ -1490,7 +1490,7 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token1,
         providerJobId: 'prov_task_1',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/1.mp4',
-        userBilledCredits: 180,
+        userBilledCredits: 450,
       });
       assert.equal(duplicateSettle.alreadyTerminal, true);
 
@@ -1509,9 +1509,9 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
 
       const res1Row = await getCreditReservation(job1Id);
       assert.equal(res1Row.status, 'settled');
-      assert.equal(res1Row.settled_amount, 180);
+      assert.equal(res1Row.settled_amount, 450);
 
-      // Claim second job and test settlement at lower cost (150 < 180 -> 30 released back to available)
+      // Claim second job and test settlement at lower cost (350 < 450 -> 100 released back to available)
       const claim2 = await claimNextRunnableJob({ workerId: 'wrk_settle_test' });
       const job2Id = claim2.job.job_id;
       const token2 = claim2.job.fencing_token;
@@ -1523,16 +1523,16 @@ test('Checkpoint 2 (Credit Safety): Concurrent reservations cannot overspend and
         fencingToken: token2,
         providerJobId: 'prov_task_2',
         sourceUrl: 'https://cdn.timecapsule.studio/outputs/2.mp4',
-        userBilledCredits: 150,
+        userBilledCredits: 350,
         providerReportedCost: 0.25,
         providerCostUnit: 'muapi_usd',
       });
 
       const creditsFinal = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
-      // Started at 400, spent 180 + 150 = 330 -> balance = 70, reserved = 0, available = 70
-      assert.equal(creditsFinal.total_credits, 70);
+      // Started at 1000, spent 450 + 350 = 800 -> balance = 200, reserved = 0, available = 200
+      assert.equal(creditsFinal.total_credits, 200);
       assert.equal(creditsFinal.reserved_credits, 0);
-      assert.equal(creditsFinal.available_credits, 70);
+      assert.equal(creditsFinal.available_credits, 200);
 
       // Verify append-only immutability trigger on credit_ledger
       await assert.rejects(
@@ -1718,7 +1718,7 @@ test('Checkpoint 2 (Ambiguous Provider Submission): Crash after provider accepta
         const creditsDuringReconcile = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
         assert.equal(
           creditsDuringReconcile.reserved_credits,
-          180,
+          450,
           'Credits must remain reserved while submission is in reconciling_submission'
         );
 
@@ -1741,7 +1741,7 @@ test('Checkpoint 2 (Ambiguous Provider Submission): Crash after provider accepta
         assert.equal(fakeProvider.createTaskRequests.length, 1);
         const finalCredits = await getTenantCredits(PREVIEW_IDENTITY.tenant_id);
         assert.equal(finalCredits.reserved_credits, 0);
-        assert.equal(finalCredits.total_credits, 320);
+        assert.equal(finalCredits.total_credits, 50);
       }
     );
   } finally {
@@ -2608,7 +2608,7 @@ test('Checkpoint 3A (Resilience & Redaction): Poll timeout retries safely withou
       status: 200,
       body: '<<<200_NOT_VALID_JSON_AT_ALL>>>',
       expectedStatus: 'reconciling_submission',
-      expectedReserved: 15,
+      expectedReserved: 10,
     },
   ]) {
     const errorServer = await startFakeMuapiProviderServer({

@@ -128,8 +128,8 @@ export const BACKER_BENEFITS = [
     icon: 'trending-up',
   },
   {
-    title: '20% Net Platform Margin Revenue Share Pool',
-    desc: '20% of net platform margins across all credit top-ups are allocated directly to the Early Seed Community Backer Pool.',
+    title: '25% Net Platform Margin Revenue Share Pool',
+    desc: '25% of net platform margins across all credit top-ups are allocated directly to the Early Seed Community Backer Pool, distributed pro-rata to token/pass holders.',
     icon: 'pie-chart',
   },
   {
@@ -141,51 +141,64 @@ export const BACKER_BENEFITS = [
 
 const MODEL_GROUPS = [
   {
+    name: 'Flagship Studio Models',
+    count: '6 verified models',
+    models: [
+      { name: 'nano-banana-pro (1K)', modality: 'TEXT TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.08 (Higgsfield)', replicate: '$0.08', discount: '2x Compute (50% Off) ↓' },
+      { name: 'nano-banana-pro (2K)', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.12', replicate: '$0.12', discount: '-50% ↓' },
+      { name: 'nano-banana-pro-edit', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.12', replicate: '$0.12', discount: '-50% ↓' },
+      { name: 'seedance-pro-t2v (720p)', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
+      { name: 'seedance-pro-t2v (1080p)', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$3.00', replicate: 'Not available', discount: '-40% ↓' },
+      { name: 'veo3.1-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50 per gen', replicate: '$2.50', discount: '-28% ↓' },
+      { name: 'lipsync-studio-v1', modality: 'LIP SYNC', timecapsule: '30 cr ($0.120)', fal: '$0.20', replicate: '$0.20', discount: '-40% ↓' },
+    ],
+  },
+  {
     name: 'Tools & Utilities',
     count: '20 models',
     models: [
-      { name: 'ai-image-upscaler', modality: 'IMAGE TO IMAGE', timecapsule: '20 cr ($0.020)', fal: '$0.03 per gen', replicate: '$0.03 per gen', discount: '-33% ↓' },
-      { name: 'ai-image-face-swap', modality: 'IMAGE TO IMAGE', timecapsule: '20 cr ($0.020)', fal: '$0.03', replicate: '$0.03', discount: '-33% ↓' },
-      { name: 'ai-product-shot', modality: 'IMAGE TO IMAGE', timecapsule: '60 cr ($0.060)', fal: '$0.08', replicate: '$0.08', discount: '-25% ↓' },
-      { name: 'ai-skin-enhancer', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.010)', fal: '$0.015 per gen', replicate: '$0.015 per gen', discount: '-33% ↓' },
-      { name: 'ai-background-remover', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.010)', fal: '$0.02 per gen', replicate: '$0.02 per gen', discount: '-50% ↓' },
+      { name: 'ai-image-upscaler', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.06 per gen', replicate: '$0.06 per gen', discount: '-33% ↓' },
+      { name: 'ai-image-face-swap', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.08', replicate: '$0.08', discount: '-25% ↓' },
+      { name: 'ai-product-shot', modality: 'IMAGE TO IMAGE', timecapsule: '20 cr ($0.080)', fal: '$0.12', replicate: '$0.12', discount: '-33% ↓' },
+      { name: 'ai-skin-enhancer', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.06 per gen', replicate: '$0.06 per gen', discount: '-33% ↓' },
+      { name: 'ai-background-remover', modality: 'IMAGE TO IMAGE', timecapsule: '5 cr ($0.020)', fal: '$0.04 per gen', replicate: '$0.04 per gen', discount: '-50% ↓' },
     ],
   },
   {
     name: 'Google Veo Series',
     count: '4 models',
     models: [
-      { name: 'veo3-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '250 cr ($2.50)', fal: '$3.50 per generation', replicate: '$3.50 per generation', discount: '-28% ↓' },
-      { name: 'veo3-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '60 cr ($0.60)', fal: '$0.80 per generation', replicate: '$0.80 per generation', discount: '-25% ↓' },
-      { name: 'veo3-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '250 cr ($2.50)', fal: '$3.50', replicate: '$3.50', discount: '-28% ↓' },
-      { name: 'veo3-fast-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '60 cr ($0.60)', fal: '$0.80', replicate: '$0.80', discount: '-25% ↓' },
+      { name: 'veo3-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '875 cr ($3.50)', fal: '$5.00 per generation', replicate: '$5.00 per generation', discount: '-30% ↓' },
+      { name: 'veo3-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50 per generation', replicate: '$2.50 per generation', discount: '-28% ↓' },
+      { name: 'veo3-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '875 cr ($3.50)', fal: '$5.00', replicate: '$5.00', discount: '-30% ↓' },
+      { name: 'veo3-fast-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50', replicate: '$2.50', discount: '-28% ↓' },
     ],
   },
   {
     name: 'Black Forest Labs Flux',
     count: '11 models',
     models: [
-      { name: 'flux-dev', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.015)', fal: '$0.020', replicate: '$0.020', discount: '-25% ↓' },
-      { name: 'flux-schnell', modality: 'TEXT TO IMAGE', timecapsule: '5 cr ($0.005)', fal: '$0.008 per generation', replicate: '$0.008 per generation', discount: '-38% ↓' },
-      { name: 'flux-3-klein-text-to-image', modality: 'TEXT TO IMAGE', timecapsule: '9 cr ($0.009)', fal: '$0.015', replicate: '$0.015', discount: '-40% ↓' },
-      { name: 'flux-3-klein-edit-image', modality: 'IMAGE TO IMAGE', timecapsule: '9 cr ($0.009)', fal: '$0.015', replicate: '$0.015', discount: '-40% ↓' },
+      { name: 'flux-dev', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.080', replicate: '$0.080', discount: '-25% ↓' },
+      { name: 'flux-schnell', modality: 'TEXT TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.050 per generation', replicate: '$0.050 per generation', discount: '-20% ↓' },
+      { name: 'flux-3-klein-text-to-image', modality: 'TEXT TO IMAGE', timecapsule: '12 cr ($0.048)', fal: '$0.070', replicate: '$0.070', discount: '-31% ↓' },
+      { name: 'flux-3-klein-edit-image', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.080', replicate: '$0.080', discount: '-25% ↓' },
     ],
   },
   {
     name: 'ByteDance Seedance 2.5',
     count: '18 models',
     models: [
-      { name: 'seedance-2.5-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '120 cr ($1.20)', fal: '$1.75 per generation', replicate: 'Not available', discount: '-31% ↓' },
-      { name: 'seedance-2.5-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '120 cr ($1.20)', fal: '$1.75 per generation', replicate: 'Not available', discount: '-31% ↓' },
-      { name: 'seedance-2.5-first-last-frame', modality: 'IMAGE TO VIDEO', timecapsule: '180 cr ($1.80)', fal: '$2.50 per generation', replicate: 'Not available', discount: '-28% ↓' },
+      { name: 'seedance-2.5-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 per gen (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
+      { name: 'seedance-2.5-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 per gen (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
+      { name: 'seedance-2.5-first-last-frame', modality: 'IMAGE TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$3.00 per generation', replicate: 'Not available', discount: '-40% ↓' },
     ],
   },
   {
     name: 'Audio & Music Synthesis',
     count: '4 models',
     models: [
-      { name: 'mmaudio-v2-text-to-audio', modality: 'TEXT TO AUDIO', timecapsule: '10 cr ($0.010)', fal: '$0.02 per generation', replicate: '$0.02 per generation', discount: '-50% ↓' },
-      { name: 'lyria-3-music', modality: 'TEXT TO AUDIO', timecapsule: '40 cr ($0.040)', fal: '$0.06 per generation', replicate: '$0.06 per generation', discount: '-33% ↓' },
+      { name: 'mmaudio-v2-text-to-audio', modality: 'TEXT TO AUDIO', timecapsule: '10 cr ($0.040)', fal: '$0.06 per generation', replicate: '$0.06 per generation', discount: '-33% ↓' },
+      { name: 'lyria-3-music', modality: 'TEXT TO AUDIO', timecapsule: '25 cr ($0.100)', fal: '$0.15 per generation', replicate: '$0.15 per generation', discount: '-33% ↓' },
     ],
   },
 ];

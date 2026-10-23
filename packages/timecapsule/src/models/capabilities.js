@@ -76,6 +76,8 @@ export function getModelCapabilities(slug) {
       default_aspect_ratio: releaseModel.inputs?.aspect_ratio?.default || (isVideo ? '16:9' : '1:1'),
       default_resolution: (releaseModel.inputs?.resolution?.default || (isVideo ? '720p' : '1k')).toLowerCase(),
       default_duration: isVideo ? (releaseModel.inputs?.duration?.default || 5) : null,
+      credit_estimate_policy: releaseModel.credit_estimate_policy || null,
+      estimated_credits: releaseModel.estimatedCredits || (isVideo ? 350 : 10),
     };
   }
 
