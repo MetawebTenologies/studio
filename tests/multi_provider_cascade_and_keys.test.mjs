@@ -641,4 +641,119 @@ test('Multi-Provider Cascade & Credential Layer (Approach 2)', async (t) => {
 
     resetProviderAdapters();
   });
+
+  await t.test('UI & Cookie-Auth Contract: Cookie session, scope filtering, validation, and CSRF guards', async () => {
+    const tenantId = `ten_uicookie_${Date.now()}`;
+    await createTenant({
+      tenantId,
+      name: 'UI Cookie Test Tenant',
+      slug: `uicookie-${Date.now()}`,
+      initialCredits: 1000,
+    });
+
+    const adminUser = await createUser({
+      userId: `usr_cookieadmin_${Date.now()}`,
+      email: `cookieadmin_${Date.now()}@example.com`,
+      name: 'Cookie Admin',
+      emailVerified: true,
+    });
+
+    await createMembership({
+      tenantId,
+      userId: adminUser.user_id,
+      role: 'reseller_admin',
+    });
+
+    const sessionCookieToken = issueTenantSessionToken({
+      userId: adminUser.user_id,
+      tenantId,
+      role: 'reseller_admin',
+      email: adminUser.email,
+      emailVerified: true,
+      name: adminUser.name,
+    });
+
+    // A. Missing CSRF header fails mutation
+    const noCsrfReq = new Request('http://localhost:8080/api/v1/keys', {
+      method: 'POST',
+      headers: {
+        cookie: `timecapsule_session=${sessionCookieToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'CSRF Missing Key' }),
+    });
+    const noCsrfRes = await createKeyRoute(noCsrfReq);
+    assert.strictEqual(noCsrfRes.status, 403);
+    const noCsrfData = await noCsrfRes.json();
+    assert.strictEqual(noCsrfData.code, 'CSRF_PROTECTION_REQUIRED');
+
+    // B. Blank name validation fails with 400
+    const blankNameReq = new Request('http://localhost:8080/api/v1/keys', {
+      method: 'POST',
+      headers: {
+        cookie: `timecapsule_session=${sessionCookieToken}`,
+        'x-timecapsule-csrf': '1',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ name: '   ' }),
+    });
+    const blankNameRes = await createKeyRoute(blankNameReq);
+    assert.strictEqual(blankNameRes.status, 400);
+    const blankNameData = await blankNameRes.json();
+    assert.strictEqual(blankNameData.code, 'INVALID_KEY_NAME');
+
+    // C. Valid creation with custom scopes via cookie session
+    const validCreateReq = new Request('http://localhost:8080/api/v1/keys', {
+      method: 'POST',
+      headers: {
+        cookie: `timecapsule_session=${sessionCookieToken}`,
+        'x-timecapsule-csrf': '1',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Worker Agent Key',
+        scopes: ['generations:write', 'models:read'],
+      }),
+    });
+    const validCreateRes = await createKeyRoute(validCreateReq);
+    assert.strictEqual(validCreateRes.status, 201);
+    const validCreateData = await validCreateRes.json();
+    assert.strictEqual(validCreateData.ok, true);
+    assert.ok(validCreateData.key.secret_key.startsWith('tcs_live_'));
+    assert.deepStrictEqual(validCreateData.key.scopes, ['generations:write', 'models:read']);
+
+    // D. Cookie session can list keys
+    const cookieListReq = new Request('http://localhost:8080/api/v1/keys', {
+      method: 'GET',
+      headers: {
+        cookie: `timecapsule_session=${sessionCookieToken}`,
+      },
+    });
+    const cookieListRes = await getKeysRoute(cookieListReq);
+    assert.strictEqual(cookieListRes.status, 200);
+    const cookieListData = await cookieListRes.json();
+    assert.strictEqual(cookieListData.ok, true);
+    assert.strictEqual(cookieListData.items.length, 1);
+    assert.strictEqual(cookieListData.items[0].name, 'Worker Agent Key');
+    assert.strictEqual(cookieListData.items[0].revoked_at, null);
+
+    // E. Cookie session can revoke key with CSRF header
+    const cookieRevokeReq = new Request(
+      `http://localhost:8080/api/v1/keys/${validCreateData.key.key_id}`,
+      {
+        method: 'DELETE',
+        headers: {
+          cookie: `timecapsule_session=${sessionCookieToken}`,
+          'x-timecapsule-csrf': '1',
+        },
+      }
+    );
+    const cookieRevokeRes = await revokeKeyRoute(cookieRevokeReq, {
+      params: Promise.resolve({ keyId: validCreateData.key.key_id }),
+    });
+    assert.strictEqual(cookieRevokeRes.status, 200);
+    const cookieRevokeData = await cookieRevokeRes.json();
+    assert.strictEqual(cookieRevokeData.ok, true);
+    assert.strictEqual(cookieRevokeData.revoked, true);
+  });
 });

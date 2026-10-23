@@ -25,7 +25,7 @@ export const APP_SUBNAV = [
   { label: 'Apps', href: '/apps', status: 'preview', greenBadge: '$' },
   { label: 'Studio', href: '/studio?preview=1', status: 'working', badge: 'HOT' },
   { label: 'White-Label', href: '/white-label', status: 'working' },
-  { label: 'API Keys', href: '/api-keys', status: 'planned' },
+  { label: 'API Keys', href: '/api-keys', status: 'working' },
   { label: 'Integrations', href: '/integrations', status: 'preview' },
   { label: 'MCP & CLI', href: '/cli', status: 'working' },
   { label: 'Billing', href: '/billing', status: 'planned' },
