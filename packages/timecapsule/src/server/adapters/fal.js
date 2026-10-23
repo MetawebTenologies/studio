@@ -207,7 +207,17 @@ export async function pollFalTaskStatus(job, options = {}) {
   const fetchFn = options.fetchImpl || globalThis.fetch.bind(globalThis);
   const baseUrl = getFalBaseUrl();
   const endpoint = String(job.resolved_provider_model || job.model || 'fal-ai/flux/dev').trim();
-  const statusUrl = `${baseUrl}/${endpoint.replace(/^\/+/, '')}/requests/${job.provider_job_id}/status`;
+
+  const submitDetails = job.provider_details?.submit || job.provider_details || {};
+  let statusUrl = submitDetails.status_url;
+  if (!statusUrl) {
+    // Fal queue path: if endpoint has subpath (e.g. "fal-ai/flux/dev" or "fal-ai/flux/schnell"),
+    // Fal's queue root is the base model path (e.g. "fal-ai/flux")
+    const appEndpoint = endpoint.includes('/') && endpoint.split('/').length > 2
+      ? endpoint.substring(0, endpoint.lastIndexOf('/'))
+      : endpoint;
+    statusUrl = `${baseUrl}/${appEndpoint.replace(/^\/+/, '')}/requests/${job.provider_job_id}/status`;
+  }
 
   let res;
   try {
@@ -259,7 +269,11 @@ export async function pollFalTaskStatus(job, options = {}) {
 
   if (state === 'COMPLETED') {
     // Fetch final result
-    const resultUrl = `${baseUrl}/${endpoint.replace(/^\/+/, '')}/requests/${job.provider_job_id}`;
+    const resultUrl =
+      submitDetails.response_url ||
+      (statusUrl.endsWith('/status')
+        ? statusUrl.replace(/\/status$/, '')
+        : `${baseUrl}/${endpoint.replace(/^\/+/, '')}/requests/${job.provider_job_id}`);
     const resultRes = await fetchFn(resultUrl, {
       method: 'GET',
       headers: {

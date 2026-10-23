@@ -68,6 +68,7 @@ function formatJobRow(row) {
     output: row.output_json || null,
     outputs: row.outputs_json || [],
     error: row.error || null,
+    provider_details: row.provider_details_private_json || {},
     created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,

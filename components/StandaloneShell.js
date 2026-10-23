@@ -98,10 +98,15 @@ function LibraryStudioView({ onNavigateTab, isPreviewMode }) {
       if (res.ok) {
         const data = await res.json();
         (data.items || []).forEach((job) => {
-          if (job.output?.url) {
+          const itemUrl =
+            job.output?.url ||
+            (Array.isArray(job.outputs) && (job.outputs[0]?.url || job.outputs[0]?.delivery_url)) ||
+            job.output?.delivery_url ||
+            (typeof job.output === 'string' ? job.output : null);
+          if (itemUrl) {
             collected.push({
               id: job.job_id,
-              url: job.output.url,
+              url: itemUrl,
               prompt: job.inputs?.prompt || '',
               model: job.model,
               kind: ['video', 'i2v', 'v2v', 'lipsync'].includes(job.modality) ? 'video' : 'image',

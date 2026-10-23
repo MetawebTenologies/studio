@@ -404,19 +404,44 @@ export default function ModelPlayground({
     sse.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.status === 'processing') {
+        const status = String(payload.status || payload.type || '').toLowerCase();
+        const isSucceeded =
+          status === 'succeeded' ||
+          status === 'completed' ||
+          status.includes('succeeded');
+        const isFailed = status === 'failed' || status.includes('failed');
+        const isProcessing =
+          status === 'running' ||
+          status === 'processing' ||
+          status.includes('progress');
+
+        if (isProcessing) {
           setExecState('processing');
-          setProgress((prev) => Math.min(prev + 20, 85));
+          if (payload.progress) {
+            setProgress(Math.round(payload.progress * 100));
+          } else {
+            setProgress((prev) => Math.min(prev + 20, 85));
+          }
           setStatusMessage(payload.message || 'Processing model execution...');
-        } else if (payload.status === 'completed') {
+        } else if (isSucceeded) {
           setProgress(100);
           setExecState('completed');
           setStatusMessage('Generation completed.');
           sse.close();
 
+          const outUrl =
+            payload.data?.delivery_url ||
+            payload.data?.url ||
+            payload.output?.delivery_url ||
+            payload.output?.url ||
+            (Array.isArray(payload.outputs) &&
+              (payload.outputs[0]?.delivery_url || payload.outputs[0]?.url)) ||
+            (Array.isArray(payload.data?.urls) && payload.data.urls[0]) ||
+            (isVideo ? '/samples/demo.mp4' : '/samples/sample_image_1.webp');
+
           const result = {
             id: jobId,
-            url: payload.output?.url || (isVideo ? '/samples/demo.mp4' : '/samples/sample_image_1.webp'),
+            url: outUrl,
             kind: isVideo ? 'video' : 'image',
             prompt,
             aspectRatio,
@@ -438,9 +463,9 @@ export default function ModelPlayground({
               }
             })
             .catch(() => {});
-        } else if (payload.status === 'failed') {
+        } else if (isFailed) {
           setExecState('failed');
-          setErrorMessage(payload.error || 'Job failed during execution.');
+          setErrorMessage(payload.error || payload.data?.error || 'Job failed during execution.');
           sse.close();
         }
       } catch {
@@ -456,12 +481,20 @@ export default function ModelPlayground({
           const pollRes = await fetch(`/api/v1/generations/${jobId}`);
           if (pollRes.ok) {
             const jobData = await pollRes.json();
-            if (jobData.status === 'completed' && jobData.output?.url) {
+            const isTerminalSuccess =
+              jobData.status === 'succeeded' || jobData.status === 'completed';
+            const outUrl =
+              jobData.output?.delivery_url ||
+              jobData.output?.url ||
+              (Array.isArray(jobData.outputs) &&
+                (jobData.outputs[0]?.delivery_url || jobData.outputs[0]?.url));
+
+            if (isTerminalSuccess && outUrl) {
               setProgress(100);
               setExecState('completed');
               setOutputAsset({
                 id: jobId,
-                url: jobData.output.url,
+                url: outUrl,
                 kind: isVideo ? 'video' : 'image',
                 prompt,
                 aspectRatio,
@@ -469,6 +502,9 @@ export default function ModelPlayground({
                 model: slug,
                 timestamp: new Date().toISOString(),
               });
+            } else if (jobData.status === 'failed') {
+              setExecState('failed');
+              setErrorMessage(jobData.error || 'Job execution failed');
             }
           }
         } catch {
