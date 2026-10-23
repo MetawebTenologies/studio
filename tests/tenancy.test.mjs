@@ -64,6 +64,29 @@ import {
   validateBrandingAtWriteTime,
   sanitizeBrandingAtReadTime,
 } from '../packages/timecapsule/src/server/brandingValidation.js';
+import {
+  checkRateLimit,
+  resetRateLimits,
+  getClientIdentifier,
+} from '../packages/timecapsule/src/server/rateLimit.js';
+import {
+  isOriginAllowed,
+  getCorsHeaders,
+  handleCorsPreflight,
+} from '../packages/timecapsule/src/server/cors.js';
+import {
+  scrubSecrets,
+  sanitizeError,
+  assertNoExposedSecrets,
+} from '../packages/timecapsule/src/server/credentials.js';
+import {
+  validateFileMagicBytes,
+  POST as postUploadRoute,
+  GET as getUploadsRoute,
+} from '../app/api/v1/uploads/route.js';
+import { DELETE as deleteUploadRoute } from '../app/api/v1/uploads/[assetId]/route.js';
+import { POST as postSessionRoute } from '../app/api/v1/session/route.js';
+import { POST as postGenerationsRoute } from '../app/api/v1/generations/route.js';
 
 test('White-Label W0: Database schema & migration 004 verification', async (t) => {
   assertDisposableTestDatabase();
@@ -1746,4 +1769,279 @@ test('Task S6: Anonymous client headers x-timecapsule-tenant-id/slug cannot spoo
       process.env.TIMECAPSULE_TEST_MODE = originalTestMode;
     }
   }
+});
+
+test('Security Task B1: Rate-Limiting & Abuse Prevention (Token bucket/sliding window, 429 Retry-After, IP/user isolation)', async (t) => {
+  resetRateLimits();
+
+  // 1. Client under limit passes successfully
+  const dummyReq = new Request('http://localhost:3000/api/v1/generations', {
+    headers: { 'x-forwarded-for': '203.0.113.10' },
+  });
+
+  const status1 = checkRateLimit(dummyReq, { action: 'auth', limit: 3, windowMs: 10000 });
+  assert.equal(status1.remaining, 2);
+  assert.equal(status1.headers['X-RateLimit-Limit'], '3');
+  assert.equal(status1.headers['X-RateLimit-Remaining'], '2');
+
+  const status2 = checkRateLimit(dummyReq, { action: 'auth', limit: 3, windowMs: 10000 });
+  assert.equal(status2.remaining, 1);
+
+  const status3 = checkRateLimit(dummyReq, { action: 'auth', limit: 3, windowMs: 10000 });
+  assert.equal(status3.remaining, 0);
+
+  // 4th request must throw 429 with Retry-After header
+  assert.throws(
+    () => {
+      checkRateLimit(dummyReq, { action: 'auth', limit: 3, windowMs: 10000 });
+    },
+    (err) => {
+      assert.equal(err.statusCode, 429);
+      assert.equal(err.code, 'RATE_LIMIT_EXCEEDED');
+      assert.ok(Number(err.headers['Retry-After']) >= 1);
+      return true;
+    },
+    'Exceeding limit must throw RATE_LIMIT_EXCEEDED with 429'
+  );
+
+  // 2. Different client IP has a separate bucket (no noisy neighbor starvation)
+  const anotherClientReq = new Request('http://localhost:3000/api/v1/generations', {
+    headers: { 'x-forwarded-for': '203.0.113.20' },
+  });
+  const anotherStatus = checkRateLimit(anotherClientReq, { action: 'auth', limit: 3, windowMs: 10000 });
+  assert.equal(anotherStatus.remaining, 2, 'Separate IP address has distinct bucket');
+
+  // 3. User session keying isolates authenticated users
+  const userAReq = new Request('http://localhost:3000/api/v1/generations');
+  const userBReq = new Request('http://localhost:3000/api/v1/generations');
+  const sessionA = { user_id: 'usr_alpha', tenant_id: 'tnt_1' };
+  const sessionB = { user_id: 'usr_beta', tenant_id: 'tnt_1' };
+
+  checkRateLimit(userAReq, { action: 'generation', limit: 1, session: sessionA });
+  assert.throws(
+    () => checkRateLimit(userAReq, { action: 'generation', limit: 1, session: sessionA }),
+    (err) => err.statusCode === 429
+  );
+  // User B still has their full quota
+  const uBStatus = checkRateLimit(userBReq, { action: 'generation', limit: 1, session: sessionB });
+  assert.equal(uBStatus.remaining, 0);
+
+  resetRateLimits();
+});
+
+test('Security Task B2: CORS & Origin Isolation (Strict preflight OPTIONS, allowed origin reflection, unauthorized rejection)', async (t) => {
+  const originalAllowedOrigins = process.env.ALLOWED_ORIGINS;
+  try {
+    process.env.ALLOWED_ORIGINS = 'https://partner.timecapsule.studio,https://custom-studio.com';
+
+    // 1. Same origin request is allowed
+    const sameOriginReq = new Request('http://localhost:3000/api/v1/models', {
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000' },
+    });
+    const sameOriginEval = isOriginAllowed(sameOriginReq);
+    assert.equal(sameOriginEval.allowed, true);
+    assert.equal(sameOriginEval.isSameOrigin, true);
+
+    // 2. Explicitly allowed origin reflects CORS headers
+    const allowedPartnerReq = new Request('http://localhost:3000/api/v1/models', {
+      headers: { host: 'localhost:3000', origin: 'https://partner.timecapsule.studio' },
+    });
+    const partnerEval = isOriginAllowed(allowedPartnerReq);
+    assert.equal(partnerEval.allowed, true);
+    assert.equal(partnerEval.isSameOrigin, false);
+
+    const partnerHeaders = getCorsHeaders(allowedPartnerReq);
+    assert.equal(partnerHeaders['Access-Control-Allow-Origin'], 'https://partner.timecapsule.studio');
+    assert.equal(partnerHeaders['Access-Control-Allow-Credentials'], 'true');
+
+    // 3. Unauthorized attacker origin is rejected
+    const evilOriginReq = new Request('http://localhost:3000/api/v1/models', {
+      headers: { host: 'localhost:3000', origin: 'https://evil-attacker-site.com' },
+    });
+    const evilEval = isOriginAllowed(evilOriginReq);
+    assert.equal(evilEval.allowed, false);
+
+    const evilHeaders = getCorsHeaders(evilOriginReq);
+    assert.equal(evilHeaders['Access-Control-Allow-Origin'], undefined, 'Unauthorized origin does not receive Allow-Origin header');
+
+    // 4. Preflight OPTIONS for evil origin returns 403 Forbidden
+    const evilPreflightReq = new Request('http://localhost:3000/api/v1/generations', {
+      method: 'OPTIONS',
+      headers: {
+        host: 'localhost:3000',
+        origin: 'https://evil-attacker-site.com',
+        'access-control-request-method': 'POST',
+      },
+    });
+    const preflightEvilRes = handleCorsPreflight(evilPreflightReq);
+    assert.equal(preflightEvilRes.status, 403);
+    const evilPreflightData = await preflightEvilRes.json();
+    assert.equal(evilPreflightData.code, 'CORS_ORIGIN_DENIED');
+
+    // 5. Preflight OPTIONS for allowed origin returns 204 No Content
+    const allowedPreflightReq = new Request('http://localhost:3000/api/v1/generations', {
+      method: 'OPTIONS',
+      headers: {
+        host: 'localhost:3000',
+        origin: 'https://custom-studio.com',
+        'access-control-request-method': 'POST',
+      },
+    });
+    const preflightAllowedRes = handleCorsPreflight(allowedPreflightReq);
+    assert.equal(preflightAllowedRes.status, 204);
+    assert.equal(preflightAllowedRes.headers.get('Access-Control-Allow-Origin'), 'https://custom-studio.com');
+    assert.equal(preflightAllowedRes.headers.get('Access-Control-Allow-Credentials'), 'true');
+    assert.ok(preflightAllowedRes.headers.get('Access-Control-Allow-Methods').includes('POST'));
+  } finally {
+    process.env.ALLOWED_ORIGINS = originalAllowedOrigins;
+  }
+});
+
+test('Security Task B3: Credential Handling & Secret Scrubbing (Masking API keys, tokens, and DB connection strings)', async (t) => {
+  // 1. Database URL with raw credentials is scrubbed
+  const rawDbUrl = 'postgresql://timecapsule_admin:SuperSecretPass123!@localhost:5432/timecapsule_prod';
+  const scrubbedDb = scrubSecrets({ databaseUrl: rawDbUrl });
+  assert.equal(
+    scrubbedDb.databaseUrl,
+    'postgresql://timecapsule_admin:[REDACTED]@localhost:5432/timecapsule_prod',
+    'Database passwords must be scrubbed from connection strings'
+  );
+
+  // 2. Sensitive object keys are scrubbed
+  const payloadWithSecrets = {
+    user: 'tester',
+    api_key: 'muapi-sk-live-1234567890abcdef',
+    token: 'jwt.header.payload.signature',
+    credentials: {
+      password: 'mypassword',
+      nested_key: 'public_value',
+    },
+    headers: {
+      authorization: 'Bearer super_secret_access_token_12345',
+    },
+  };
+  const cleanPayload = scrubSecrets(payloadWithSecrets);
+  assert.equal(cleanPayload.api_key, '[REDACTED]');
+  assert.equal(cleanPayload.token, '[REDACTED]');
+  assert.equal(cleanPayload.credentials.password, '[REDACTED]');
+  assert.equal(cleanPayload.credentials.nested_key, 'public_value');
+  assert.equal(cleanPayload.headers.authorization, '[REDACTED]');
+
+  // 3. assertNoExposedSecrets catches leaks
+  assert.throws(
+    () => assertNoExposedSecrets('Connection error: postgresql://admin:p@ssword@db.host:5432/db failed'),
+    (err) => err.message.includes('database credentials detected')
+  );
+
+  // 4. sanitizeError in production shields internal error stacks and 5xx details
+  const originalEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    const internalErr = new Error('Database connection failed at postgresql://user:pass@internal.db:5432/db');
+    internalErr.statusCode = 500;
+    const safeRes = sanitizeError(internalErr);
+    assert.equal(safeRes.statusCode, 500);
+    assert.equal(safeRes.error, 'An unexpected server error occurred. Please try again later.');
+    assert.ok(!safeRes.error.includes('pass'));
+    assert.ok(!safeRes.error.includes('internal.db'));
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+  }
+});
+
+test('Task C1 & C2: User-Scoped Uploads Deletion and No Source URL Exposure', async (t) => {
+  assertDisposableTestDatabase();
+  process.env.TIMECAPSULE_SESSION_SECRET = 'checkpoint3a-secret-value-at-least-32-bytes';
+  process.env.TIMECAPSULE_TEST_MODE = '1';
+  await runMigrations();
+  await resetStoreForTests();
+
+  const tenantId = 'tnt_scope_test';
+  await createTenant({ tenantId, slug: 'scope-test', name: 'Scope Test Studio' });
+
+  const tokenUser1 = issueTenantSessionToken({ tenantId, userId: 'usr_owner_1', role: 'end_user' });
+  const tokenUser2 = issueTenantSessionToken({ tenantId, userId: 'usr_stranger_2', role: 'end_user' });
+  const tokenAdmin = issueTenantSessionToken({ tenantId, userId: 'usr_admin', role: 'admin' });
+
+  // 1. User 1 uploads an asset
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03]);
+  const postReq = new Request('http://localhost:3000/api/v1/uploads', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timecapsule-CSRF': '1',
+      cookie: `tc_session=${tokenUser1}`,
+    },
+    body: JSON.stringify({
+      dataUrl: `data:image/png;base64,${pngBytes.toString('base64')}`,
+      contentType: 'image/png',
+      filename: 'my_private_ref.png',
+    }),
+  });
+  const postRes = await postUploadRoute(postReq);
+  const postData = await postRes.json();
+  assert.equal(postRes.status, 200);
+  const assetId = postData.asset_id;
+
+  // 2. User 2 (same tenant, different user) attempts to DELETE asset -> 403 Forbidden (Task C1)
+  const delReqUser2 = new Request(`http://localhost:3000/api/v1/uploads/${assetId}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Timecapsule-CSRF': '1',
+      cookie: `tc_session=${tokenUser2}`,
+    },
+  });
+  const delResUser2 = await deleteUploadRoute(delReqUser2, { params: Promise.resolve({ assetId }) });
+  assert.equal(delResUser2.status, 403, 'Same-tenant different-user delete must return 403');
+  const delDataUser2 = await delResUser2.json();
+  assert.equal(delDataUser2.code, 'FORBIDDEN_ASSET_DELETE');
+
+  // 3. User 1 lists uploads: GET /api/v1/uploads must NOT return source_url (Task C2)
+  const listReq = new Request('http://localhost:3000/api/v1/uploads?limit=invalid_nan', {
+    method: 'GET',
+    headers: {
+      cookie: `tc_session=${tokenUser1}`,
+    },
+  });
+  const listRes = await getUploadsRoute(listReq);
+  assert.equal(listRes.status, 200);
+  const listData = await listRes.json();
+  assert.equal(listData.ok, true);
+  const found = listData.uploads.find((u) => u.asset_id === assetId);
+  assert.ok(found);
+  assert.equal(found.source_url, undefined, 'source_url must NOT be exposed in GET /api/v1/uploads (Task C2)');
+  assert.ok(found.url);
+  assert.equal(found.filename, 'my_private_ref.png');
+
+  // 4. Admin deletes the asset -> 200 OK (Task C1)
+  const delReqAdmin = new Request(`http://localhost:3000/api/v1/uploads/${assetId}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Timecapsule-CSRF': '1',
+      cookie: `tc_session=${tokenAdmin}`,
+    },
+  });
+  const delResAdmin = await deleteUploadRoute(delReqAdmin, { params: Promise.resolve({ assetId }) });
+  assert.equal(delResAdmin.status, 200, 'Admin can delete any tenant asset');
+  const delDataAdmin = await delResAdmin.json();
+  assert.equal(delDataAdmin.deleted, true);
+});
+
+test('Task C3: validateFileMagicBytes fails closed for unhandled MIME types', async (t) => {
+  // Valid PNG passes
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  assert.equal(validateFileMagicBytes(pngBytes, 'image/png'), true);
+
+  // Unhandled MIME type fails closed (throws 415 MAGIC_BYTE_MISMATCH)
+  assert.throws(
+    () => {
+      validateFileMagicBytes(Buffer.from('arbitrary binary payload header'), 'application/x-shockwave-flash');
+    },
+    (err) => {
+      assert.equal(err.statusCode, 415);
+      assert.equal(err.code, 'MAGIC_BYTE_MISMATCH');
+      return true;
+    },
+    'validateFileMagicBytes must fail closed on unhandled MIME types (Task C3)'
+  );
 });

@@ -2,6 +2,14 @@ import crypto from 'crypto';
 import { resolveTenantFromRequest } from '../../../../../packages/timecapsule/src/server/tenancy.js';
 import { extractTokenFromRequest, verifySessionToken } from '../../../../../packages/timecapsule/src/server/auth.js';
 import { sanitizeBrandingAtReadTime } from '../../../../../packages/timecapsule/src/server/brandingValidation.js';
+import { handleCorsPreflight, getCorsHeaders } from '../../../../../packages/timecapsule/src/server/cors.js';
+import { sanitizeError } from '../../../../../packages/timecapsule/src/server/credentials.js';
+
+export async function OPTIONS(request) {
+  const preflight = handleCorsPreflight(request);
+  if (preflight) return preflight;
+  return new Response(null, { status: 204 });
+}
 
 // Explicit public whitelist for tenant configuration (P0-2 / S5)
 const ALLOWED_PUBLIC_FLAGS = new Set([
@@ -41,6 +49,7 @@ export function sanitizePublicTenantConfig(tenant) {
 }
 
 export async function GET(request) {
+  const corsHeaders = getCorsHeaders(request);
   try {
     const token = extractTokenFromRequest(request);
     const session = verifySessionToken(token);
@@ -64,6 +73,7 @@ export async function GET(request) {
           'Cache-Control': 'private, max-age=60',
           ETag: etag,
           Vary: 'Cookie, Authorization, Host',
+          ...corsHeaders,
         },
       });
     }
@@ -73,15 +83,18 @@ export async function GET(request) {
         'Cache-Control': 'private, max-age=60',
         ETag: etag,
         Vary: 'Cookie, Authorization, Host',
+        ...corsHeaders,
       },
     });
   } catch (err) {
+    const safe = sanitizeError(err, err.statusCode || 500);
     return Response.json(
-      { ok: false, error: err.message, code: err.code || 'INTERNAL_ERROR' },
+      { ok: false, error: safe.error, code: safe.code },
       {
-        status: err.statusCode || 500,
+        status: safe.statusCode,
         headers: {
           'Cache-Control': 'private, no-cache, no-store, max-age=0',
+          ...corsHeaders,
         },
       }
     );

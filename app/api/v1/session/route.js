@@ -5,10 +5,20 @@ import {
   verifyMutationOrigin,
 } from '../../../../packages/timecapsule/src/server/auth.js';
 import { getTenantCredits } from '../../../../packages/timecapsule/src/server/store.js';
+import { checkRateLimit } from '../../../../packages/timecapsule/src/server/rateLimit.js';
+import { handleCorsPreflight, getCorsHeaders } from '../../../../packages/timecapsule/src/server/cors.js';
+import { scrubSecrets, sanitizeError } from '../../../../packages/timecapsule/src/server/credentials.js';
 
 const SESSION_MAX_AGE_SECONDS = 8 * 3600;
 
+export async function OPTIONS(request) {
+  const preflight = handleCorsPreflight(request);
+  if (preflight) return preflight;
+  return new Response(null, { status: 204 });
+}
+
 export async function GET(request) {
+  const corsHeaders = getCorsHeaders(request);
   try {
     const session = await requireSession(request);
     const credits = await getTenantCredits(session.tenant_id);
@@ -28,21 +38,24 @@ export async function GET(request) {
       {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
+          ...corsHeaders,
         },
       }
     );
   } catch (err) {
+    const safe = sanitizeError(err, 401);
     return Response.json(
       {
         ok: false,
         authenticated: false,
-        code: err.code || 'UNAUTHORIZED',
-        error: err.message || 'Authentication required',
+        code: safe.code || 'UNAUTHORIZED',
+        error: safe.error || 'Authentication required',
       },
       {
-        status: err.statusCode || 401,
+        status: safe.statusCode,
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
+          ...corsHeaders,
         },
       }
     );
@@ -50,8 +63,15 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const corsHeaders = getCorsHeaders(request);
+  let rateHeaders = {};
   try {
     verifyMutationOrigin(request);
+
+    // Abuse prevention & rate limiting (Security Task B1 / S3)
+    const rateStatus = checkRateLimit(request, { action: 'auth' });
+    rateHeaders = rateStatus.headers;
+
     const body = await request.json().catch(() => ({}));
     const submittedCredential = String(
       body.access_key || body.preview_key || body.access_code || ''
@@ -70,27 +90,32 @@ export async function POST(request) {
         ok: true,
         auth_mode: 'private_preview',
         notice: 'Single-tenant private-preview access only (not multi-tenant authentication).',
-        session: identity,
+        session: scrubSecrets(identity),
         credits,
       },
       {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
           'Set-Cookie': cookieValue,
+          ...rateHeaders,
+          ...corsHeaders,
         },
       }
     );
   } catch (err) {
+    const safe = sanitizeError(err, 401);
     return Response.json(
       {
         ok: false,
-        code: err.code || 'AUTH_FAILED',
-        error: err.message || 'Could not establish private-preview session',
+        code: safe.code || 'AUTH_FAILED',
+        error: safe.error || 'Could not establish private-preview session',
       },
       {
-        status: err.statusCode || 401,
+        status: safe.statusCode,
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
+          ...(err.headers || {}),
+          ...corsHeaders,
         },
       }
     );
@@ -98,6 +123,7 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  const corsHeaders = getCorsHeaders(request);
   try {
     verifyMutationOrigin(request);
     const clearCookie =
@@ -108,15 +134,20 @@ export async function DELETE(request) {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
           'Set-Cookie': clearCookie,
+          ...corsHeaders,
         },
       }
     );
   } catch (err) {
+    const safe = sanitizeError(err, 403);
     return Response.json(
-      { ok: false, code: err.code || 'CSRF_ERROR', error: err.message },
+      { ok: false, code: safe.code || 'CSRF_ERROR', error: safe.error },
       {
-        status: err.statusCode || 403,
-        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        status: safe.statusCode,
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          ...corsHeaders,
+        },
       }
     );
   }

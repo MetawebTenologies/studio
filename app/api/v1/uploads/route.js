@@ -6,6 +6,15 @@ import { registerAsset, listTenantUploads } from '../../../../packages/timecapsu
 import { uploadFileToMuapi } from '../../../../packages/timecapsule/src/server/adapters/muapi.js';
 import { uploadFileToKie } from '../../../../packages/timecapsule/src/server/adapters/kie.js';
 import { validateExternalMediaUrl } from '../../../../packages/timecapsule/src/server/media.js';
+import { checkRateLimit } from '../../../../packages/timecapsule/src/server/rateLimit.js';
+import { handleCorsPreflight, getCorsHeaders } from '../../../../packages/timecapsule/src/server/cors.js';
+import { sanitizeError } from '../../../../packages/timecapsule/src/server/credentials.js';
+
+export async function OPTIONS(request) {
+  const preflight = handleCorsPreflight(request);
+  if (preflight) return preflight;
+  return new Response(null, { status: 204 });
+}
 
 export const ALLOWED_UPLOAD_MIME_LIMITS = Object.freeze({
   'image/jpeg': 10 * 1024 * 1024, // 10 MB
@@ -133,7 +142,12 @@ export function validateFileMagicBytes(buffer, contentType) {
     return true;
   }
 
-  return true;
+  // Task C3: Fail-closed for any MIME type not explicitly handled.
+  // Note: Remote-URL uploads cannot be signature-checked at write time and rely strictly on SSRF validation.
+  const err = new Error(`File signature verification failed: unhandled or unrecognized MIME type "${mime}".`);
+  err.code = 'MAGIC_BYTE_MISMATCH';
+  err.statusCode = 415;
+  throw err;
 }
 
 function parseDataUrlPayload(dataUrl, declaredContentType) {
@@ -194,9 +208,15 @@ function resolveUploadProvider(requestedProvider) {
 }
 
 export async function POST(request) {
+  const corsHeaders = getCorsHeaders(request);
+  let rateHeaders = {};
   try {
     verifyMutationOrigin(request);
     const session = await requireSession(request);
+
+    // Abuse prevention & rate limiting (Security Task B1)
+    const rateStatus = checkRateLimit(request, { action: 'uploads', session });
+    rateHeaders = rateStatus.headers;
 
     const reqContentType = (request.headers.get('content-type') || '').toLowerCase();
     let buffer;
@@ -361,28 +381,46 @@ export async function POST(request) {
         size_bytes: buffer.byteLength,
       },
       {
-        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          ...rateHeaders,
+          ...corsHeaders,
+        },
       }
     );
   } catch (err) {
+    const safe = sanitizeError(err, err.statusCode || err.status || 500);
     return Response.json(
       {
-        error: err.message || 'Upload failed',
-        code: err.code || 'UPLOAD_ERROR',
+        error: safe.error,
+        code: safe.code,
       },
       {
-        status: err.statusCode || err.status || 500,
-        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        status: safe.statusCode,
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          ...(err.headers || {}),
+          ...corsHeaders,
+        },
       }
     );
   }
 }
 
 export async function GET(request) {
+  const corsHeaders = getCorsHeaders(request);
   try {
     const session = await requireSession(request);
+    checkRateLimit(request, { action: 'default', session });
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '50', 10)), 100);
+
+    // Validate limit parameter (Task C2: handle NaN and non-positive numbers gracefully)
+    const rawLimit = searchParams.get('limit');
+    let parsedLimit = parseInt(rawLimit || '50', 10);
+    if (isNaN(parsedLimit) || parsedLimit <= 0) {
+      parsedLimit = 50;
+    }
+    const limit = Math.min(Math.max(1, parsedLimit), 100);
     const cursor = searchParams.get('cursor') || null;
 
     const uploads = await listTenantUploads({
@@ -399,7 +437,6 @@ export async function GET(request) {
         uploads: uploads.map((u) => ({
           asset_id: u.asset_id,
           url: u.url,
-          source_url: u.source_url,
           filename: u.filename,
           content_type: u.content_type,
           created_at: u.created_at,
@@ -408,18 +445,26 @@ export async function GET(request) {
         })),
       },
       {
-        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          ...corsHeaders,
+        },
       }
     );
   } catch (err) {
+    const safe = sanitizeError(err, err.statusCode || err.status || 500);
     return Response.json(
       {
-        error: err.message || 'Failed to list uploads',
-        code: err.code || 'LIST_UPLOADS_ERROR',
+        error: safe.error,
+        code: safe.code,
       },
       {
-        status: err.statusCode || err.status || 500,
-        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        status: safe.statusCode,
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+          ...(err.headers || {}),
+          ...corsHeaders,
+        },
       }
     );
   }
