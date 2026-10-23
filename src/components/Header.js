@@ -7,7 +7,7 @@ export function Header(navigate) {
 
   const navBar = document.createElement('div');
   navBar.className =
-    'w-full h-16 bg-black flex items-center justify-between px-4 md:px-6 border-b border-white/5 backdrop-blur-md bg-opacity-95';
+    'w-full h-16 bg-[#08080a] flex items-center justify-between px-4 md:px-6 border-b border-white/10 backdrop-blur-md bg-opacity-95';
 
   const leftPart = document.createElement('div');
   leftPart.className = 'flex items-center gap-8';
@@ -16,7 +16,7 @@ export function Header(navigate) {
   logoContainer.className =
     'flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform';
   logoContainer.innerHTML = `
-    <div class="w-8 h-8 bg-[#09090b] border border-[#00e5ff]/40 rounded-lg flex items-center justify-center p-1.5 shadow-lg">
+    <div class="w-8 h-8 bg-[#09090b] border border-[#00e5ff]/40 rounded-lg flex items-center justify-center p-1.5 shadow-lg shadow-[#00e5ff]/10">
       <svg viewBox="0 0 240 240" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M 36 45 H 180 V 69 H 60 V 129 H 132 V 153 H 36 Z" fill="#F5F7FA"/>
         <path d="M 108 87 H 204 V 195 H 60 V 171 H 180 V 111 H 108 Z" fill="#00E5FF"/>
@@ -25,20 +25,21 @@ export function Header(navigate) {
     <span class="text-lg font-black tracking-tight text-white uppercase">Timecapsule</span>
   `;
   logoContainer.onclick = () => {
-    navigate('library');
-    activate('Library');
+    navigate('home');
+    activate('Home');
   };
 
   const menu = document.createElement('nav');
-  menu.className = 'hidden lg:flex items-center gap-6 text-[13px] font-bold text-secondary';
-  const items = ['Library', 'Image', 'Video', 'Lip Sync', 'Cinema Studio'];
+  menu.className = 'hidden lg:flex items-center gap-6 text-[13px] font-bold text-zinc-400';
+  const items = ['Home', 'Cinema Studio', 'Video', 'Image', 'Lip Sync', 'Library'];
 
   const pageForItem = {
-    Library: 'library',
-    Image: 'image',
-    Video: 'video',
-    'Lip Sync': 'lipsync',
+    Home: 'home',
     'Cinema Studio': 'cinema',
+    Video: 'video',
+    Image: 'image',
+    'Lip Sync': 'lipsync',
+    Library: 'library',
   };
   const links = {};
 
@@ -52,7 +53,7 @@ export function Header(navigate) {
     if (!link) return;
     link.classList.add('text-white');
     const dot = document.createElement('div');
-    dot.className = 'absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary rounded-full';
+    dot.className = 'absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#00e5ff] rounded-full';
     dot.setAttribute('data-nav-dot', '1');
     link.appendChild(dot);
   };
@@ -61,7 +62,7 @@ export function Header(navigate) {
     const link = document.createElement('a');
     link.textContent = name;
     link.className = `hover:text-white transition-all cursor-pointer relative group ${
-      name === 'Library' ? 'text-white' : ''
+      name === 'Home' ? 'text-white' : ''
     }`;
 
     link.onclick = () => {
@@ -69,15 +70,22 @@ export function Header(navigate) {
       navigate(pageForItem[name]);
     };
 
-    if (name === 'Library') {
+    if (name === 'Home') {
       const dot = document.createElement('div');
-      dot.className = 'absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary rounded-full';
+      dot.className = 'absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#00e5ff] rounded-full';
       dot.setAttribute('data-nav-dot', '1');
       link.appendChild(dot);
     }
 
     links[name] = link;
     menu.appendChild(link);
+  });
+
+  // Listen to external page changes (e.g. from LandingPage CTA buttons)
+  window.addEventListener('nav-page-change', (e) => {
+    const p = e.detail?.page;
+    const item = Object.keys(pageForItem).find((k) => pageForItem[k] === p);
+    if (item) activate(item);
   });
 
   leftPart.appendChild(logoContainer);
@@ -134,7 +142,7 @@ export function Header(navigate) {
   }
 
   // Render immediately with current cached user or logged-out state
-  renderAuth(auth.currentUser);
+  renderAuth(auth?.currentUser);
 
   // Subscribe to Firebase Auth state
   onAuthUserChanged((user) => {
