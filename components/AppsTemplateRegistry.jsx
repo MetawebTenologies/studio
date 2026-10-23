@@ -13,7 +13,7 @@ const FALLBACK_TEMPLATES = [
     category: 'Product Visualization',
     description: 'Photorealistic 2D raster studio product concept staging.',
     model_id: 'nano-banana-pro',
-    status: 'published',
+    status: 'preview',
     pricing: 'tier_image_resolution_v1',
   },
   {
@@ -24,7 +24,7 @@ const FALLBACK_TEMPLATES = [
     category: 'Brand Identity',
     description: 'Raster visual insignia and minimal logo concept artwork.',
     model_id: 'nano-banana-pro',
-    status: 'published',
+    status: 'preview',
     pricing: 'tier_image_resolution_v1',
   },
 ];
@@ -41,18 +41,25 @@ export default function AppsTemplateRegistry() {
       try {
         const res = await fetch('/api/v1/templates', {
           credentials: 'same-origin',
+          cache: 'no-cache',
         });
         if (!res.ok) {
-          // If unauthenticated or preview mode, retain verified fallback catalog
+          // If unauthenticated, tenant-switched, or preview mode, retain verified fallback catalog
+          if (active) {
+            setTemplates(FALLBACK_TEMPLATES);
+          }
           return;
         }
         const data = await res.json();
         if (active && data.ok && Array.isArray(data.templates) && data.templates.length > 0) {
           setTemplates(data.templates);
+        } else if (active) {
+          setTemplates(FALLBACK_TEMPLATES);
         }
       } catch (err) {
         if (active) {
           setError(err.message);
+          setTemplates(FALLBACK_TEMPLATES);
         }
       } finally {
         if (active) {
@@ -122,8 +129,14 @@ export default function AppsTemplateRegistry() {
                 <span className="text-[11px] font-bold uppercase tracking-widest text-blue-400 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20">
                   {tmpl.category}
                 </span>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                  v{tmpl.version || 1} Published
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    tmpl.status === 'published'
+                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      : 'text-amber-300 bg-amber-400/10 border-amber-400/20'
+                  }`}
+                >
+                  v{tmpl.version || 1} {tmpl.status === 'published' ? 'Published' : 'Preview'}
                 </span>
               </div>
 

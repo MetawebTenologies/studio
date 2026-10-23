@@ -1,5 +1,6 @@
 import {
   checkExistingIdempotentJob,
+  findExistingIdempotentJob,
   createSubmissionTransaction,
   getJob,
 } from './store.js';
@@ -52,8 +53,56 @@ export async function submitGenerationJob({
   const cleanIdempotencyKey =
     idempotencyKey && String(idempotencyKey).trim() ? String(idempotencyKey).trim() : null;
 
-  // Resolve template recipe and server-side prompt synthesis if template_slug is provided
+  // 1. Check existing idempotency binding BEFORE resolving live template or provider status.
+  // This guarantees an already-accepted template request replays its original job even if
+  // the template was subsequently edited, archived, or made unavailable, and changing
+  // the template under the same idempotency key returns 409 immediately.
   const templateSlug = body.template_slug || body.inputs?.template_slug;
+  if (cleanIdempotencyKey) {
+    const existingRecord = await findExistingIdempotentJob(tenantId, cleanIdempotencyKey);
+    if (existingRecord) {
+      const existingJob = existingRecord.job;
+      const existingInputs = existingJob?.inputs || {};
+      const existingTemplateSlug = existingInputs.template_slug;
+
+      if (existingTemplateSlug || templateSlug) {
+        // Changing the template under the same idempotency key returns 409
+        if (existingTemplateSlug !== templateSlug) {
+          const err = new Error(
+            `Idempotency-Key "${cleanIdempotencyKey}" has already been used with a different request payload`
+          );
+          err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
+          err.status = 409;
+          err.statusCode = 409;
+          throw err;
+        }
+
+        const rawUserPrompt =
+          body.input_variables?.user_prompt ||
+          body.inputs?.user_prompt ||
+          body.inputs?.prompt ||
+          body.prompt ||
+          '';
+        const existingUserPrompt = existingInputs.user_prompt || '';
+
+        // Changing the user prompt under the same idempotency key returns 409
+        if (String(rawUserPrompt).trim() !== String(existingUserPrompt).trim()) {
+          const err = new Error(
+            `Idempotency-Key "${cleanIdempotencyKey}" has already been used with a different request payload`
+          );
+          err.code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
+          err.status = 409;
+          err.statusCode = 409;
+          throw err;
+        }
+
+        // Replay original accepted job without re-evaluating live template availability or duplicate billing
+        return { job: existingJob, deduplicated: true };
+      }
+    }
+  }
+
+  // Resolve template recipe and server-side prompt synthesis if template_slug is provided
   if (templateSlug) {
     const template = await getTemplateBySlug(templateSlug, tenantId);
     if (!template) {
@@ -80,6 +129,7 @@ export async function submitGenerationJob({
       ...(body.parameters || {}),
       ...(body.inputs || {}),
       prompt: synthesizedPrompt,
+      user_prompt: String(rawUserPrompt).trim(),
       template_slug: template.slug,
       template_version: template.version,
     };

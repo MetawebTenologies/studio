@@ -2344,3 +2344,215 @@ test('Template Registry Track: Server-side prompt synthesis, parameter snapshot,
     process.env.MUAPI_API_KEY = originalEnv;
   }
 });
+
+test('Template Registry Track: Idempotency replay across template edits/archival and 409 mismatch guards', async (t) => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_tmpl_idem',
+    slug: 'tmpl-idem',
+    name: 'Template Idem Tenant',
+    initialCredits: 1000,
+  });
+  const user = await createUser({
+    userId: 'usr_tmpl_idem',
+    email: 'idem@timecapsule.test',
+  });
+  await createMembership({
+    tenantId: tenant.tenant_id,
+    userId: user.user_id,
+    role: 'end_user',
+  });
+
+  const session = {
+    user_id: user.user_id,
+    tenant_id: tenant.tenant_id,
+    role: 'end_user',
+    auth_mode: 'tenant_session',
+    email_verified: true,
+  };
+
+  const originalEnv = process.env.MUAPI_API_KEY;
+  try {
+    process.env.MUAPI_API_KEY = 'muapi-test-key-contract-tested';
+
+    const idempotencyKey = 'idem_template_lifecycle_001';
+    const originalBody = {
+      template_slug: 'product-concept-pro',
+      input_variables: {
+        user_prompt: 'Matte titanium carabiner key organizer',
+      },
+    };
+
+    // 1. Initial submission succeeds and establishes idempotency binding
+    const initialRes = await submitGenerationJob({
+      session,
+      idempotencyKey,
+      body: originalBody,
+    });
+    assert.equal(initialRes.deduplicated, false);
+    const initialJob = initialRes.job;
+    assert.ok(initialJob.job_id);
+
+    // Initial tenant reservation is exactly 15 credits
+    const balanceAfterInitial = await withTenantContext(tenant.tenant_id, async (client) => {
+      const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
+      return res.rows[0];
+    });
+    assert.equal(Number(balanceAfterInitial.credits_reserved), 15);
+
+    // 2. Modify the template in app_templates (alter prompt_template AND set status = 'archived')
+    await withSystemContext(async (client) => {
+      await client.query(`
+        UPDATE app_templates
+        SET prompt_template = 'Completely different prompt harness: {user_prompt}',
+            status = 'archived'
+        WHERE slug = 'product-concept-pro'
+      `);
+    });
+
+    // Verify template is now hidden/archived from tenant query
+    const templateLookup = await getTemplateBySlug('product-concept-pro', tenant.tenant_id);
+    assert.equal(templateLookup, null, 'Template is now archived and unavailable');
+
+    // 3. Retry the EXACT SAME request with the same idempotency key
+    // Must replay the original job WITHOUT throwing 404 TEMPLATE_NOT_FOUND or 409 mismatch
+    const replayRes = await submitGenerationJob({
+      session,
+      idempotencyKey,
+      body: {
+        template_slug: 'product-concept-pro',
+        input_variables: {
+          user_prompt: 'Matte titanium carabiner key organizer',
+        },
+      },
+    });
+    assert.equal(replayRes.deduplicated, true, 'Request is recognized as duplicate replay');
+    assert.equal(replayRes.job.job_id, initialJob.job_id, 'Replays the exact original job');
+    assert.equal(replayRes.job.inputs.prompt, initialJob.inputs.prompt, 'Retains original prompt recipe snapshot');
+
+    // Retries CANNOT duplicate reservations
+    const balanceAfterReplay = await withTenantContext(tenant.tenant_id, async (client) => {
+      const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
+      return res.rows[0];
+    });
+    assert.equal(Number(balanceAfterReplay.credits_reserved), 15, 'Reserved credits remain unchanged at 15');
+
+    // 4. Changing the template under the same idempotency key returns 409
+    await assert.rejects(
+      async () => {
+        await submitGenerationJob({
+          session,
+          idempotencyKey,
+          body: {
+            template_slug: 'brand-logo-concept', // different template!
+            input_variables: {
+              user_prompt: 'Matte titanium carabiner key organizer',
+            },
+          },
+        });
+      },
+      (err) => {
+        assert.equal(err.statusCode, 409);
+        assert.equal(err.code, 'IDEMPOTENCY_PAYLOAD_MISMATCH');
+        return true;
+      },
+      'Changing template under same idempotency key must reject with 409 IDEMPOTENCY_PAYLOAD_MISMATCH'
+    );
+
+    // 5. Changing the user prompt under the same idempotency key returns 409
+    await assert.rejects(
+      async () => {
+        await submitGenerationJob({
+          session,
+          idempotencyKey,
+          body: {
+            template_slug: 'product-concept-pro',
+            input_variables: {
+              user_prompt: 'Completely different prompt content', // different prompt!
+            },
+          },
+        });
+      },
+      (err) => {
+        assert.equal(err.statusCode, 409);
+        assert.equal(err.code, 'IDEMPOTENCY_PAYLOAD_MISMATCH');
+        return true;
+      },
+      'Changing user prompt under same idempotency key must reject with 409 IDEMPOTENCY_PAYLOAD_MISMATCH'
+    );
+
+    // Reserved credits still remain unchanged at 15
+    const balanceFinal = await withTenantContext(tenant.tenant_id, async (client) => {
+      const res = await client.query('SELECT credits_reserved, credits_balance FROM tenants WHERE tenant_id = $1', [tenant.tenant_id]);
+      return res.rows[0];
+    });
+    assert.equal(Number(balanceFinal.credits_reserved), 15, 'No extra credits reserved on rejected mismatched requests');
+  } finally {
+    process.env.MUAPI_API_KEY = originalEnv;
+    // Restore starter templates
+    await withSystemContext(async (client) => {
+      const { seedStarterTemplates } = await import('../packages/timecapsule/src/server/templates.js');
+      await seedStarterTemplates(client);
+    });
+  }
+});
+
+test('Track F12/Templates: Unavailable provider configuration cannot reserve credits', async () => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_prov_unavail',
+    slug: 'prov-unavail-org',
+    name: 'Provider Unavailable Org',
+    initialCredits: 200,
+  });
+
+  const session = {
+    tenant_id: tenant.tenant_id,
+    user_id: 'usr_prov_check',
+    roles: ['reseller_admin'],
+  };
+
+  const originalMuapi = process.env.MUAPI_API_KEY;
+  delete process.env.MUAPI_API_KEY;
+
+  try {
+    await assert.rejects(
+      async () => {
+        await submitGenerationJob({
+          session,
+          idempotencyKey: 'idem_prov_unavail_test',
+          body: {
+            template_slug: 'product-concept-pro',
+            input_variables: {
+              user_prompt: 'Test prompt with missing provider key',
+            },
+          },
+        });
+      },
+      (err) => {
+        assert.equal(err.statusCode, 503);
+        assert.equal(err.code, 'PROVIDER_CREDENTIALS_MISSING');
+        return true;
+      },
+      'Must reject with 503 PROVIDER_CREDENTIALS_MISSING when provider key is missing'
+    );
+
+    // Verify tenant balance and reserved credits remain completely untouched
+    const tenantRow = await withTenantContext(tenant.tenant_id, async (client) => {
+      const res = await client.query(
+        'SELECT credits_balance, credits_reserved FROM tenants WHERE tenant_id = $1',
+        [tenant.tenant_id]
+      );
+      return res.rows[0];
+    });
+
+    assert.equal(Number(tenantRow.credits_balance), 200, 'Credits balance remains 200');
+    assert.equal(Number(tenantRow.credits_reserved), 0, 'Credits reserved remains strictly 0');
+  } finally {
+    process.env.MUAPI_API_KEY = originalMuapi;
+  }
+});

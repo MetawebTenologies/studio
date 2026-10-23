@@ -277,6 +277,29 @@ export async function checkExistingIdempotentJob(tenantId, idempotencyKey, reque
 }
 
 /**
+ * Finds an existing idempotency key record for a tenant with full stored normalized request json
+ * and associated job details without enforcing fingerprint equality up-front.
+ */
+export async function findExistingIdempotentJob(tenantId, idempotencyKey) {
+  if (!idempotencyKey) return null;
+  return withTenantContext(tenantId, async (client) => {
+    const res = await client.query(
+      `SELECT ik.request_fingerprint, ik.normalized_request_json, j.*
+       FROM idempotency_keys ik
+       JOIN jobs j ON j.tenant_id = ik.tenant_id AND j.job_id = ik.job_id
+       WHERE ik.tenant_id = $1 AND ik.idempotency_key = $2`,
+      [tenantId, idempotencyKey]
+    );
+    if (res.rowCount === 0) return null;
+    return {
+      request_fingerprint: res.rows[0].request_fingerprint,
+      normalized_request_json: res.rows[0].normalized_request_json,
+      job: formatJobRow(res.rows[0]),
+    };
+  });
+}
+
+/**
  * Creates the job, reservation, ledger entry, idempotency binding, initial job event,
  * and durable worker dispatch eligibility in a single ACID PostgreSQL transaction.
  *
