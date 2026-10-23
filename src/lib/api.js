@@ -6,6 +6,7 @@ let sessionActive = false;
 const SESSION_FLAG = 'cf_backend';
 
 export function cfBackendEnabled() {
+    if (localStorage.getItem('firebase_user_uid')) return true;
     if (!localStorage.getItem(SESSION_FLAG)) return false;
     return sessionActive || checkSession().then(ok => {
         sessionActive = ok;
@@ -193,8 +194,27 @@ export async function buildPrompt(brief, kind = 'image') {
 }
 
 export async function listLibrary() {
-    const json = await request('/library');
-    return json.items || [];
+    try {
+        const json = await request('/library');
+        return json.items || [];
+    } catch {
+        // Fallback to local user uploads/generations when on static Firebase hosting
+        try {
+            const raw = localStorage.getItem('kie_uploads');
+            if (raw) {
+                const list = JSON.parse(raw);
+                return list.map(item => ({
+                    id: item.id,
+                    url: item.uploadedUrl,
+                    thumb: item.thumbnail || item.uploadedUrl,
+                    createdAt: item.timestamp ? new Date(item.timestamp).toISOString() : new Date().toISOString(),
+                    model: item.name || 'Studio Creation',
+                    kind: item.name?.includes('video') ? 'videos' : 'images'
+                }));
+            }
+        } catch {}
+        return [];
+    }
 }
 
 export async function deleteLibraryItem(id) {

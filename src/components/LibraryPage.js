@@ -2,7 +2,7 @@
 // All media types in one place (images, videos, talking avatars), sorted with
 // the newest first. Requires a backend session; prompts sign-in otherwise.
 import { cfBackendEnabled, listLibrary } from '../lib/api.js';
-import { BackendModal } from './BackendModal.js';
+import { FirebaseSignInModal } from './FirebaseSignInModal.js';
 
 const state = { items: [], filter: 'all', error: '' };
 
@@ -147,7 +147,7 @@ export function LibraryPage() {
         `;
         page.appendChild(note);
         note.querySelector('#lib-signin-btn').onclick = () => {
-            BackendModal(async () => {
+            FirebaseSignInModal(async () => {
                 if (authNote) { authNote.remove(); authNote = null; }
                 filters.style.display = 'flex';
                 page.$pageRefresh?.();

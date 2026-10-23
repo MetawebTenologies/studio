@@ -1,3 +1,6 @@
+import { onAuthUserChanged, signOutUser } from '../lib/firebase.js';
+import { FirebaseSignInModal } from './FirebaseSignInModal.js';
+
 export function Header(navigate) {
   const header = document.createElement('header');
   header.className = 'w-full flex flex-col z-50 sticky top-0';
@@ -80,8 +83,60 @@ export function Header(navigate) {
   leftPart.appendChild(logoContainer);
   leftPart.appendChild(menu);
 
+  // Auth area in rightPart
   const rightPart = document.createElement('div');
-  rightPart.className = 'flex items-center gap-4';
+  rightPart.className = 'flex items-center gap-3';
+
+  function renderAuth(user) {
+    rightPart.innerHTML = '';
+    if (user) {
+      // User is logged in
+      const avatarContainer = document.createElement('div');
+      avatarContainer.className = 'flex items-center gap-3 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full';
+      
+      const displayName = user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'User';
+      const initial = (displayName[0] || 'U').toUpperCase();
+
+      avatarContainer.innerHTML = `
+        <div class="w-6 h-6 rounded-full bg-[#00e5ff] text-black font-extrabold text-[11px] flex items-center justify-center">
+          ${initial}
+        </div>
+        <span class="text-xs text-zinc-300 font-medium max-w-[120px] truncate">${displayName}</span>
+      `;
+
+      const signOutBtn = document.createElement('button');
+      signOutBtn.className =
+        'text-xs text-zinc-400 hover:text-white font-medium border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-full transition-all cursor-pointer';
+      signOutBtn.textContent = 'Sign Out';
+      signOutBtn.onclick = async () => {
+        await signOutUser();
+        localStorage.removeItem('firebase_user_uid');
+        localStorage.removeItem('firebase_user_email');
+        localStorage.removeItem('cf_backend');
+        window.location.reload();
+      };
+
+      rightPart.appendChild(avatarContainer);
+      rightPart.appendChild(signOutBtn);
+    } else {
+      // User is logged out: show Sign In button
+      const signInBtn = document.createElement('button');
+      signInBtn.className =
+        'bg-[#00e5ff] hover:bg-[#38bdf8] text-black font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer';
+      signInBtn.textContent = 'Sign In';
+      signInBtn.onclick = () => {
+        FirebaseSignInModal(() => {
+          window.location.reload();
+        });
+      };
+      rightPart.appendChild(signInBtn);
+    }
+  }
+
+  // Subscribe to Firebase Auth state
+  onAuthUserChanged((user) => {
+    renderAuth(user);
+  });
 
   navBar.appendChild(leftPart);
   navBar.appendChild(rightPart);
