@@ -1,4 +1,4 @@
-import { onAuthUserChanged, signOutUser } from '../lib/firebase.js';
+import { onAuthUserChanged, signOutUser, auth } from '../lib/firebase.js';
 import { FirebaseSignInModal } from './FirebaseSignInModal.js';
 
 export function Header(navigate) {
