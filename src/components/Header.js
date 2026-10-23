@@ -133,6 +133,9 @@ export function Header(navigate) {
     }
   }
 
+  // Render immediately with current cached user or logged-out state
+  renderAuth(auth.currentUser);
+
   // Subscribe to Firebase Auth state
   onAuthUserChanged((user) => {
     renderAuth(user);

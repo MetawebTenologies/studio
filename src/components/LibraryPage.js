@@ -142,7 +142,7 @@ export function LibraryPage() {
             <div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow mb-2">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/></svg>
             </div>
-            <p class="text-sm text-secondary leading-relaxed">Sign in to your content-factory account to browse the shared library.</p>
+            <p class="text-sm text-secondary leading-relaxed">Sign in with Google, Email, or Phone to access your studio library.</p>
             <button id="lib-signin-btn" class="px-6 py-3 rounded-xl bg-primary text-black text-[11px] font-black uppercase tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all">Sign in</button>
         `;
         page.appendChild(note);
