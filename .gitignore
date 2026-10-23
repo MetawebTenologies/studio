@@ -29,6 +29,8 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+# Firebase CLI cache (local deployment state, not needed in repo)
+.firebase/
 release
 scratch
 .agent/
