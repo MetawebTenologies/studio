@@ -36,6 +36,7 @@ import {
   resolveTenantFromRequest,
   enforceTenantAccess,
   assertAdminRole,
+  assertAdminRoleWithDatabaseCheck,
   extractSubdomain,
 } from '../packages/timecapsule/src/server/tenancy.js';
 import {
@@ -59,6 +60,10 @@ import { GET as getJobDetailRoute } from '../app/api/v1/generations/[jobId]/rout
 import { GET as getGenerationsRoute } from '../app/api/v1/generations/route.js';
 import { GET as getAssetRoute } from '../app/api/v1/assets/[assetId]/route.js';
 import { GET as getTenantConfigRoute, sanitizePublicTenantConfig } from '../app/api/v1/tenant/config/route.js';
+import {
+  validateBrandingAtWriteTime,
+  sanitizeBrandingAtReadTime,
+} from '../packages/timecapsule/src/server/brandingValidation.js';
 
 test('White-Label W0: Database schema & migration 004 verification', async (t) => {
   assertDisposableTestDatabase();
@@ -1369,6 +1374,8 @@ test('Task A4 Guard Test: app/api never imports withSystemContext and raw query(
 test('Task A5 Test: assertRuntimeRoleSafety refuses superuser or BYPASSRLS in production', async (t) => {
   const originalEnv = process.env.NODE_ENV;
   const originalOverride = process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE;
+  const originalDestructive = process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB;
+  const originalTestMode = process.env.TIMECAPSULE_TEST_MODE;
 
   try {
     // 1. Mock insecure role (superuser = true) under NODE_ENV=production
@@ -1427,6 +1434,316 @@ test('Task A5 Test: assertRuntimeRoleSafety refuses superuser or BYPASSRLS in pr
     process.env.NODE_ENV = originalEnv;
     if (originalOverride !== undefined) {
       process.env.TIMECAPSULE_ALLOW_INSECURE_DEV_ROLE = originalOverride;
+    }
+    if (originalDestructive !== undefined) {
+      process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB = originalDestructive;
+    }
+    if (originalTestMode !== undefined) {
+      process.env.TIMECAPSULE_TEST_MODE = originalTestMode;
+    }
+  }
+});
+
+test('Task B1: Branding validation at write and read time (rejects javascript:, CSS injection, non-hex colors)', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  // 1. Write-time rejection of non-hex primary_color
+  await assert.rejects(
+    async () => {
+      await createTenant({
+        tenantId: 'tnt_bad_color',
+        name: 'Bad Color Tenant',
+        branding: { primary_color: 'red' },
+      });
+    },
+    (err) => {
+      assert.equal(err.code, 'INVALID_BRANDING_PRIMARY_COLOR');
+      return true;
+    },
+    'createTenant must reject non-hex primary_color at write time'
+  );
+
+  // 2. Write-time rejection of javascript: logo_url
+  await assert.rejects(
+    async () => {
+      await createTenant({
+        tenantId: 'tnt_bad_logo',
+        name: 'Bad Logo Tenant',
+        branding: { logo_url: 'javascript:alert(document.cookie)' },
+      });
+    },
+    (err) => {
+      assert.equal(err.code, 'INVALID_BRANDING_LOGO_URL');
+      return true;
+    },
+    'createTenant must reject javascript: logo_url at write time'
+  );
+
+  // 3. Write-time rejection of CSS injection in font_family
+  await assert.rejects(
+    async () => {
+      await createTenant({
+        tenantId: 'tnt_bad_font',
+        name: 'Bad Font Tenant',
+        branding: { font_family: 'Inter; } body { display:none } /*' },
+      });
+    },
+    (err) => {
+      assert.equal(err.code, 'INVALID_BRANDING_FONT_FAMILY');
+      return true;
+    },
+    'createTenant must reject CSS injection in font_family at write time'
+  );
+
+  // 4. Valid branding writes succeed cleanly
+  const validTenant = await createTenant({
+    tenantId: 'tnt_valid_branding',
+    slug: 'valid-branding',
+    name: 'Valid Branding Studio',
+    branding: {
+      app_name: 'Studio Prime',
+      primary_color: '#00e5ff',
+      secondary_color: '#9b8cff',
+      logo_url: 'https://cdn.timecapsule.ai/logo.png',
+      favicon_url: '/favicon.svg',
+      font_family: 'Inter, sans-serif',
+    },
+  });
+  assert.equal(validTenant.branding.primary_color, '#00e5ff');
+
+  // 5. Read-time sanitization strips dirty DB records if injected directly into database
+  const dirtyBranding = {
+    app_name: '<script>alert(1)</script>Injected',
+    primary_color: '#00e5ff; background: red;',
+    secondary_color: '#9b8cff',
+    logo_url: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
+    favicon_url: 'https://cdn.timecapsule.ai/favicon.ico',
+    font_family: 'Roboto"; @import url("evil.css");',
+    theme_preset: 'cyberpunk',
+  };
+  const sanitized = sanitizeBrandingAtReadTime(dirtyBranding);
+  assert.equal(sanitized.primary_color, undefined, 'Invalid color with CSS injection stripped');
+  assert.equal(sanitized.secondary_color, '#9b8cff');
+  assert.equal(sanitized.logo_url, undefined, 'data: URI stripped at read time');
+  assert.equal(sanitized.favicon_url, 'https://cdn.timecapsule.ai/favicon.ico');
+  assert.equal(sanitized.font_family, undefined, 'Font with CSS injection stripped at read time');
+  assert.equal(sanitized.app_name, undefined, 'app_name with HTML tags stripped');
+  assert.equal(sanitized.theme_preset, 'cyberpunk');
+});
+
+test('Task B3: /api/v1/tenant/config returns private max-age=60 with deterministic ETag and 304 Not Modified', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_etag_test',
+    slug: 'etag-studio',
+    name: 'ETag Studio',
+    status: 'active',
+    branding: {
+      app_name: 'ETag App',
+      primary_color: '#00e5ff',
+    },
+  });
+
+  // First request: returns 200 with Cache-Control and ETag header
+  const req1 = new Request('http://localhost:3000/api/v1/tenant/config', {
+    method: 'GET',
+    headers: {
+      'x-timecapsule-tenant-id': tenant.tenant_id,
+    },
+  });
+
+  const res1 = await getTenantConfigRoute(req1);
+  assert.equal(res1.status, 200);
+
+  const cacheControl = res1.headers.get('cache-control') || '';
+  assert.ok(cacheControl.includes('private'), 'Cache-Control must be private');
+  assert.ok(cacheControl.includes('max-age=60'), 'Cache-Control must specify max-age=60');
+
+  const etag = res1.headers.get('etag');
+  assert.ok(etag && etag.startsWith('W/"'), 'ETag must be returned as weak validator');
+
+  // Second request: If-None-Match matches ETag -> returns 304 Not Modified with empty body
+  const req2 = new Request('http://localhost:3000/api/v1/tenant/config', {
+    method: 'GET',
+    headers: {
+      'x-timecapsule-tenant-id': tenant.tenant_id,
+      'if-none-match': etag,
+    },
+  });
+
+  const res2 = await getTenantConfigRoute(req2);
+  assert.equal(res2.status, 304, 'Server must return 304 Not Modified when ETag matches');
+  assert.equal(res2.headers.get('etag'), etag);
+  const text2 = await res2.text();
+  assert.equal(text2, '', '304 response body must be empty');
+});
+
+test('Task S3: Recheck user role in database on privileged operations (assertAdminRole rejects revoked/downgraded role)', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_s3_audit',
+    slug: 's3-audit',
+    name: 'S3 Audit Studio',
+  });
+
+  const user = await createUser({
+    userId: 'usr_s3_admin',
+    email: 'admin@s3audit.com',
+  });
+
+  // Initially active platform_admin membership in database
+  await createMembership({
+    userId: user.user_id,
+    tenantId: tenant.tenant_id,
+    role: 'platform_admin',
+    status: 'active',
+  });
+
+  // Client holds session claiming platform_admin
+  const session = {
+    user_id: user.user_id,
+    tenant_id: tenant.tenant_id,
+    role: 'platform_admin',
+  };
+
+  // 1. Initial check passes
+  await assertAdminRoleWithDatabaseCheck(session);
+
+  // 2. User role is downgraded to 'end_user' in PostgreSQL
+  await createMembership({
+    userId: user.user_id,
+    tenantId: tenant.tenant_id,
+    role: 'end_user',
+    status: 'active',
+  });
+
+  // Rechecking DB strictly rejects the stale session role
+  await assert.rejects(
+    async () => {
+      await assertAdminRoleWithDatabaseCheck(session);
+    },
+    (err) => {
+      assert.equal(err.code, 'ROLE_DOWNGRADED');
+      return true;
+    },
+    'assertAdminRoleWithDatabaseCheck must reject user whose DB role was downgraded despite token claim'
+  );
+
+  // 3. User membership is revoked / inactive in PostgreSQL
+  await createMembership({
+    userId: user.user_id,
+    tenantId: tenant.tenant_id,
+    role: 'platform_admin',
+    status: 'suspended',
+  });
+
+  await assert.rejects(
+    async () => {
+      await assertAdminRoleWithDatabaseCheck(session);
+    },
+    (err) => {
+      assert.equal(err.code, 'MEMBERSHIP_REVOKED');
+      return true;
+    },
+    'assertAdminRoleWithDatabaseCheck must reject user whose DB membership is suspended or revoked'
+  );
+});
+
+test('Task S4: PREVIEW_IDENTITY platform_admin fallback is env-gated OFF in production', async (t) => {
+  const originalEnv = process.env.NODE_ENV;
+  try {
+    // 1. In non-production, preview session token can issue platform_admin for local dev
+    process.env.NODE_ENV = 'development';
+    const devToken = issuePreviewSessionToken();
+    const devSession = verifySessionToken(devToken);
+    assert.equal(devSession.role, 'platform_admin');
+
+    // 2. In production, issuePreviewSessionToken forces 'end_user' role
+    process.env.NODE_ENV = 'production';
+    const prodToken = issuePreviewSessionToken();
+    const prodSession = verifySessionToken(prodToken);
+    assert.equal(
+      prodSession.role,
+      'end_user',
+      'Preview token must be demoted to end_user in production (S4)'
+    );
+
+    // 3. Even if a token forged or claimed platform_admin with preview identity, verifySessionToken forces end_user
+    const spoofedDevToken = devToken; // signed with platform_admin
+    const spoofedInProd = verifySessionToken(spoofedDevToken);
+    assert.equal(
+      spoofedInProd.role,
+      'end_user',
+      'verifySessionToken must strictly demote preview identity role to end_user in production'
+    );
+
+    // 4. assertAdminRole rejects private_preview sessions in production
+    await assert.rejects(
+      async () => {
+        await assertAdminRole(spoofedInProd);
+      },
+      (err) => {
+        assert.equal(err.code, 'PREVIEW_ADMIN_FORBIDDEN_IN_PRODUCTION');
+        return true;
+      },
+      'assertAdminRole must refuse preview identity admin rights in production'
+    );
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+  }
+});
+
+test('Task S6: Anonymous client headers x-timecapsule-tenant-id/slug cannot spoof tenant resolution', async (t) => {
+  assertDisposableTestDatabase();
+  await resetStoreForTests();
+  await runMigrations();
+
+  const victimTenant = await createTenant({
+    tenantId: 'tnt_victim_corp',
+    slug: 'victim-corp',
+    name: 'Victim Corp Private Data',
+  });
+
+  const originalEnv = process.env.NODE_ENV;
+  const originalTestMode = process.env.TIMECAPSULE_TEST_MODE;
+  try {
+    // Simulate production / untrusted external request
+    process.env.NODE_ENV = 'production';
+    delete process.env.TIMECAPSULE_TEST_MODE;
+
+    // Anonymous attacker passes x-timecapsule-tenant-id header aiming to resolve victim tenant
+    const spoofReq = new Request('http://localhost:3002/api/v1/tenant/config', {
+      headers: {
+        'x-timecapsule-tenant-id': victimTenant.tenant_id,
+        'x-timecapsule-tenant-slug': victimTenant.slug,
+      },
+    });
+
+    const resolvedTenant = await resolveTenantFromRequest(spoofReq, null);
+
+    // Must NOT resolve to victim tenant!
+    assert.notEqual(
+      resolvedTenant.tenant_id,
+      victimTenant.tenant_id,
+      'Anonymous request with x-timecapsule-tenant-id MUST NOT resolve to victim tenant (S6)'
+    );
+    assert.equal(
+      resolvedTenant.slug,
+      'default',
+      'Untrusted client headers must be ignored, falling back to public default tenant'
+    );
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+    if (originalTestMode !== undefined) {
+      process.env.TIMECAPSULE_TEST_MODE = originalTestMode;
     }
   }
 });

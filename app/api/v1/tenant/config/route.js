@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { resolveTenantFromRequest } from '../../../../../packages/timecapsule/src/server/tenancy.js';
 import { extractTokenFromRequest, verifySessionToken } from '../../../../../packages/timecapsule/src/server/auth.js';
+import { sanitizeBrandingAtReadTime } from '../../../../../packages/timecapsule/src/server/brandingValidation.js';
 
 // Explicit public whitelist for tenant configuration (P0-2 / S5)
 const ALLOWED_PUBLIC_FLAGS = new Set([
@@ -10,28 +12,12 @@ const ALLOWED_PUBLIC_FLAGS = new Set([
   'maintenance_mode',
 ]);
 
-const ALLOWED_BRANDING_FIELDS = new Set([
-  'app_name',
-  'logo_url',
-  'favicon_url',
-  'primary_color',
-  'secondary_color',
-  'font_family',
-  'theme_preset',
-  'support_email',
-]);
-
 export function sanitizePublicTenantConfig(tenant) {
   if (!tenant) return null;
 
-  // Filter branding to whitelisted fields only
+  // Filter & sanitize branding to whitelisted fields and safe formats only (Task B1)
   const rawBranding = tenant.branding && typeof tenant.branding === 'object' ? tenant.branding : {};
-  const sanitizedBranding = {};
-  for (const [key, val] of Object.entries(rawBranding)) {
-    if (ALLOWED_BRANDING_FIELDS.has(key)) {
-      sanitizedBranding[key] = val;
-    }
-  }
+  const sanitizedBranding = sanitizeBrandingAtReadTime(rawBranding);
 
   // Filter flags strictly: NEVER return raw flags object (S5)
   const rawFlags = tenant.flags && typeof tenant.flags === 'object' ? tenant.flags : {};
@@ -62,9 +48,31 @@ export async function GET(request) {
 
     const publicConfig = sanitizePublicTenantConfig(tenant);
 
+    // Compute deterministic ETag from publicConfig payload (Task B3)
+    const contentHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(publicConfig), 'utf8')
+      .digest('hex')
+      .slice(0, 16);
+    const etag = `W/"${contentHash}"`;
+
+    const clientIfNoneMatch = request.headers.get('if-none-match');
+    if (clientIfNoneMatch && (clientIfNoneMatch === etag || clientIfNoneMatch === contentHash)) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': 'private, max-age=60',
+          ETag: etag,
+          Vary: 'Cookie, Authorization, Host',
+        },
+      });
+    }
+
     return Response.json(publicConfig, {
       headers: {
-        'Cache-Control': 'private, no-cache, no-store, max-age=0',
+        'Cache-Control': 'private, max-age=60',
+        ETag: etag,
+        Vary: 'Cookie, Authorization, Host',
       },
     });
   } catch (err) {

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { query, withTransaction, withSystemContext, withTenantContext, assumeSystemRole } from './db.js';
+import { validateBrandingAtWriteTime } from './brandingValidation.js';
 
 export async function createTenant({
   tenantId,
@@ -15,6 +16,7 @@ export async function createTenant({
 }) {
   const id = tenantId || `tnt_${crypto.randomBytes(8).toString('hex')}`;
   const normalizedSlug = slug ? String(slug).toLowerCase().trim() : null;
+  const validatedBranding = validateBrandingAtWriteTime(branding);
 
   return withTransaction(async (client) => {
     await assumeSystemRole(client);
@@ -29,7 +31,7 @@ export async function createTenant({
         name,
         plan,
         status,
-        JSON.stringify(branding),
+        JSON.stringify(validatedBranding),
         JSON.stringify(legal),
         JSON.stringify(flags),
         spendCeilingCredits,
@@ -102,8 +104,9 @@ export async function updateTenant(tenantId, updates = {}) {
     values.push(updates.plan);
   }
   if (updates.branding !== undefined) {
+    const validatedBranding = validateBrandingAtWriteTime(updates.branding);
     fields.push(`branding = $${idx++}`);
-    values.push(JSON.stringify(updates.branding));
+    values.push(JSON.stringify(validatedBranding));
   }
   if (updates.legal !== undefined) {
     fields.push(`legal = $${idx++}`);

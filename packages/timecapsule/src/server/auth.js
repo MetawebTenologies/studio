@@ -65,13 +65,16 @@ export function authenticatePreviewCredential(submittedCredential) {
 }
 
 export function issuePreviewSessionToken({ ttlSeconds = 8 * 3600 } = {}) {
+  // S4 Hardening: In production, PREVIEW_IDENTITY platform_admin fallback must be env-gated OFF
+  const isProduction = process.env.NODE_ENV === 'production';
+  const role = isProduction ? 'end_user' : (PREVIEW_IDENTITY.role || 'platform_admin');
   const payload = {
     sub: PREVIEW_IDENTITY.user_id,
     tenant_id: PREVIEW_IDENTITY.tenant_id,
-    role: PREVIEW_IDENTITY.role || 'platform_admin',
+    role,
     name: PREVIEW_IDENTITY.name,
     auth_mode: PREVIEW_IDENTITY.auth_mode,
-    scope: PREVIEW_IDENTITY.scope,
+    scope: isProduction ? 'restricted_preview' : PREVIEW_IDENTITY.scope,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
   };
@@ -167,10 +170,18 @@ export function verifySessionToken(token) {
     if (!payload.sub || !payload.tenant_id) {
       return null;
     }
+    const isProduction = process.env.NODE_ENV === 'production';
+    let assignedRole = payload.role;
+    if (isProduction && (payload.sub === PREVIEW_IDENTITY.user_id || payload.auth_mode === 'private_preview')) {
+      assignedRole = 'end_user';
+    } else if (!assignedRole) {
+      assignedRole = (payload.tenant_id === PREVIEW_IDENTITY.tenant_id && !isProduction) ? 'platform_admin' : 'end_user';
+    }
+
     return {
       user_id: payload.sub,
       tenant_id: payload.tenant_id,
-      role: payload.role || (payload.tenant_id === PREVIEW_IDENTITY.tenant_id ? 'platform_admin' : 'end_user'),
+      role: assignedRole,
       email: payload.email || null,
       name: payload.name || PREVIEW_IDENTITY.name,
       auth_mode: payload.auth_mode || PREVIEW_IDENTITY.auth_mode,
