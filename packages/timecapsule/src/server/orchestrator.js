@@ -11,6 +11,7 @@ import {
 import { normalizeAndFingerprintGenerationRequest } from './fingerprint.js';
 import { getEstimatedCreditsForModel } from '../models/index.js';
 import { createDurableWorker } from '../worker/index.js';
+import { getTemplateBySlug, synthesizeTemplatePrompt } from './templates.js';
 
 export function validateGenerationRequest(body = {}) {
   return normalizeAndFingerprintGenerationRequest(body);
@@ -50,6 +51,39 @@ export async function submitGenerationJob({
   const userId = session.user_id;
   const cleanIdempotencyKey =
     idempotencyKey && String(idempotencyKey).trim() ? String(idempotencyKey).trim() : null;
+
+  // Resolve template recipe and server-side prompt synthesis if template_slug is provided
+  const templateSlug = body.template_slug || body.inputs?.template_slug;
+  if (templateSlug) {
+    const template = await getTemplateBySlug(templateSlug, tenantId);
+    if (!template) {
+      const err = new Error('Template not found or unavailable');
+      err.code = 'TEMPLATE_NOT_FOUND';
+      err.status = 404;
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const rawUserPrompt =
+      body.input_variables?.user_prompt ||
+      body.inputs?.user_prompt ||
+      body.inputs?.prompt ||
+      body.prompt;
+    const synthesizedPrompt = synthesizeTemplatePrompt(template, rawUserPrompt);
+
+    body.model = template.model_id;
+    body.modality = body.modality || 'image';
+    body.inputs = {
+      aspect_ratio: '1:1',
+      resolution: '1k',
+      ...(template.default_parameters || {}),
+      ...(body.parameters || {}),
+      ...(body.inputs || {}),
+      prompt: synthesizedPrompt,
+      template_slug: template.slug,
+      template_version: template.version,
+    };
+  }
 
   // 1. Normalize, validate, and compute canonical SHA-256 request fingerprint first
   const normalized = normalizeAndFingerprintGenerationRequest(body);

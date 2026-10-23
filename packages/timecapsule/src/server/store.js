@@ -13,6 +13,7 @@ import {
 } from './db.js';
 import { validateExternalMediaUrl } from './media-validator.js';
 import { redactProviderDetails } from './adapters/redact.js';
+import { seedStarterTemplates } from './templates.js';
 
 function formatJobRow(row) {
   if (!row) return null;
@@ -146,6 +147,7 @@ export async function resetStoreForTests(
     await client.query(
       'TRUNCATE TABLE job_events, assets, credit_ledger, credit_reservations, idempotency_keys, jobs, tenants RESTART IDENTITY CASCADE'
     );
+    await seedStarterTemplates(client);
   });
   for (const tenantId of tenantIds) {
     await seedDevelopmentTenant({ tenantId, targetCredits: initialCredits });

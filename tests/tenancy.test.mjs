@@ -87,6 +87,14 @@ import {
 import { DELETE as deleteUploadRoute } from '../app/api/v1/uploads/[assetId]/route.js';
 import { POST as postSessionRoute } from '../app/api/v1/session/route.js';
 import { POST as postGenerationsRoute } from '../app/api/v1/generations/route.js';
+import {
+  getTemplatesForTenant,
+  getTemplateBySlug,
+  synthesizeTemplatePrompt,
+  MAX_TEMPLATE_USER_INPUT_LENGTH,
+} from '../packages/timecapsule/src/server/templates.js';
+import { GET as getTemplatesRoute } from '../app/api/v1/templates/route.js';
+import { submitGenerationJob } from '../packages/timecapsule/src/server/orchestrator.js';
 
 test('White-Label W0: Database schema & migration 004 verification', async (t) => {
   assertDisposableTestDatabase();
@@ -2044,4 +2052,295 @@ test('Task C3: validateFileMagicBytes fails closed for unhandled MIME types', as
     },
     'validateFileMagicBytes must fail closed on unhandled MIME types (Task C3)'
   );
+});
+
+test('Template Registry Track: Multi-tenant RLS isolation on app_templates', async (t) => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+
+  const tenantA = await createTenant({
+    tenantId: 'tnt_tmpl_alpha',
+    slug: 'tmpl-alpha',
+    name: 'Template Tenant Alpha',
+    initialCredits: 1000,
+  });
+  const tenantB = await createTenant({
+    tenantId: 'tnt_tmpl_beta',
+    slug: 'tmpl-beta',
+    name: 'Template Tenant Beta',
+    initialCredits: 1000,
+  });
+
+  // System context inserts a private template owned exclusively by tenantA
+  await withSystemContext(async (client) => {
+    await client.query(
+      `INSERT INTO app_templates (
+        id, slug, tenant_id, version, title, category, description,
+        model_id, prompt_template, default_parameters, status
+      ) VALUES (
+        'tmpl_priv_alpha',
+        'alpha-private-concept',
+        'tnt_tmpl_alpha',
+        1,
+        'Alpha Private Ceramic Design',
+        'Ceramic Concept',
+        'Private ceramic prompt framework for tenant alpha.',
+        'nano-banana-pro',
+        'Studio ceramic photography, {user_prompt}, warm lighting',
+        '{"aspect_ratio": "1:1", "resolution": "1k"}'::jsonb,
+        'published'
+      ) ON CONFLICT (slug) DO NOTHING`
+    );
+  });
+
+  // 1. Tenant Alpha queries templates: sees published global templates + their private template
+  const alphaTemplates = await getTemplatesForTenant(tenantA.tenant_id);
+  const alphaSlugs = alphaTemplates.map((tmpl) => tmpl.slug);
+  assert.ok(alphaSlugs.includes('product-concept-pro'), 'Alpha sees global product concept');
+  assert.ok(alphaSlugs.includes('brand-logo-concept'), 'Alpha sees global brand logo');
+  assert.ok(alphaSlugs.includes('alpha-private-concept'), 'Alpha sees their own private template');
+
+  const alphaPrivateDirect = await getTemplateBySlug('alpha-private-concept', tenantA.tenant_id);
+  assert.ok(alphaPrivateDirect);
+  assert.equal(alphaPrivateDirect.title, 'Alpha Private Ceramic Design');
+
+  // 2. Tenant Beta queries templates: sees ONLY published global templates; Alpha private template is invisible under RLS
+  const betaTemplates = await getTemplatesForTenant(tenantB.tenant_id);
+  const betaSlugs = betaTemplates.map((tmpl) => tmpl.slug);
+  assert.ok(betaSlugs.includes('product-concept-pro'), 'Beta sees global product concept');
+  assert.ok(betaSlugs.includes('brand-logo-concept'), 'Beta sees global brand logo');
+  assert.equal(betaSlugs.includes('alpha-private-concept'), false, 'Beta CANNOT see Alpha private template under RLS');
+
+  const betaPrivateDirect = await getTemplateBySlug('alpha-private-concept', tenantB.tenant_id);
+  assert.equal(betaPrivateDirect, null, 'Direct slug lookup for foreign private template returns null under RLS');
+});
+
+test('Template Registry Track: Global draft and archived templates are hidden from tenants', async (t) => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_tmpl_gamma',
+    slug: 'tmpl-gamma',
+    name: 'Template Tenant Gamma',
+    initialCredits: 1000,
+  });
+
+  // System context inserts a global draft and a global archived template
+  await withSystemContext(async (client) => {
+    await client.query(
+      `INSERT INTO app_templates (
+        id, slug, tenant_id, version, title, category, description,
+        model_id, prompt_template, default_parameters, status
+      ) VALUES (
+        'tmpl_global_draft_01',
+        'global-draft-template',
+        NULL,
+        1,
+        'Unreleased Global Template',
+        'Experimental',
+        'Draft template not yet approved for public registry.',
+        'nano-banana-pro',
+        'Draft experiment: {user_prompt}',
+        '{"aspect_ratio": "1:1", "resolution": "1k"}'::jsonb,
+        'draft'
+      ), (
+        'tmpl_global_arch_01',
+        'global-archived-template',
+        NULL,
+        1,
+        'Deprecated Global Template',
+        'Legacy',
+        'Archived template retired from active registry.',
+        'nano-banana-pro',
+        'Archived prompt: {user_prompt}',
+        '{"aspect_ratio": "1:1", "resolution": "1k"}'::jsonb,
+        'archived'
+      ) ON CONFLICT (slug) DO UPDATE SET status = EXCLUDED.status`
+    );
+  });
+
+  // 1. Database layer: Ordinary tenant cannot see draft or archived global templates
+  const tenantTemplates = await getTemplatesForTenant(tenant.tenant_id);
+  const slugs = tenantTemplates.map((tmpl) => tmpl.slug);
+  assert.equal(slugs.includes('global-draft-template'), false, 'Draft global template must NOT be visible');
+  assert.equal(slugs.includes('global-archived-template'), false, 'Archived global template must NOT be visible');
+
+  assert.equal(await getTemplateBySlug('global-draft-template', tenant.tenant_id), null);
+  assert.equal(await getTemplateBySlug('global-archived-template', tenant.tenant_id), null);
+
+  // 2. HTTP API layer: GET /api/v1/templates returns only published templates with ETag
+  const user = await createUser({
+    userId: 'usr_tmpl_gamma',
+    email: 'gamma@timecapsule.test',
+  });
+  await createMembership({
+    tenantId: tenant.tenant_id,
+    userId: user.user_id,
+    role: 'end_user',
+  });
+  const token = issueTenantSessionToken({
+    userId: user.user_id,
+    tenantId: tenant.tenant_id,
+    role: 'end_user',
+    emailVerified: true,
+  });
+
+  const req = new Request('http://localhost:3000/api/v1/templates', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: 'http://localhost:3000',
+    },
+  });
+
+  const res = await getTemplatesRoute(req);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'private, max-age=60');
+  const etag = res.headers.get('etag');
+  assert.ok(etag, 'ETag header is present');
+
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  const routeSlugs = data.templates.map((t) => t.slug);
+  assert.ok(routeSlugs.includes('product-concept-pro'));
+  assert.ok(routeSlugs.includes('brand-logo-concept'));
+  assert.equal(routeSlugs.includes('global-draft-template'), false);
+  assert.equal(routeSlugs.includes('global-archived-template'), false);
+
+  // 3. ETag 304 Not Modified validation
+  const cachedReq = new Request('http://localhost:3000/api/v1/templates', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'If-None-Match': etag,
+    },
+  });
+  const cachedRes = await getTemplatesRoute(cachedReq);
+  assert.equal(cachedRes.status, 304, 'Returns 304 on matching ETag');
+});
+
+test('Template Registry Track: Server-side prompt synthesis, parameter snapshot, and credit safety', async (t) => {
+  assertDisposableTestDatabase();
+  await runMigrations();
+
+  const tenant = await createTenant({
+    tenantId: 'tnt_tmpl_delta',
+    slug: 'tmpl-delta',
+    name: 'Template Tenant Delta',
+    initialCredits: 1000,
+  });
+  const user = await createUser({
+    userId: 'usr_tmpl_delta',
+    email: 'delta@timecapsule.test',
+  });
+  await createMembership({
+    tenantId: tenant.tenant_id,
+    userId: user.user_id,
+    role: 'end_user',
+  });
+
+  const session = {
+    user_id: user.user_id,
+    tenant_id: tenant.tenant_id,
+    role: 'end_user',
+    auth_mode: 'tenant_session',
+    email_verified: true,
+  };
+
+  // 1. Validation Failures (missing prompt, excessive prompt, non-existent template)
+  await assert.rejects(
+    async () => {
+      await submitGenerationJob({
+        session,
+        body: {
+          template_slug: 'product-concept-pro',
+          input_variables: { user_prompt: '' },
+        },
+      });
+    },
+    (err) => {
+      assert.equal(err.statusCode, 400);
+      assert.equal(err.code, 'MISSING_TEMPLATE_VARIABLE');
+      return true;
+    },
+    'Rejects empty user_prompt with MISSING_TEMPLATE_VARIABLE'
+  );
+
+  await assert.rejects(
+    async () => {
+      await submitGenerationJob({
+        session,
+        body: {
+          template_slug: 'product-concept-pro',
+          input_variables: { user_prompt: 'x'.repeat(MAX_TEMPLATE_USER_INPUT_LENGTH + 1) },
+        },
+      });
+    },
+    (err) => {
+      assert.equal(err.statusCode, 400);
+      assert.equal(err.code, 'TEMPLATE_VARIABLE_TOO_LONG');
+      return true;
+    },
+    'Rejects oversized user_prompt with TEMPLATE_VARIABLE_TOO_LONG'
+  );
+
+  await assert.rejects(
+    async () => {
+      await submitGenerationJob({
+        session,
+        body: {
+          template_slug: 'non-existent-template-slug',
+          input_variables: { user_prompt: 'A ceramic vase' },
+        },
+      });
+    },
+    (err) => {
+      assert.equal(err.statusCode, 404);
+      assert.equal(err.code, 'TEMPLATE_NOT_FOUND');
+      return true;
+    },
+    'Rejects invalid template slug with TEMPLATE_NOT_FOUND (404)'
+  );
+
+  // 2. Successful job submission with template prompt synthesis
+  const originalEnv = process.env.MUAPI_API_KEY;
+  try {
+    process.env.MUAPI_API_KEY = 'muapi-test-key-contract-tested';
+
+    const { job } = await submitGenerationJob({
+      session,
+      body: {
+        template_slug: 'product-concept-pro',
+        input_variables: {
+          user_prompt: 'Minimalist matte obsidian travel tumbler with copper accents',
+        },
+      },
+    });
+
+    assert.ok(job.job_id);
+    assert.equal(job.model, 'nano-banana-pro', 'Model forced to template model_id (nano-banana-pro)');
+    assert.equal(job.provider, 'muapi');
+    assert.equal(job.execution_route, 'muapi:predictions/v1:nano-banana-pro');
+    assert.equal(job.credits_reserved, 15, 'Base 1K resolution reserves exactly 15 credits under tier_image_resolution_v1');
+
+    // Verify snapshot in job inputs
+    assert.equal(job.inputs.template_slug, 'product-concept-pro');
+    assert.equal(job.inputs.template_version, 1);
+    assert.equal(job.inputs.aspect_ratio, '1:1');
+    assert.equal(job.inputs.resolution, '1k');
+
+    // Verify synthesized prompt has the curated studio photography harness
+    const expectedPrompt =
+      'Commercial studio product concept photography, Minimalist matte obsidian travel tumbler with copper accents, centered composition, soft diffuse studio strobe lighting, clean commercial backdrop, f/4 aperture, crisp packaging typography, photorealistic 8k';
+    assert.equal(job.inputs.prompt, expectedPrompt, 'Synthesizes server-side prompt using DB prompt_template');
+
+    // Verify persisted job record from DB
+    const persisted = await getJob(job.job_id);
+    assert.equal(persisted.inputs.prompt, expectedPrompt);
+    assert.equal(persisted.inputs.template_slug, 'product-concept-pro');
+    assert.equal(persisted.inputs.template_version, 1);
+  } finally {
+    process.env.MUAPI_API_KEY = originalEnv;
+  }
 });

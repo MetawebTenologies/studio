@@ -284,6 +284,10 @@ export default function StandaloneShell({ hideHeader = false }) {
     setHasMounted(true);
     const searchParams = new URLSearchParams(window.location.search);
     const isUrlPreview = searchParams.get('preview') === '1' || searchParams.get('mode') === 'preview';
+    const preset = searchParams.get('preset');
+    if (preset) {
+      setActiveTab('image');
+    }
 
     const mode = localStorage.getItem(TIMECAPSULE_BRAND.storageKeys.backendMode);
     const stored =

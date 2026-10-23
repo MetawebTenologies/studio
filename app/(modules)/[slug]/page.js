@@ -4,6 +4,7 @@ import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
 import ModuleStatusBadge from '@/components/ModuleStatusBadge';
 import ModelPlayground from '@/components/ModelPlayground';
+import AppsTemplateRegistry from '@/components/AppsTemplateRegistry';
 import { getModelCapabilities } from '../../../packages/timecapsule/src/models/capabilities.js';
 
 export default async function GenericModulePage({ params }) {
@@ -175,6 +176,8 @@ export default async function GenericModulePage({ params }) {
             estimatedCredits={estimatedCredits}
             capabilities={capabilities}
           />
+        ) : slug === 'apps' ? (
+          <AppsTemplateRegistry />
         ) : (
           /* General Module Layout (Workflows, Assistant, etc.) */
           <div>

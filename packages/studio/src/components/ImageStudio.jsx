@@ -629,7 +629,7 @@ function SimpleDropdown({ title, options, selected, onSelect, onClose }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ImageStudio({ apiKey, onGenerationComplete, historyItems }) {
+export default function ImageStudio({ apiKey, onGenerationComplete, historyItems, initialPreset, initialModel }) {
   // ── Model / mode state ──────────────────────────────────────────────────
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
   const [selectedModelId, setSelectedModelId] = useState(t2iModels[0].id);
@@ -642,6 +642,35 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
     return resolutions[0] || null;
   });
   const [maxImages, setMaxImages] = useState(1);
+  const [activePreset, setActivePreset] = useState(() => {
+    if (initialPreset) return initialPreset;
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get("preset") || null;
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const urlPreset = initialPreset || sp.get("preset");
+    const urlModel = initialModel || sp.get("model");
+    if (urlPreset) {
+      setActivePreset(urlPreset);
+    }
+    if (urlModel) {
+      const match = t2iModels.find((m) => m.id === urlModel);
+      if (match) {
+        setSelectedModelId(match.id);
+        setSelectedModelName(match.name);
+        const ars = getAspectRatiosForModel(match.id);
+        const resolutions = getResolutionsForModel(match.id);
+        setSelectedAr(ars[0] || "1:1");
+        setSelectedQuality(resolutions[0] || null);
+      }
+    }
+  }, [initialPreset, initialModel]);
 
   // ── Prompt / upload state ───────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -816,6 +845,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
           model: selectedModelId,
           prompt: prompt.trim(),
           aspect_ratio: selectedAr,
+          ...(activePreset ? { template_slug: activePreset } : {}),
         };
         if (currentQualityField && selectedQuality) {
           genParams[currentQualityField] = selectedQuality;
@@ -856,6 +886,10 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
       ? `${uploadedImageUrls.length} images selected — describe the transformation (optional)`
       : imageMode
       ? "Describe how to transform this image (optional)"
+      : activePreset === 'product-concept-pro'
+      ? "Describe your product concept (e.g. Matte ceramic mug with cork base)..."
+      : activePreset === 'brand-logo-concept'
+      ? "Describe your brand identity (e.g. Clean geometric solar tech emblem)..."
       : "Describe the image you want to create";
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -1003,6 +1037,28 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
           {/* Prompt bar */}
           <div className="w-full max-w-4xl relative z-40 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
             <div className="w-full bg-[#111]/90 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-5 flex flex-col gap-3 md:gap-5 shadow-3xl">
+
+              {/* Preset template banner if active */}
+              {activePreset && (
+                <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-300">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-400" />
+                    <span>
+                      <strong>Template Recipe:</strong> {activePreset === 'product-concept-pro' ? 'Commercial Product Concept' : activePreset === 'brand-logo-concept' ? 'Minimalist Brand Logo Concept' : activePreset}
+                    </span>
+                    <span className="text-zinc-500 font-mono text-[11px] hidden sm:inline">
+                      (Synthesized server-side on submit)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActivePreset(null)}
+                    className="text-zinc-400 hover:text-white underline text-[11px] cursor-pointer ml-3"
+                  >
+                    Clear Template
+                  </button>
+                </div>
+              )}
 
               {/* Top row: upload picker + textarea */}
               <div className="flex items-start gap-5 px-2">

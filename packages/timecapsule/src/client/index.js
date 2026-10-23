@@ -222,7 +222,7 @@ function sleep(ms) {
 
 // ─── Timecapsule BFF Execution Path ──────────────────────────────────────────
 
-async function runViaTimecapsuleBff({ apiKey, modality, model, provider, inputs, workflow, delivery }) {
+async function runViaTimecapsuleBff({ apiKey, modality, model, provider, inputs, workflow, delivery, template_slug }) {
   if (!model || typeof model !== 'string' || !model.trim()) {
     const err = new Error(`Explicit model identifier is required for modality "${modality}"`);
     err.status = 400;
@@ -245,6 +245,8 @@ async function runViaTimecapsuleBff({ apiKey, modality, model, provider, inputs,
     headers.Authorization = `Bearer ${token}`;
   }
 
+  const resolvedTemplateSlug = template_slug || inputs?.template_slug;
+
   const res = await fetchFn(`${baseUrl}/generations`, {
     method: 'POST',
     credentials: 'same-origin',
@@ -253,6 +255,7 @@ async function runViaTimecapsuleBff({ apiKey, modality, model, provider, inputs,
       project_id: inputs?.project_id || 'prj_default',
       modality,
       model,
+      ...(resolvedTemplateSlug ? { template_slug: resolvedTemplateSlug } : {}),
       ...(provider ? { provider } : {}),
       inputs,
       workflow: workflow || {},
@@ -462,12 +465,14 @@ export async function generateImage(apiKey, params = {}) {
       modality: 'image',
       model: params.model,
       provider: params.provider,
+      template_slug: params.template_slug,
       inputs: {
         prompt: params.prompt,
         aspect_ratio: params.aspect_ratio || '1:1',
         resolution: params.resolution || params.quality || '1k',
         seed: params.seed,
         image_urls: params.image_urls,
+        ...(params.template_slug ? { template_slug: params.template_slug } : {}),
       },
     });
   }
