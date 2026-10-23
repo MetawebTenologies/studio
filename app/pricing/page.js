@@ -11,46 +11,46 @@ export const CREDIT_PACKS = [
   {
     name: 'Starter Pack',
     price: '$10',
-    credits: '10,000 Credits',
-    bonus: '0% Bonus',
-    desc: 'Perfect for quick tests, prompt exploration, and small creative batches.',
-    capacity: '~666 images (1K) or ~83 videos (5s)',
+    credits: '2,500 Credits',
+    bonus: '2x vs Higgsfield',
+    desc: '2x more compute than Higgsfield Lite ($10 = 125 gens). Zero expiration.',
+    capacity: '250 images (1K) or ~25 videos (5s)',
     popular: false,
   },
   {
     name: 'Creator Pack',
-    price: '$50',
-    credits: '55,000 Credits',
-    bonus: '+10% Bonus Compute',
-    desc: 'The creators choice for active content creators, game assets, and storyboarding.',
-    capacity: '~3,666 images or ~458 videos',
+    price: '$25',
+    credits: '6,800 Credits',
+    bonus: '+9% Bonus Compute',
+    desc: 'Beats Higgsfield Pro ($29 = 300 gens) with over 2.2x compute power.',
+    capacity: '680 images or ~68 videos',
     popular: true,
   },
   {
     name: 'Studio Pro',
-    price: '$100',
-    credits: '120,000 Credits',
+    price: '$75',
+    credits: '22,500 Credits',
     bonus: '+20% Bonus Compute',
-    desc: 'Designed for production studios, agency pipelines, and batch generation.',
-    capacity: '~8,000 images or ~1,000 videos',
+    desc: 'Beats Higgsfield Max ($79 = 900 gens) with nearly 3x compute capacity.',
+    capacity: '2,250 images or ~225 videos',
     popular: false,
   },
   {
     name: 'Production House',
-    price: '$500',
-    credits: '650,000 Credits',
-    bonus: '+30% Bonus Compute',
+    price: '$250',
+    credits: '85,000 Credits',
+    bonus: '+36% Bonus Compute',
     desc: 'High-volume generation for automated commercial creative workflows.',
-    capacity: '~43,333 images or ~5,416 videos',
+    capacity: '8,500 images or ~850 videos',
     popular: false,
   },
   {
     name: 'Enterprise Fleet',
     price: '$1,000',
-    credits: '1,400,000 Credits',
-    bonus: '+40% Bonus Compute',
+    credits: '380,000 Credits',
+    bonus: '+52% Bonus Compute',
     desc: 'Maximum compute value for enterprise pipelines, game studios, and API resellers.',
-    capacity: '~93,333 images or ~11,666 videos',
+    capacity: '38,000 images or ~3,800 videos',
     popular: false,
   },
 ];
@@ -419,15 +419,15 @@ export default function PricingPage() {
                 <div className="p-5 rounded-2xl bg-[#00e5ff]/10 border border-[#00e5ff]/40 flex flex-col justify-between">
                   <div>
                     <span className="text-[10px] font-mono text-[#00e5ff] font-bold uppercase tracking-wider block mb-1">
-                      Platform Margin Waterfall
+                      High-Margin Platform Waterfall
                     </span>
-                    <h3 className="font-bold text-sm text-white mb-2">33% / 27% / 20% / 20% Model</h3>
+                    <h3 className="font-bold text-sm text-white mb-2">12% / 15% / 25% / 48% Model</h3>
                     <p className="text-xs text-zinc-300 leading-relaxed">
-                      Every $100 earned distributes $33 to vendor compute, $27 to core engineering, <strong>$20 to the Seed Backer Pool</strong>, and $20 to company treasury.
+                      Every $100 earned allocates only $12 to compute (88% gross margin), $15 to infra/R&D, <strong>$25 to the Seed Backer Pool</strong>, and <strong>$48 directly to Company Retained Treasury</strong>.
                     </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-[#00e5ff]/20 text-[11px] font-mono font-bold text-[#00e5ff]">
-                    Direct Alignment with Studio Growth
+                    48% Retained War Chest Margin
                   </div>
                 </div>
               </div>
