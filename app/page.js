@@ -11,6 +11,7 @@ import {
   RealWorldUseCasesSection,
   IntegrateIn5LinesSection,
   WhyDevelopersChooseSection,
+  DeveloperVoicesSection,
   FaqSection,
 } from '@/components/landing';
 
@@ -516,6 +517,11 @@ export default function HomePage() {
             Why Developers Choose Timecapsule (Production AI Architecture Cards)
             ========================================================================= */}
         <WhyDevelopersChooseSection />
+
+        {/* =========================================================================
+            What Technical Teams Value (Developer Voices Testimonials)
+            ========================================================================= */}
+        <DeveloperVoicesSection />
 
         {/* =========================================================================
             Frequently Asked Questions (Accessible Keyboard Accordion)
