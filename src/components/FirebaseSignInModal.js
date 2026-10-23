@@ -3,8 +3,6 @@ import {
   signInWithGooglePopup,
   signInWithEmail,
   signUpWithEmail,
-  createPhoneVerifier,
-  sendPhoneVerification,
 } from '../lib/firebase.js';
 
 export function FirebaseSignInModal(onSuccess) {
@@ -26,20 +24,10 @@ export function FirebaseSignInModal(onSuccess) {
         </svg>
       </div>
       <h2 class="text-xl md:text-2xl font-black text-white uppercase tracking-wider">Timecapsule Studio</h2>
-      <p class="text-zinc-400 text-xs mt-1">Sign in with Google, Email, or Phone to access your studio</p>
+      <p class="text-zinc-400 text-xs mt-1">Sign in with Google or Email to access your studio</p>
     </div>
 
-    <!-- Provider Tabs -->
-    <div class="flex items-center p-1 bg-black/40 border border-white/5 rounded-xl mb-6">
-      <button id="tab-email" class="flex-1 py-2 text-xs font-bold rounded-lg transition-all text-white bg-white/10 shadow">
-        Email
-      </button>
-      <button id="tab-phone" class="flex-1 py-2 text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-white">
-        Phone SMS
-      </button>
-    </div>
-
-    <!-- 1. Google One-Click Sign-In (Always Available) -->
+    <!-- 1. Google One-Click Sign-In -->
     <div class="mb-5">
       <button id="btn-google-signin" class="w-full flex items-center justify-center gap-3 bg-white text-zinc-900 font-bold py-3.5 px-4 rounded-xl hover:bg-zinc-100 active:scale-[0.99] transition-all shadow-md">
         <svg width="18" height="18" viewBox="0 0 24 24">
@@ -93,50 +81,6 @@ export function FirebaseSignInModal(onSuccess) {
       </button>
     </div>
 
-    <!-- 3. Phone SMS Section (Hidden by default) -->
-    <div id="section-phone" class="space-y-4 hidden">
-      <div id="phone-step-1" class="space-y-4">
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Phone Number (with Country Code)</label>
-          <input 
-            type="tel" 
-            id="phone-input" 
-            placeholder="+1 555 123 4567"
-            class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00e5ff] transition-colors"
-          >
-          <p class="text-[11px] text-zinc-500 ml-1">We'll send a 6-digit SMS verification code to verify.</p>
-        </div>
-
-        <button id="btn-send-sms" class="w-full bg-[#00e5ff] text-black font-extrabold py-3.5 rounded-xl hover:bg-[#38bdf8] active:scale-[0.99] transition-all shadow-md">
-          Send Verification SMS
-        </button>
-      </div>
-
-      <div id="phone-step-2" class="space-y-4 hidden">
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">6-Digit SMS Code</label>
-          <input 
-            type="text" 
-            id="sms-code-input" 
-            placeholder="123456" 
-            maxlength="6"
-            class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00e5ff] transition-colors"
-          >
-        </div>
-
-        <button id="btn-verify-sms" class="w-full bg-[#00e5ff] text-black font-extrabold py-3.5 rounded-xl hover:bg-[#38bdf8] active:scale-[0.99] transition-all shadow-md">
-          Verify & Sign In
-        </button>
-
-        <button id="btn-change-phone" type="button" class="w-full text-xs text-zinc-400 hover:text-white py-1">
-          ← Change phone number
-        </button>
-      </div>
-
-      <!-- Invisible reCAPTCHA container -->
-      <div id="recaptcha-container"></div>
-    </div>
-
     <!-- Error Message -->
     <p id="modal-error-msg" class="text-xs text-red-400 mt-4 text-center hidden p-2 bg-red-950/30 border border-red-900/40 rounded-lg"></p>
 
@@ -151,34 +95,19 @@ export function FirebaseSignInModal(onSuccess) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // References
-  const tabEmail = modal.querySelector('#tab-email');
-  const tabPhone = modal.querySelector('#tab-phone');
-  const sectionEmail = modal.querySelector('#section-email');
-  const sectionPhone = modal.querySelector('#section-phone');
-
+  // Bind DOM Elements
   const btnGoogle = modal.querySelector('#btn-google-signin');
-
+  const sectionEmail = modal.querySelector('#section-email');
   const emailInput = modal.querySelector('#email-input');
   const passwordInput = modal.querySelector('#password-input');
   const btnEmailSubmit = modal.querySelector('#btn-email-submit');
   const authModeLabel = modal.querySelector('#auth-mode-label');
   const authModeToggle = modal.querySelector('#auth-mode-toggle');
 
-  const phoneStep1 = modal.querySelector('#phone-step-1');
-  const phoneStep2 = modal.querySelector('#phone-step-2');
-  const phoneInput = modal.querySelector('#phone-input');
-  const smsCodeInput = modal.querySelector('#sms-code-input');
-  const btnSendSms = modal.querySelector('#btn-send-sms');
-  const btnVerifySms = modal.querySelector('#btn-verify-sms');
-  const btnChangePhone = modal.querySelector('#btn-change-phone');
-
   const errorEl = modal.querySelector('#modal-error-msg');
   const btnClose = modal.querySelector('#btn-close-modal');
 
   let isSignUpMode = false;
-  let phoneConfirmation = null;
-  let phoneVerifier = null;
 
   const showError = (msg) => {
     errorEl.textContent = msg;
@@ -190,31 +119,39 @@ export function FirebaseSignInModal(onSuccess) {
     errorEl.classList.add('hidden');
   };
 
-  const finishSuccess = (user) => {
-    // Save session flag for the app
-    localStorage.setItem('firebase_user_uid', user.uid);
-    localStorage.setItem('firebase_user_email', user.email || user.phoneNumber || 'User');
-    localStorage.setItem('cf_backend', '1'); // unlocks library & studio
-    document.body.removeChild(overlay);
-    if (onSuccess) onSuccess(user);
-  };
+  const finishSuccess = async (user) => {
+    try {
+      showError('Establishing secure studio session...');
+      const idToken = await user.getIdToken();
 
-  // Switch to Email Tab
-  tabEmail.onclick = () => {
-    clearError();
-    tabEmail.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all text-white bg-white/10 shadow';
-    tabPhone.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-white';
-    sectionEmail.classList.remove('hidden');
-    sectionPhone.classList.add('hidden');
-  };
+      // Session exchange with Next.js BFF endpoint
+      const res = await fetch('/api/v1/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-timecapsule-csrf': '1',
+        },
+        body: JSON.stringify({ id_token: idToken }),
+        credentials: 'include',
+      });
 
-  // Switch to Phone Tab
-  tabPhone.onclick = () => {
-    clearError();
-    tabPhone.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all text-white bg-white/10 shadow';
-    tabEmail.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-white';
-    sectionPhone.classList.remove('hidden');
-    sectionEmail.classList.add('hidden');
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        showError(data.error || 'Failed to establish backend session with server');
+        return;
+      }
+
+      // Unlock client views
+      localStorage.setItem('cf_backend', '1');
+
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+      if (onSuccess) onSuccess(data.session);
+    } catch (err) {
+      showError(err.message || 'Session exchange failed');
+    }
   };
 
   // Toggle Email Sign In / Sign Up
@@ -239,7 +176,7 @@ export function FirebaseSignInModal(onSuccess) {
     btnGoogle.classList.add('opacity-70');
     try {
       const result = await signInWithGooglePopup();
-      finishSuccess(result.user);
+      await finishSuccess(result.user);
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user') {
         showError('Google sign in was canceled.');
@@ -279,95 +216,32 @@ export function FirebaseSignInModal(onSuccess) {
       } else {
         result = await signInWithEmail(email, password);
       }
-      finishSuccess(result.user);
+      await finishSuccess(result.user);
     } catch (err) {
-      let msg = err.message || 'Authentication failed.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        msg = 'Invalid email or password.';
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        showError('Invalid email or password.');
       } else if (err.code === 'auth/email-already-in-use') {
-        msg = 'An account with this email already exists. Try signing in.';
-      } else if (err.code === 'auth/invalid-email') {
-        msg = 'Please enter a valid email address.';
+        showError('An account with this email already exists. Click "Sign In" instead.');
+      } else {
+        showError(err.message || 'Authentication failed.');
       }
-      showError(msg);
     } finally {
       btnEmailSubmit.disabled = false;
       btnEmailSubmit.textContent = isSignUpMode ? 'Create Account' : 'Sign In';
     }
   };
 
-  // 3. Phone Auth - Send SMS
-  btnSendSms.onclick = async () => {
-    clearError();
-    const phone = phoneInput.value.trim();
-    if (!phone || !phone.startsWith('+')) {
-      showError('Please enter phone with country code (e.g. +1 555 123 4567 or +91 ...)');
-      return;
-    }
-
-    btnSendSms.disabled = true;
-    btnSendSms.textContent = 'Sending SMS...';
-
-    try {
-      if (!phoneVerifier) {
-        phoneVerifier = createPhoneVerifier('recaptcha-container');
-      }
-      phoneConfirmation = await sendPhoneVerification(phone, phoneVerifier);
-      phoneStep1.classList.add('hidden');
-      phoneStep2.classList.remove('hidden');
-      smsCodeInput.focus();
-    } catch (err) {
-      if (phoneVerifier) {
-        try { phoneVerifier.clear(); } catch {}
-        phoneVerifier = null;
-      }
-      showError(err.message || 'Failed to send SMS verification code.');
-    } finally {
-      btnSendSms.disabled = false;
-      btnSendSms.textContent = 'Send Verification SMS';
-    }
-  };
-
-  // 3b. Phone Auth - Verify SMS Code
-  btnVerifySms.onclick = async () => {
-    clearError();
-    const code = smsCodeInput.value.trim();
-    if (!code || code.length < 6) {
-      showError('Please enter the 6-digit code sent to your phone.');
-      return;
-    }
-
-    if (!phoneConfirmation) {
-      showError('Please request an SMS code first.');
-      return;
-    }
-
-    btnVerifySms.disabled = true;
-    btnVerifySms.textContent = 'Verifying...';
-
-    try {
-      const result = await phoneConfirmation.confirm(code);
-      finishSuccess(result.user);
-    } catch (err) {
-      showError(err.message || 'Invalid SMS verification code.');
-    } finally {
-      btnVerifySms.disabled = false;
-      btnVerifySms.textContent = 'Verify & Sign In';
-    }
-  };
-
-  btnChangePhone.onclick = () => {
-    phoneStep2.classList.add('hidden');
-    phoneStep1.classList.remove('hidden');
-    clearError();
-  };
-
-  // Close modal
+  // Close Modal
   btnClose.onclick = () => {
-    if (phoneVerifier) {
-      try { phoneVerifier.clear(); } catch {}
+    if (overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
     }
-    document.body.removeChild(overlay);
+  };
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
   };
 
   return overlay;

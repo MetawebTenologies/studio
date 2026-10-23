@@ -11,6 +11,8 @@ node_modules
 .next
 dist
 dist-ssr
+out
+_api_build_tmp
 *.local
 .env
 .env.*

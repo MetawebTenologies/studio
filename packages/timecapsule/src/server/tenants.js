@@ -162,11 +162,197 @@ export async function getUser(userId) {
   if (!userId) return null;
   return withSystemContext(async (client) => {
     const res = await client.query(
-      `SELECT user_id, email, auth_mode, status, created_at FROM users WHERE user_id = $1`,
+      `SELECT user_id, email, firebase_uid, email_verified, auth_mode, status, token_version, created_at FROM users WHERE user_id = $1`,
       [userId]
     );
     return res.rows[0] || null;
   });
+}
+
+export async function getUserByFirebaseUid(firebaseUid) {
+  if (!firebaseUid) return null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `SELECT user_id, email, firebase_uid, email_verified, auth_mode, status, token_version, created_at FROM users WHERE firebase_uid = $1`,
+      [firebaseUid]
+    );
+    return res.rows[0] || null;
+  });
+}
+
+export async function revokeUserSessions(userId) {
+  if (!userId) return null;
+  return withSystemContext(async (client) => {
+    const res = await client.query(
+      `UPDATE users
+       SET token_version = token_version + 1, updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING user_id, token_version`,
+      [userId]
+    );
+    return res.rows[0] || null;
+  });
+}
+
+/**
+ * Atomically resolves or provisions a Firebase-authenticated user, their isolated tenant,
+ * and tenant membership in a single transaction with row locking and unique constraints.
+ *
+ * Guarantees:
+ * - Never links accounts by email alone (prevents account takeover).
+ * - New users get least-privileged tenant owner role ('reseller_admin') and ZERO starter credits.
+ * - Concurrent first sign-ins cannot create duplicate tenants or duplicate users.
+ */
+export async function provisionFirebaseUserAndTenant({
+  firebaseUid,
+  email,
+  emailVerified = false,
+  name = null,
+}) {
+  if (!firebaseUid) {
+    throw new Error('firebaseUid is required for Firebase user provisioning');
+  }
+
+  const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await withTransaction(async (client) => {
+        await assumeSystemRole(client);
+
+        // 1. Look up existing user by firebase_uid with row lock
+        const existingRes = await client.query(
+          `SELECT user_id, email, firebase_uid, email_verified, auth_mode, status, token_version, created_at
+           FROM users WHERE firebase_uid = $1 FOR UPDATE`,
+          [firebaseUid]
+        );
+
+        let user = existingRes.rows[0] || null;
+
+        if (user) {
+          if (user.status !== 'active') {
+            const err = new Error('User account is suspended');
+            err.code = 'USER_SUSPENDED';
+            err.statusCode = 403;
+            throw err;
+          }
+
+          // Update email_verified if newly verified
+          if (emailVerified && !user.email_verified) {
+            await client.query(
+              `UPDATE users SET email_verified = true, updated_at = NOW() WHERE user_id = $1`,
+              [user.user_id]
+            );
+            user.email_verified = true;
+          }
+
+          // Fetch primary membership
+          const memRes = await client.query(
+            `SELECT m.membership_id, m.user_id, m.tenant_id, m.role, m.status, t.status as tenant_status
+             FROM memberships m
+             JOIN tenants t ON t.tenant_id = m.tenant_id
+             WHERE m.user_id = $1 AND m.status = 'active'
+             ORDER BY m.created_at ASC
+             LIMIT 1`,
+            [user.user_id]
+          );
+
+          const membership = memRes.rows[0] || null;
+          if (!membership || membership.tenant_status !== 'active') {
+            const err = new Error('No active tenant membership found for user');
+            err.code = 'TENANT_NOT_FOUND';
+            err.statusCode = 403;
+            throw err;
+          }
+
+          return {
+            user,
+            membership,
+            tenantId: membership.tenant_id,
+            role: membership.role,
+            isNewUser: false,
+          };
+        }
+
+        // 2. User does not exist by firebase_uid.
+        // Strict Guard: Never link accounts by email alone!
+        if (normalizedEmail) {
+          const emailCollision = await client.query(
+            `SELECT user_id, firebase_uid FROM users WHERE email = $1 FOR UPDATE`,
+            [normalizedEmail]
+          );
+          if (emailCollision.rows.length > 0) {
+            const collision = emailCollision.rows[0];
+            if (collision.firebase_uid && collision.firebase_uid !== firebaseUid) {
+              const err = new Error(
+                'An account with this email already exists under a different identity provider. Account linking by email alone is forbidden.'
+              );
+              err.code = 'ACCOUNT_COLLISION_EMAIL_LINK_FORBIDDEN';
+              err.statusCode = 409;
+              throw err;
+            }
+            if (!collision.firebase_uid) {
+              const err = new Error(
+                'An existing account exists with this email. Automatic account takeover/linking by email alone is forbidden.'
+              );
+              err.code = 'ACCOUNT_COLLISION_EMAIL_LINK_FORBIDDEN';
+              err.statusCode = 409;
+              throw err;
+            }
+          }
+        }
+
+        // 3. Provision new user, tenant, and membership atomically
+        const newUserId = `usr_${crypto.randomBytes(8).toString('hex')}`;
+        const newTenantId = `tnt_${crypto.randomBytes(8).toString('hex')}`;
+        const newMembershipId = `mem_${crypto.randomBytes(8).toString('hex')}`;
+        const safeEmail = normalizedEmail || `${firebaseUid.slice(0, 12)}@timecapsule.local`;
+        const safeSlugBase = (safeEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'studio').slice(0, 20);
+        const tenantSlug = `${safeSlugBase}-${crypto.randomBytes(2).toString('hex')}`;
+        const tenantName = name || `${safeSlugBase} Studio`;
+
+        // Insert Tenant: NO starter credits (credits_balance = 0, credits_reserved = 0)
+        await client.query(
+          `INSERT INTO tenants (tenant_id, slug, name, plan, status, credits_balance, credits_reserved)
+           VALUES ($1, $2, $3, 'starter', 'active', 0, 0)`,
+          [newTenantId, tenantSlug, tenantName]
+        );
+
+        // Insert User: least-privileged, token_version = 1
+        const userRes = await client.query(
+          `INSERT INTO users (user_id, email, firebase_uid, email_verified, auth_mode, status, token_version)
+           VALUES ($1, $2, $3, $4, 'firebase', 'active', 1)
+           RETURNING user_id, email, firebase_uid, email_verified, auth_mode, status, token_version, created_at`,
+          [newUserId, safeEmail, firebaseUid, Boolean(emailVerified)]
+        );
+        const newUser = userRes.rows[0];
+
+        // Insert Membership: least-privileged tenant owner ('reseller_admin')
+        const memRes = await client.query(
+          `INSERT INTO memberships (membership_id, user_id, tenant_id, role, status)
+           VALUES ($1, $2, $3, 'reseller_admin', 'active')
+           RETURNING membership_id, user_id, tenant_id, role, status, created_at`,
+          [newMembershipId, newUserId, newTenantId]
+        );
+        const newMembership = memRes.rows[0];
+
+        return {
+          user: newUser,
+          membership: newMembership,
+          tenantId: newTenantId,
+          role: 'reseller_admin',
+          isNewUser: true,
+        };
+      });
+    } catch (err) {
+      if (err.code === '23505' && attempt < 2) {
+        // Unique violation from concurrent first sign-in race: retry so row-lock query finds it
+        await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export async function getUserByEmail(email) {

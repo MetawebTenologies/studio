@@ -37,6 +37,15 @@ export async function submitGenerationJob({
     throw err;
   }
 
+  // S-Gate: Verified email required before initiating generation jobs (for tenant users)
+  if (session.auth_mode === 'tenant_session' && session.email_verified !== true) {
+    const err = new Error('Verified email address is required before initiating generation jobs');
+    err.code = 'EMAIL_VERIFICATION_REQUIRED';
+    err.status = 403;
+    err.statusCode = 403;
+    throw err;
+  }
+
   const tenantId = session.tenant_id;
   const userId = session.user_id;
   const cleanIdempotencyKey =

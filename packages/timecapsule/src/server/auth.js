@@ -89,6 +89,8 @@ export function issueTenantSessionToken({
   role = 'end_user',
   name = 'User',
   email = null,
+  emailVerified = false,
+  tokenVersion = 1,
   ttlSeconds = 8 * 3600,
 } = {}) {
   if (!userId || !tenantId) {
@@ -100,6 +102,8 @@ export function issueTenantSessionToken({
     role,
     name,
     email,
+    email_verified: Boolean(emailVerified),
+    tv: Number(tokenVersion) || 1,
     auth_mode: 'tenant_session',
     scope: 'tenant_scoped',
     iat: Math.floor(Date.now() / 1000),
@@ -183,6 +187,8 @@ export function verifySessionToken(token) {
       tenant_id: payload.tenant_id,
       role: assignedRole,
       email: payload.email || null,
+      email_verified: Boolean(payload.email_verified),
+      token_version: payload.tv ? Number(payload.tv) : 1,
       name: payload.name || PREVIEW_IDENTITY.name,
       auth_mode: payload.auth_mode || PREVIEW_IDENTITY.auth_mode,
       scope: payload.scope || PREVIEW_IDENTITY.scope,
@@ -329,12 +335,46 @@ export async function requireSession(request) {
 
   const token = extractTokenFromRequest(request);
   const session = verifySessionToken(token);
-  if (session) return session;
+  if (!session) {
+    const err = new Error('Authentication required (session invalid or missing)');
+    err.code = 'UNAUTHORIZED';
+    err.statusCode = 401;
+    throw err;
+  }
 
-  const err = new Error('Authentication required (private-preview session)');
-  err.code = 'UNAUTHORIZED';
-  err.statusCode = 401;
-  throw err;
+  // Session Revocation & User Status Recheck:
+  // For tenant sessions, recheck user status and token_version against database
+  if (session.auth_mode === 'tenant_session' && session.user_id) {
+    try {
+      const { getUser } = await import('./tenants.js');
+      const dbUser = await getUser(session.user_id);
+      if (dbUser) {
+        if (dbUser.status !== 'active') {
+          const err = new Error('User account is suspended');
+          err.code = 'USER_SUSPENDED';
+          err.statusCode = 403;
+          throw err;
+        }
+        if (
+          session.token_version &&
+          dbUser.token_version &&
+          session.token_version !== dbUser.token_version
+        ) {
+          const err = new Error('Session has been revoked');
+          err.code = 'SESSION_REVOKED';
+          err.statusCode = 401;
+          throw err;
+        }
+        session.email_verified = Boolean(dbUser.email_verified);
+      }
+    } catch (e) {
+      if (e.code === 'USER_SUSPENDED' || e.code === 'SESSION_REVOKED') {
+        throw e;
+      }
+    }
+  }
+
+  return session;
 }
 
 export async function authorizeJobAccess(session, jobId) {

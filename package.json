@@ -13,7 +13,7 @@
     "build": "npm run build:studio && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs",
+    "test": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs tests/firebase_auth_server.test.mjs",
     "migrate": "npm run db:migrate",
     "seed": "npm run db:seed",
     "reconcile": "npm run db:reconcile",
@@ -23,6 +23,8 @@
     "db:reconcile": "node --env-file-if-exists=.env packages/timecapsule/src/scripts/reconcile-cli.js",
     "worker": "node --env-file-if-exists=.env packages/timecapsule/src/scripts/worker-cli.js",
     "build:studio": "cd packages/studio && npm run build",
+    "build:export": "node scripts/build-static.mjs",
+    "deploy:firebase": "npm run build:export && firebase deploy --only hosting",
     "setup": "npm install && npm run build:studio",
     "vite:dev": "vite",
     "vite:build": "vite build",
@@ -71,12 +73,13 @@
   },
   "dependencies": {
     "axios": "^1.7.0",
+    "firebase": "^13.1.0",
+    "jose": "^6.2.13",
     "next": "^15.0.0",
     "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.4.1",
-    "firebase": "^13.1.0",
     "studio": "*"
   },
   "devDependencies": {
