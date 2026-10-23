@@ -92,11 +92,16 @@ Copy the example environment file and configure your keys:
 cp .env.example .env
 ```
 
-Set your provider credentials:
+Set your provider credentials (configure Fal and/or Replicate for immediate testing):
 
 ```bash
+FAL_KEY=your_fal_api_key_here
+REPLICATE_API_TOKEN=your_replicate_api_token_here
 MUAPI_API_KEY=your_muapi_api_key_here
 KIE_API_KEY=your_kie_api_key_here
+
+# To route directly to Fal or Replicate without MuAPI:
+# TIMECAPSULE_DEFAULT_PROVIDER=fal
 ```
 
 ### 6. Start the development server & worker
