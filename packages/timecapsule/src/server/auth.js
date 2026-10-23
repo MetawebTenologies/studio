@@ -1,5 +1,8 @@
 import crypto from 'crypto';
 import { getJob } from './store.js';
+import { isCustomerApiKey, authenticateCustomerApiKey } from './keys.js';
+
+export { isCustomerApiKey, authenticateCustomerApiKey };
 
 export const PREVIEW_IDENTITY = Object.freeze({
   user_id: 'usr_preview_operator',
@@ -329,11 +332,41 @@ export function verifyMutationOrigin(request) {
   }
 }
 
-export async function requireSession(request) {
+export async function requireSession(request, options = {}) {
   // Fail closed if server session secret is not configured
   getSessionSecret();
 
   const token = extractTokenFromRequest(request);
+  if (!token) {
+    const err = new Error('Authentication required (session invalid or missing)');
+    err.code = 'UNAUTHORIZED';
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // Tier 2: Customer Developer API Key Authentication (tcs_live_...)
+  if (isCustomerApiKey(token)) {
+    const apiKeySession = await authenticateCustomerApiKey(token);
+    if (!apiKeySession) {
+      const err = new Error('Invalid API key');
+      err.code = 'UNAUTHORIZED';
+      err.statusCode = 401;
+      throw err;
+    }
+    if (options.requiredScope) {
+      const hasScope =
+        apiKeySession.scopes.includes('*') ||
+        apiKeySession.scopes.includes(options.requiredScope);
+      if (!hasScope) {
+        const err = new Error(`Forbidden: API key lacks required scope "${options.requiredScope}"`);
+        err.code = 'INSUFFICIENT_SCOPE';
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+    return apiKeySession;
+  }
+
   const session = verifySessionToken(token);
   if (!session) {
     const err = new Error('Authentication required (session invalid or missing)');

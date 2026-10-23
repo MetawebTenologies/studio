@@ -17,7 +17,7 @@ export async function OPTIONS(request) {
 export async function GET(request) {
   const corsHeaders = getCorsHeaders(request);
   try {
-    const session = await requireSession(request);
+    const session = await requireSession(request, { requiredScope: 'generations:read' });
     checkRateLimit(request, { action: 'default', session });
     const url = new URL(request.url);
     const queryTenantId = url.searchParams.get('tenant_id');
@@ -58,7 +58,7 @@ export async function POST(request) {
   let rateHeaders = {};
   try {
     verifyMutationOrigin(request);
-    const session = await requireSession(request);
+    const session = await requireSession(request, { requiredScope: 'generations:write' });
 
     // Abuse prevention & rate limiting (Security Task B1)
     const rateStatus = checkRateLimit(request, { action: 'generation', session });

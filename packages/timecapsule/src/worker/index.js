@@ -4,6 +4,7 @@ import {
   claimNextRunnableJob,
   heartbeatJobLease,
   beginProviderSubmissionAttempt,
+  transitionJobCascadeRoute,
   recordProviderTaskId,
   markSubmissionAmbiguous,
   scheduleNextWorkerAttempt,
@@ -14,6 +15,8 @@ import {
   submitTaskToProvider,
   pollProviderTaskStatus,
 } from '../server/providers.js';
+import { getCascadeRoutesForModel } from '../models/index.js';
+import { defaultGovernor, calculateBackoffMs } from '../server/governor.js';
 
 export function createDurableWorker(options = {}) {
   const workerId =
@@ -28,6 +31,7 @@ export function createDurableWorker(options = {}) {
   );
   const submissionRetryBaseMs = Number(options.submissionRetryBaseMs || 150);
   const fetchImpl = options.fetchImpl || null;
+  const governor = options.governor || defaultGovernor;
 
   // Fault-injection hooks for deterministic crash/interruption verification tests
   const onAfterBeginSubmission = options.onAfterBeginSubmission || null;
@@ -97,37 +101,103 @@ export function createDurableWorker(options = {}) {
           await onAfterBeginSubmission(jobSubmitting, { workerId, fencingToken });
         }
 
-        let submissionResult;
-        try {
-          submissionResult = await submitTaskToProvider(jobSubmitting, { fetchImpl });
-        } catch (err) {
-          if (err.ambiguousSubmission) {
-            const ambiguousJob = await markSubmissionAmbiguous({
-              jobId,
-              workerId,
-              fencingToken,
-              reason: err.message,
-            });
-            return {
-              processed: true,
-              action: 'marked_ambiguous',
-              job: ambiguousJob,
-            };
-          }
+        let currentJobToSubmit = jobSubmitting;
+        let submissionResult = null;
+        let lastError = null;
 
+        const cascadeRoutes = getCascadeRoutesForModel(
+          currentJobToSubmit.model,
+          currentJobToSubmit.modality
+        );
+        const attemptedProviders = new Set();
+
+        while (!submissionResult) {
+          const currentProvider = currentJobToSubmit.provider;
+          attemptedProviders.add(currentProvider);
+
+          let acquiredSlot = false;
+          try {
+            if (governor.isCircuitOpen(currentProvider)) {
+              const circuitErr = new Error(`Provider "${currentProvider}" circuit is OPEN`);
+              circuitErr.code = 'PROVIDER_CIRCUIT_OPEN';
+              circuitErr.retryableSubmission = true;
+              throw circuitErr;
+            }
+
+            governor.acquireSlot(currentProvider);
+            acquiredSlot = true;
+
+            submissionResult = await submitTaskToProvider(currentJobToSubmit, { fetchImpl });
+            governor.recordSuccess(currentProvider);
+          } catch (err) {
+            lastError = err;
+            governor.recordFailure(currentProvider, err);
+
+            if (err.ambiguousSubmission) {
+              const ambiguousJob = await markSubmissionAmbiguous({
+                jobId,
+                workerId,
+                fencingToken,
+                reason: err.message,
+              });
+              return {
+                processed: true,
+                action: 'marked_ambiguous',
+                job: ambiguousJob,
+              };
+            }
+
+            const nextCascadeRoute = cascadeRoutes.find(
+              (r) => !attemptedProviders.has(r.provider) && !governor.isCircuitOpen(r.provider)
+            );
+
+            const isRetriableOrUnavailable =
+              err.retryableSubmission ||
+              err.status === 429 ||
+              err.statusCode === 429 ||
+              err.status === 503 ||
+              err.statusCode === 503 ||
+              err.code === 'PROVIDER_CIRCUIT_OPEN' ||
+              err.code === 'PROVIDER_CONCURRENCY_EXCEEDED';
+
+            if (isRetriableOrUnavailable && nextCascadeRoute) {
+              currentJobToSubmit = await transitionJobCascadeRoute({
+                jobId,
+                workerId,
+                fencingToken,
+                nextProvider: nextCascadeRoute.provider,
+                nextResolvedModel: nextCascadeRoute.provider_model_id,
+                nextExecutionRoute: nextCascadeRoute.execution_route,
+                reason: `Cascade failover from ${currentProvider}: ${err.message}`,
+              });
+              continue;
+            }
+
+            break;
+          } finally {
+            if (acquiredSlot) {
+              governor.releaseSlot(currentProvider);
+            }
+          }
+        }
+
+        if (!submissionResult) {
           if (
-            err.retryableSubmission &&
-            jobSubmitting.submission_attempts < jobSubmitting.max_submission_attempts
+            lastError?.retryableSubmission &&
+            currentJobToSubmit.submission_attempts < currentJobToSubmit.max_submission_attempts
           ) {
-            const backoffMs =
-              submissionRetryBaseMs * Math.pow(2, Math.max(0, jobSubmitting.submission_attempts - 1));
+            const backoffMs = calculateBackoffMs({
+              attempt: currentJobToSubmit.submission_attempts,
+              baseMs: submissionRetryBaseMs,
+              retryAfterHeader: lastError?.retryAfter,
+            });
             const retriedJob = await scheduleNextWorkerAttempt({
               jobId,
               workerId,
               fencingToken,
               delayMs: backoffMs,
               mode: 'submission_retry',
-              error: err.message,
+              error: lastError?.message,
             });
             return {
               processed: true,
@@ -141,8 +211,8 @@ export function createDurableWorker(options = {}) {
             tenantId: claimedJob.tenant_id,
             workerId,
             fencingToken,
-            errorMessage: err.message || 'Provider task submission failed',
-            providerDetails: err.providerDetails || null,
+            errorMessage: lastError?.message || 'Provider task submission failed',
+            providerDetails: lastError?.providerDetails || null,
           });
           return {
             processed: true,
@@ -152,7 +222,7 @@ export function createDurableWorker(options = {}) {
         }
 
         if (onAfterProviderAcceptBeforePersist) {
-          await onAfterProviderAcceptBeforePersist(submissionResult, jobSubmitting, {
+          await onAfterProviderAcceptBeforePersist(submissionResult, currentJobToSubmit, {
             workerId,
             fencingToken,
           });
@@ -210,6 +280,7 @@ export function createDurableWorker(options = {}) {
       try {
         pollResult = await pollProviderTaskStatus(claimedJob, { fetchImpl });
       } catch (err) {
+        governor.recordFailure(claimedJob.provider, err);
         const nextPollAttempt = Number(claimedJob.poll_attempts || 0) + 1;
         if (err.retryablePoll !== false && nextPollAttempt < claimedJob.max_poll_attempts) {
           const backoffMs = Math.min(5000, providerPollDelayMs * 2);
@@ -245,6 +316,7 @@ export function createDurableWorker(options = {}) {
       }
 
       if (pollResult.status === 'succeeded') {
+        governor.recordSuccess(claimedJob.provider);
         const { job: completedJob } = await completeJobSuccess({
           jobId,
           tenantId: claimedJob.tenant_id,
@@ -266,6 +338,7 @@ export function createDurableWorker(options = {}) {
       }
 
       if (pollResult.status === 'failed') {
+        governor.recordFailure(claimedJob.provider, { message: pollResult.error });
         const { job: failedJob } = await completeJobFailure({
           jobId,
           tenantId: claimedJob.tenant_id,

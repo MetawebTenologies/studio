@@ -13,7 +13,7 @@
     "build": "npm run build:studio && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs tests/firebase_auth_server.test.mjs",
+    "test": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs tests/firebase_auth_server.test.mjs tests/multi_provider_cascade_and_keys.test.mjs",
     "migrate": "npm run db:migrate",
     "seed": "npm run db:seed",
     "reconcile": "npm run db:reconcile",

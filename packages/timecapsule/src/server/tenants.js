@@ -142,17 +142,18 @@ export async function createUser({
   email,
   authMode = 'otp',
   status = 'active',
+  emailVerified = false,
 }) {
   const id = userId || `usr_${crypto.randomBytes(8).toString('hex')}`;
   const normalizedEmail = String(email).toLowerCase().trim();
 
   return withSystemContext(async (client) => {
     const res = await client.query(
-      `INSERT INTO users (user_id, email, auth_mode, status)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
-       RETURNING user_id, email, auth_mode, status, created_at`,
-      [id, normalizedEmail, authMode, status]
+      `INSERT INTO users (user_id, email, auth_mode, status, email_verified)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (email) DO UPDATE SET updated_at = NOW(), email_verified = EXCLUDED.email_verified
+       RETURNING user_id, email, auth_mode, status, email_verified, created_at`,
+      [id, normalizedEmail, authMode, status, Boolean(emailVerified)]
     );
     return res.rows[0];
   });

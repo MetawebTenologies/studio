@@ -22,6 +22,16 @@ import {
   submitKieTask,
   pollKieTaskStatus,
 } from './adapters/kie.js';
+import {
+  isFalConfigured,
+  submitFalTask,
+  pollFalTaskStatus,
+} from './adapters/fal.js';
+import {
+  isReplicateConfigured,
+  submitReplicateTask,
+  pollReplicateTaskStatus,
+} from './adapters/replicate.js';
 
 export {
   getMuapiBaseV1Url,
@@ -31,6 +41,8 @@ export {
   getKieUploadBaseUrl,
   isKieConfigured,
   buildKieTaskPayload,
+  isFalConfigured,
+  isReplicateConfigured,
 };
 
 const customAdapters = new Map();
@@ -282,6 +294,74 @@ export function assertProviderReadyForJob({ model, modality, provider, inputs = 
     };
   }
 
+  if (route.provider === 'fal') {
+    if (hasTestProviderAdapter('fal')) {
+      return {
+        provider: 'fal',
+        resolvedModel: route.provider_model_id,
+        executionRoute: route.execution_route,
+        executionRouteVersion: route.execution_route_version,
+        pricingPolicyVersion: route.pricing_policy_version,
+        verificationStatus: route.verification_status,
+        isTestSimulation: true,
+      };
+    }
+
+    if (!isFalConfigured()) {
+      const err = new Error(
+        'Provider credentials (FAL_KEY) are not configured on the server; refusing to reserve credits or dispatch job.'
+      );
+      err.code = 'PROVIDER_CREDENTIALS_MISSING';
+      err.status = 503;
+      err.statusCode = 503;
+      throw err;
+    }
+
+    return {
+      provider: 'fal',
+      resolvedModel: route.provider_model_id,
+      executionRoute: route.execution_route,
+      executionRouteVersion: route.execution_route_version,
+      pricingPolicyVersion: route.pricing_policy_version,
+      verificationStatus: route.verification_status,
+      isTestSimulation: false,
+    };
+  }
+
+  if (route.provider === 'replicate') {
+    if (hasTestProviderAdapter('replicate')) {
+      return {
+        provider: 'replicate',
+        resolvedModel: route.provider_model_id,
+        executionRoute: route.execution_route,
+        executionRouteVersion: route.execution_route_version,
+        pricingPolicyVersion: route.pricing_policy_version,
+        verificationStatus: route.verification_status,
+        isTestSimulation: true,
+      };
+    }
+
+    if (!isReplicateConfigured()) {
+      const err = new Error(
+        'Provider credentials (REPLICATE_API_TOKEN) are not configured on the server; refusing to reserve credits or dispatch job.'
+      );
+      err.code = 'PROVIDER_CREDENTIALS_MISSING';
+      err.status = 503;
+      err.statusCode = 503;
+      throw err;
+    }
+
+    return {
+      provider: 'replicate',
+      resolvedModel: route.provider_model_id,
+      executionRoute: route.execution_route,
+      executionRouteVersion: route.execution_route_version,
+      pricingPolicyVersion: route.pricing_policy_version,
+      verificationStatus: route.verification_status,
+      isTestSimulation: false,
+    };
+  }
+
   if (hasTestProviderAdapter(route.provider)) {
     return {
       provider: route.provider,
@@ -352,6 +432,14 @@ export async function submitTaskToProvider(job, options = {}) {
     return submitKieTask(job, options);
   }
 
+  if (job.provider === 'fal') {
+    return submitFalTask(job, options);
+  }
+
+  if (job.provider === 'replicate') {
+    return submitReplicateTask(job, options);
+  }
+
   const err = new Error(`Unsupported job provider "${job.provider}" during task submission`);
   err.code = 'UNSUPPORTED_PROVIDER';
   err.statusCode = 400;
@@ -384,6 +472,14 @@ export async function pollProviderTaskStatus(job, options = {}) {
 
   if (job.provider === 'kie') {
     return pollKieTaskStatus(job, options);
+  }
+
+  if (job.provider === 'fal') {
+    return pollFalTaskStatus(job, options);
+  }
+
+  if (job.provider === 'replicate') {
+    return pollReplicateTaskStatus(job, options);
   }
 
   const err = new Error(`Unsupported job provider "${job.provider}" during status polling`);

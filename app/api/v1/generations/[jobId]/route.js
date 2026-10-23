@@ -5,7 +5,7 @@ import {
 
 export async function GET(request, context) {
   try {
-    const session = await requireSession(request);
+    const session = await requireSession(request, { requiredScope: 'generations:read' });
     const resolvedParams = await context.params;
     const job = await authorizeJobAccess(session, resolvedParams.jobId);
 

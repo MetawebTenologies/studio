@@ -67,6 +67,28 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
       'Kie recordInfo and veo/record-info do not consistently return a standardized provider credit debit field across all models; Timecapsule bills deterministic integer credits via credit_estimate_policy.',
     ],
   },
+  fal: {
+    provider: 'fal',
+    docs_url: 'https://fal.ai/docs',
+    base_url: 'https://queue.fal.run',
+    auth_scheme: 'Authorization: Key <FAL_KEY> (server-only)',
+    submit_contract: 'POST https://queue.fal.run/{endpoint} -> { request_id }',
+    poll_contract: 'GET https://queue.fal.run/{endpoint}/requests/{request_id}/status -> { status }',
+    unknowns: [
+      'Fal Queue provides asynchronous polling with separate result URLs; cost is billed in USD micro-units.',
+    ],
+  },
+  replicate: {
+    provider: 'replicate',
+    docs_url: 'https://replicate.com/docs',
+    base_url: 'https://api.replicate.com/v1',
+    auth_scheme: 'Authorization: Bearer <REPLICATE_API_TOKEN> (server-only)',
+    submit_contract: 'POST https://api.replicate.com/v1/models/{model}/predictions -> { id, status }',
+    poll_contract: 'GET https://api.replicate.com/v1/predictions/{id} -> { id, status, output, error }',
+    unknowns: [
+      'Replicate predictions report execution metrics and outputs as string or array of strings.',
+    ],
+  },
 });
 
 /**
@@ -93,7 +115,22 @@ export const SUPPORTED_RELEASE_MODELS = [
     execution_route: 'muapi:predictions/v1:nano-banana-pro',
     execution_route_version: EXECUTION_ROUTE_VERSION,
     pricing_policy_version: PRICING_POLICY_VERSION,
+    cascade_order: ['muapi', 'fal', 'replicate', 'kie'],
     alternative_providers: {
+      fal: {
+        provider: 'fal',
+        provider_model_id: 'fal-ai/flux/dev',
+        execution_route: 'fal:queue/v1:fal-ai/flux/dev',
+        execution_route_version: EXECUTION_ROUTE_VERSION,
+        verification_status: 'contract_tested',
+      },
+      replicate: {
+        provider: 'replicate',
+        provider_model_id: 'black-forest-labs/flux-schnell',
+        execution_route: 'replicate:predictions/v1:black-forest-labs/flux-schnell',
+        execution_route_version: EXECUTION_ROUTE_VERSION,
+        verification_status: 'contract_tested',
+      },
       kie: {
         provider: 'kie',
         provider_model_id: 'nano-banana-pro',
@@ -584,4 +621,29 @@ export function resolveReleaseRoute(modelId, modality, requestedProvider = null)
   err.status = 400;
   err.statusCode = 400;
   throw err;
+}
+
+export function getCascadeRoutesForModel(modelId, modality) {
+  const entry = getSupportedReleaseModel(modelId);
+  if (!entry) return [];
+  const order = entry.cascade_order || [
+    entry.primary_provider,
+    ...Object.keys(entry.alternative_providers || {}),
+  ];
+  const routes = [];
+  for (const provider of order) {
+    try {
+      const resolved = resolveReleaseRoute(modelId, modality, provider);
+      if (
+        resolved &&
+        (resolved.verification_status === 'contract_tested' ||
+          resolved.verification_status === 'live_verified')
+      ) {
+        routes.push(resolved);
+      }
+    } catch {
+      // skip unresolvable or disabled routes
+    }
+  }
+  return routes;
 }

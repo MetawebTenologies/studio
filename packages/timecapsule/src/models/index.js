@@ -14,6 +14,7 @@ import {
   PROVIDER_DOCUMENTATION_REGISTRY,
   getSupportedReleaseModel,
   resolveReleaseRoute,
+  getCascadeRoutesForModel,
 } from './release-catalog.js';
 import { getModelCapabilities } from './capabilities.js';
 
@@ -25,6 +26,7 @@ export {
   PROVIDER_DOCUMENTATION_REGISTRY,
   getSupportedReleaseModel,
   resolveReleaseRoute,
+  getCascadeRoutesForModel,
   getModelCapabilities,
 };
 

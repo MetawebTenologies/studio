@@ -790,6 +790,77 @@ export async function beginProviderSubmissionAttempt({ jobId, workerId, fencingT
 }
 
 /**
+ * Atomically transitions a job from a failing/rate-limited provider to an alternative
+ * cascade route, recording `generation.cascade_failover` in `job_events`.
+ */
+export async function transitionJobCascadeRoute({
+  jobId,
+  workerId,
+  fencingToken,
+  nextProvider,
+  nextResolvedModel,
+  nextExecutionRoute,
+  reason = 'Primary provider retriable error or circuit open',
+}) {
+  return withTransaction(async (client) => {
+    const jobRes = await client.query(
+      `SELECT * FROM jobs WHERE job_id = $1 FOR UPDATE`,
+      [jobId]
+    );
+    if (jobRes.rowCount === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const row = jobRes.rows[0];
+    if (
+      row.status !== 'running' ||
+      row.lease_owner !== workerId ||
+      Number(row.fencing_token) !== Number(fencingToken)
+    ) {
+      throw createStaleFencingError(jobId, workerId, fencingToken);
+    }
+
+    const fromProvider = row.provider;
+    const nextEventVersion = Number(row.last_event_version || 0) + 1;
+
+    await client.query("SELECT set_config('app.allow_cascade_failover', 'true', true)");
+
+    const updatedRes = await client.query(
+      `UPDATE jobs
+       SET provider = $2,
+           resolved_provider_model = $3,
+           execution_route = $4,
+           last_event_version = $5,
+           updated_at = NOW()
+       WHERE job_id = $1
+       RETURNING *`,
+      [jobId, nextProvider, nextResolvedModel, nextExecutionRoute, nextEventVersion]
+    );
+
+    await client.query(
+      `INSERT INTO job_events (
+         event_id, job_id, tenant_id, event_version, type, status, progress, provider, provider_job_id, data_json
+       ) VALUES ($1, $2, $3, $4, 'generation.cascade_failover', 'running', $5, $6, NULL, $7::jsonb)`,
+      [
+        `evt_${crypto.randomBytes(8).toString('hex')}`,
+        row.job_id,
+        row.tenant_id,
+        nextEventVersion,
+        Number(row.progress || 0.05),
+        nextProvider,
+        JSON.stringify({
+          from_provider: fromProvider,
+          to_provider: nextProvider,
+          execution_route: nextExecutionRoute,
+          reason,
+        }),
+      ]
+    );
+
+    return formatJobRow(updatedRes.rows[0]);
+  });
+}
+
+/**
  * Immediately persists `provider_job_id` and transitions `submission_state = 'submitted'`
  * as soon as the provider returns a task ID.
  */
