@@ -6,6 +6,13 @@ import PlatformNav from '@/components/PlatformNav';
 import PlatformFooter from '@/components/PlatformFooter';
 import BrandIcon from '@/components/BrandIcon';
 import { Button, Badge, Card } from '@/components/ui';
+import {
+  WorkflowCanvasSection,
+  RealWorldUseCasesSection,
+  IntegrateIn5LinesSection,
+  WhyDevelopersChooseSection,
+  FaqSection,
+} from '@/components/landing';
 
 const LEFT_PROVIDERS = [
   { name: 'Kling AI', slug: 'kling', id: 'kling-2-1-pro' },
@@ -489,6 +496,31 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* =========================================================================
+            Build & Scale Generative AI Workflows (Interactive Canvas Graph)
+            ========================================================================= */}
+        <WorkflowCanvasSection />
+
+        {/* =========================================================================
+            Real World Use Cases (Tabbed Multi-Domain Pipeline Showcases)
+            ========================================================================= */}
+        <RealWorldUseCasesSection />
+
+        {/* =========================================================================
+            Integrate AI In Under 5 Lines (Multi-Language Code Terminal)
+            ========================================================================= */}
+        <IntegrateIn5LinesSection />
+
+        {/* =========================================================================
+            Why Developers Choose Timecapsule (Production AI Architecture Cards)
+            ========================================================================= */}
+        <WhyDevelopersChooseSection />
+
+        {/* =========================================================================
+            Frequently Asked Questions (Accessible Keyboard Accordion)
+            ========================================================================= */}
+        <FaqSection />
       </main>
 
       <PlatformFooter />
