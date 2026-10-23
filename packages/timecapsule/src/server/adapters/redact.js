@@ -10,6 +10,10 @@ export function redactStringSecrets(input) {
   const knownSecrets = [
     process.env.MUAPI_API_KEY,
     process.env.KIE_API_KEY,
+    process.env.FAL_KEY,
+    process.env.FAL_API_KEY,
+    process.env.REPLICATE_API_TOKEN,
+    process.env.REPLICATE_API_KEY,
     process.env.TIMECAPSULE_PREVIEW_KEY,
     process.env.TIMECAPSULE_SESSION_SECRET,
   ].filter((v) => typeof v === 'string' && v.trim().length >= 4);

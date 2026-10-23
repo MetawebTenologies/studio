@@ -17,6 +17,17 @@ _api_build_tmp
 .env
 .env.*
 !.env.example
+*.env
+.env*.local
+
+# Credentials, certificates, and private keys
+*.pem
+*.key
+*.cert
+*.crt
+service-account*.json
+credentials*.json
+*secret*.json
 
 # Editor directories and files
 .vscode/*
