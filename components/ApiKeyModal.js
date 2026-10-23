@@ -74,6 +74,26 @@ export default function ApiKeyModal({ onSave }) {
         </div>
 
         <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem(TIMECAPSULE_BRAND.storageKeys.backendMode, 'bff');
+              onSave('TIMECAPSULE_BFF');
+            }}
+            className="w-full bg-[#00e5ff] text-black font-black py-3.5 rounded-xl hover:opacity-90 transition-opacity cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-[#00e5ff]/20"
+          >
+            <span>Enter Studio with Account Credits</span>
+            <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full font-bold">Default</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px bg-white/10 flex-1" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
+              or enter private preview key
+            </span>
+            <div className="h-px bg-white/10 flex-1" />
+          </div>
+
           <form onSubmit={handleManagedMode} className="space-y-3">
             <div>
               <label className="block text-xs font-bold text-[#00e5ff]/80 uppercase tracking-widest mb-1.5">

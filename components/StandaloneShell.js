@@ -307,6 +307,10 @@ export default function StandaloneShell({ hideHeader = false }) {
       setApiKey('TIMECAPSULE_OFFLINE_PREVIEW');
     } else if (stored) {
       setApiKey(stored);
+    } else {
+      // Default to live credit-powered Studio (no manual key or modal prompt needed)
+      localStorage.setItem(TIMECAPSULE_BRAND.storageKeys.backendMode, 'bff');
+      setApiKey('TIMECAPSULE_BFF');
     }
   }, []);
 
