@@ -14,7 +14,7 @@
     "start": "next start",
     "lint": "next lint",
     "verify:secrets": "node scripts/verify_no_secrets.mjs",
-    "test": "node scripts/verify_no_secrets.mjs && DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs tests/firebase_auth_server.test.mjs tests/multi_provider_cascade_and_keys.test.mjs",
+    "test": "node scripts/verify_no_secrets.mjs && DATABASE_URL=${TEST_DATABASE_URL:-postgresql://localhost:5432/timecapsule_test} TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB=1 node --test --test-concurrency=1 tests/timecapsule.test.mjs tests/tenancy.test.mjs tests/uploads_and_parity.test.mjs tests/firebase_auth_server.test.mjs tests/multi_provider_cascade_and_keys.test.mjs tests/business_invariants_and_pricing.test.mjs",
     "migrate": "npm run db:migrate",
     "seed": "npm run db:seed",
     "reconcile": "npm run db:reconcile",

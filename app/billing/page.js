@@ -94,17 +94,17 @@ export default function BillingPage() {
 
           <Card className="p-6 flex flex-col justify-between">
             <div>
-              <span className="text-xs text-zinc-400 font-medium block mb-1">Founder Backer Program</span>
-              <div className="text-sm font-bold text-[#f5f7fa] mt-2 mb-1">Early Seed Backer Tier</div>
+              <span className="text-xs text-zinc-400 font-medium block mb-1">Commercial Billing Notice</span>
+              <div className="text-sm font-bold text-[#f5f7fa] mt-2 mb-1">Private Preview Mode</div>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Eligible for 20% net margin revenue sharing pool, perpetual filmmaking software license, and monthly credit dividends.
+                Live commercial credit purchases are paused while supplier costs are reviewed. Use workspace preview keys or test credit allocations for internal studio verification.
               </p>
             </div>
             <Link
               href="/pricing"
-              className="mt-6 px-4 py-2 border border-[#00e5ff]/30 hover:border-[#00e5ff]/50 bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20 text-[#00e5ff] text-xs font-bold rounded text-center transition-colors"
+              className="mt-6 px-4 py-2 border border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-bold rounded text-center transition-colors"
             >
-              View Backer Pass Inclusions
+              View Rate Cards & Price Book
             </Link>
           </Card>
         </div>

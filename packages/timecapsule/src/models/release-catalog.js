@@ -38,23 +38,60 @@ export const PRICING_POLICY_VERSION = 'tc-pricing-v1';
 export const EXECUTION_ROUTE_VERSION = '2026-10-21.v1';
 
 export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
-  checked_at: '2026-10-21',
+  checked_at: '2026-10-24',
   muapi: {
     provider: 'muapi',
     docs_url: 'https://muapi.ai/docs',
+    pricing_url: 'https://muapi.ai/pricing',
     base_url: 'https://api.muapi.ai/api/v1',
     auth_scheme: 'x-api-key header (server-only MUAPI_API_KEY)',
     submit_contract: 'POST /api/v1/{endpoint} -> { request_id, status }',
     poll_contract: 'GET /api/v1/predictions/{request_id}/result -> { id, status, outputs, error }',
     upload_contract: 'POST /api/v1/upload_file (multipart/form-data field "file") -> { url }',
+    verified_rates: {
+      'nano-banana-pro': {
+        unit_cost_usd: 0.120,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://muapi.ai/pricing and https://muapi.ai/playground/nano-banana-pro',
+        confidence: 'high',
+        resolution_tiered: false,
+      },
+      'nano-banana-pro-edit': {
+        unit_cost_usd: 0.120,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://muapi.ai/pricing',
+        confidence: 'high',
+        resolution_tiered: false,
+      },
+      'seedance-pro-t2v': {
+        unit_cost_usd: 0.180,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://muapi.ai/pricing',
+        confidence: 'high',
+        resolution_tiered: false,
+      },
+      'seedance-pro-i2v': {
+        unit_cost_usd: 0.180,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://muapi.ai/pricing',
+        confidence: 'high',
+        resolution_tiered: false,
+      },
+    },
     unknowns: [
       'Muapi does not document a universal caller-supplied idempotency header on POST /api/v1/{endpoint}; Timecapsule enforces pre-submission attempt locking and submission_unknown reconciliation.',
+      'Muapi public pricing page does not publish a tiered resolution curve for nano-banana-pro; per-resolution supplier cost variation is unverified/unknown.',
       'Exact Muapi per-request credit/USD response headers or payload fields may vary by model endpoint; provider cost is recorded as separate metadata when present and never used as user_billed_credits.',
     ],
   },
   kie: {
     provider: 'kie',
     docs_url: 'https://docs.kie.ai',
+    pricing_url: 'https://kie.ai/pricing',
     base_url: 'https://api.kie.ai',
     upload_base_url: 'https://kieai.redpandaai.co',
     auth_scheme: 'Authorization: Bearer <KIE_API_KEY> (server-only)',
@@ -63,8 +100,27 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
     veo_submit_contract: 'POST /api/v1/veo/generate -> { code: 200, data: { taskId } }',
     veo_poll_contract: 'GET /api/v1/veo/record-info?taskId={taskId} -> { code: 200, data: { taskId, successFlag, response: { resultUrls }, errorMessage } }',
     upload_contract: 'POST https://kieai.redpandaai.co/api/file-base64-upload -> { code: 200, data: { downloadUrl } }',
+    verified_rates: {
+      'veo3_fast': {
+        unit_cost_usd: 0.350, // 60-80 Kie credits at $0.005/credit = $0.30 - $0.40
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://docs.kie.ai/veo3-api/generate-veo-3-video',
+        confidence: 'high',
+        resolution_tiered: true,
+      },
+      'bytedance/seedance-1.5-pro': {
+        unit_cost_usd: 0.250, // ~50 Kie credits
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://docs.kie.ai/market/common/create-task',
+        confidence: 'medium',
+        resolution_tiered: false,
+      },
+    },
     unknowns: [
       'Kie recordInfo and veo/record-info do not consistently return a standardized provider credit debit field across all models; Timecapsule bills deterministic integer credits via credit_estimate_policy.',
+      'Kie market task pricing (seedance-1.5-pro) fluctuates with cluster demand.',
     ],
   },
   fal: {
@@ -74,6 +130,15 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
     auth_scheme: 'Authorization: Key <FAL_KEY> (server-only)',
     submit_contract: 'POST https://queue.fal.run/{endpoint} -> { request_id }',
     poll_contract: 'GET https://queue.fal.run/{endpoint}/requests/{request_id}/status -> { status }',
+    verified_rates: {
+      'fal-ai/flux/dev': {
+        unit_cost_usd: 0.025,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://fal.ai/models/fal-ai/flux/dev',
+        confidence: 'high',
+      },
+    },
     unknowns: [
       'Fal Queue provides asynchronous polling with separate result URLs; cost is billed in USD micro-units.',
     ],
@@ -85,6 +150,15 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
     auth_scheme: 'Authorization: Bearer <REPLICATE_API_TOKEN> (server-only)',
     submit_contract: 'POST https://api.replicate.com/v1/models/{model}/predictions -> { id, status }',
     poll_contract: 'GET https://api.replicate.com/v1/predictions/{id} -> { id, status, output, error }',
+    verified_rates: {
+      'black-forest-labs/flux-schnell': {
+        unit_cost_usd: 0.003,
+        currency: 'USD',
+        checked_date: '2026-10-24',
+        source: 'https://replicate.com/black-forest-labs/flux-schnell',
+        confidence: 'high',
+      },
+    },
     unknowns: [
       'Replicate predictions report execution metrics and outputs as string or array of strings.',
     ],

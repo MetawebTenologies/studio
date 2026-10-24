@@ -17,6 +17,7 @@ import {
   getCascadeRoutesForModel,
 } from './release-catalog.js';
 import { getModelCapabilities } from './capabilities.js';
+import * as economics from './economics.js';
 
 export {
   SUPPORTED_RELEASE_MODELS,
@@ -28,7 +29,9 @@ export {
   resolveReleaseRoute,
   getCascadeRoutesForModel,
   getModelCapabilities,
+  economics,
 };
+export * from './economics.js';
 
 export const timecapsuleNativeModels = {
   t2i: [

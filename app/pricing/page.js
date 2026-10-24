@@ -12,45 +12,45 @@ export const CREDIT_PACKS = [
     name: 'Starter Pack',
     price: '$10',
     credits: '2,500 Credits',
-    bonus: '2x vs Higgsfield',
-    desc: '2x more compute than Higgsfield Lite ($10 = 125 gens). Zero expiration.',
-    capacity: '250 images (1K) or ~25 videos (5s)',
+    bonus: 'Baseline Denomination ($1 = 250 cr)',
+    desc: 'Pay-as-you-go multimodal compute credits. Zero expiration.',
+    capacity: 'On-demand image, video, and lip-sync generations',
     popular: false,
   },
   {
     name: 'Creator Pack',
     price: '$25',
     credits: '6,800 Credits',
-    bonus: '+9% Bonus Compute',
-    desc: 'Beats Higgsfield Pro ($29 = 300 gens) with over 2.2x compute power.',
-    capacity: '680 images or ~68 videos',
+    bonus: '+8.8% Bonus Credits ($0.00368/cr)',
+    desc: 'Volume top-up for active creators and storyboarders.',
+    capacity: 'High-frequency image iterations and video renders',
     popular: true,
   },
   {
     name: 'Studio Pro',
     price: '$75',
     credits: '22,500 Credits',
-    bonus: '+20% Bonus Compute',
-    desc: 'Beats Higgsfield Max ($79 = 900 gens) with nearly 3x compute capacity.',
-    capacity: '2,250 images or ~225 videos',
+    bonus: '+20% Bonus Credits ($0.00333/cr)',
+    desc: 'Professional studio batch generation and multi-scene pipelines.',
+    capacity: 'Commercial creative workflows and HD video pipelines',
     popular: false,
   },
   {
     name: 'Production House',
     price: '$250',
     credits: '85,000 Credits',
-    bonus: '+36% Bonus Compute',
-    desc: 'High-volume generation for automated commercial creative workflows.',
-    capacity: '8,500 images or ~850 videos',
+    bonus: '+36% Bonus Credits ($0.00294/cr)',
+    desc: 'High-throughput production pipelines for creative agencies.',
+    capacity: 'Extensive multimodal rendering and automated queues',
     popular: false,
   },
   {
     name: 'Enterprise Fleet',
     price: '$1,000',
     credits: '380,000 Credits',
-    bonus: '+52% Bonus Compute',
-    desc: 'Maximum compute value for enterprise pipelines, game studios, and API resellers.',
-    capacity: '38,000 images or ~3,800 videos',
+    bonus: '+52% Bonus Credits ($0.00263/cr)',
+    desc: 'Maximum compute value for API integrations, game studios, and resellers.',
+    capacity: 'Enterprise-scale throughput across all supported models',
     popular: false,
   },
 ];
@@ -60,16 +60,16 @@ export const MONTHLY_STUDIO_PLANS = [
     name: 'Studio Scale',
     price: '$3,000',
     period: '/month',
-    fastCredits: '4,000,000 Fast Credits',
-    relaxed: 'Unlimited Relaxed Generations (Queued)',
+    fastCredits: 'Provisional Allowance (Pending Stress-Test)',
+    relaxed: 'Queued Generations (Fair-Use)',
     concurrency: '10 Concurrent Tasks',
-    desc: 'For growing creative studios generating thousands of assets every week.',
+    desc: 'For growing creative teams requiring dedicated concurrency and team management.',
     features: [
-      '4,000,000 Fast Priority Credits monthly',
-      'Unlimited Relaxed Image Generation (Fair-Use)',
-      '10 Concurrent GPU worker pipelines',
+      'High-priority fast compute queue',
+      'Relaxed image generation lanes',
+      '10 Concurrent worker pipelines',
       'Filmmaking Suite multi-seat license included',
-      'Dedicated Customer Success channel',
+      'Dedicated technical support channel',
     ],
     popular: false,
   },
@@ -77,14 +77,14 @@ export const MONTHLY_STUDIO_PLANS = [
     name: 'Agency Master',
     price: '$5,000',
     period: '/month',
-    fastCredits: '7,500,000 Fast Credits',
-    relaxed: 'Unlimited Relaxed Image & Video',
+    fastCredits: 'Provisional Allowance (Pending Stress-Test)',
+    relaxed: 'Multi-seat Queued Lanes',
     concurrency: '20 Concurrent Tasks',
-    desc: 'For top-tier creative agencies, production houses, and high-frequency video teams.',
+    desc: 'For creative agencies and production houses running concurrent client pipelines.',
     features: [
-      '7,500,000 Fast Priority Credits monthly',
-      'Unlimited Relaxed Image + Video generation',
-      '20 Concurrent GPU worker pipelines',
+      'High-priority agency queue',
+      'Relaxed image + video lanes',
+      '20 Concurrent worker pipelines',
       'Unlimited team member seats',
       'Shared Studio Media Vault & Asset CDN',
       'Direct Private Slack / Telegram channel',
@@ -95,14 +95,13 @@ export const MONTHLY_STUDIO_PLANS = [
     name: 'Sovereign VIP',
     price: '$10,000',
     period: '/month',
-    fastCredits: '16,000,000 Fast Credits',
-    relaxed: 'VIP Priority GPU Lane + Unlimited',
+    fastCredits: 'Custom Enterprise Quota',
+    relaxed: 'VIP Dedicated GPU Queue',
     concurrency: '50 Concurrent Tasks',
-    desc: 'For enterprise media companies requiring private dedicated lanes and maximum throughput.',
+    desc: 'For enterprise media companies requiring dedicated compute lanes and SLAs.',
     features: [
-      '16,000,000 Fast Priority Credits monthly',
       'VIP Dedicated GPU Priority Queue Lane',
-      '50 Concurrent GPU worker pipelines',
+      '50 Concurrent worker pipelines',
       'Custom White-Label domain instance included',
       'Custom model fine-tuning & LoRA hosting support',
       '99.9% Uptime Enterprise SLA guarantee',
@@ -111,100 +110,62 @@ export const MONTHLY_STUDIO_PLANS = [
   },
 ];
 
-export const BACKER_BENEFITS = [
-  {
-    title: 'Perpetual Filmmaking Suite (Free Forever)',
-    desc: 'All current and future Timecapsule software (Cinema Studio, Storyboarder, Canvas Director, Lipsync Suite) includes $0 monthly subscription fees for life. You only consume compute credits.',
-    icon: 'film',
-  },
-  {
-    title: 'Monthly Compounding Compute Dividend',
-    desc: 'Every backer receives an automatic recurring refill of 5,000 to 25,000 free compute credits every single month for life.',
-    icon: 'sparkles',
-  },
-  {
-    title: 'Sub-Wholesale At-Cost Compute Lane',
-    desc: 'Backers generate at vendor cost + 15% rather than standard retail markup (+200%). Your compute credits stretch 2.5x further than standard users.',
-    icon: 'trending-up',
-  },
-  {
-    title: '25% Net Platform Margin Revenue Share Pool',
-    desc: '25% of net platform margins across all credit top-ups are allocated directly to the Early Seed Community Backer Pool, distributed pro-rata to token/pass holders.',
-    icon: 'pie-chart',
-  },
-  {
-    title: 'VIP Queue Priority & Roadmap Governance',
-    desc: 'Backer tasks jump to the head of provider queues, and backers hold direct voting rights on which new AI models are integrated next.',
-    icon: 'shield-check',
-  },
-];
-
 const MODEL_GROUPS = [
   {
     name: 'Flagship Studio Models',
     count: '6 verified models',
     models: [
-      { name: 'nano-banana-pro (1K)', modality: 'TEXT TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.08 (Higgsfield)', replicate: '$0.08', discount: '2x Compute (50% Off) ↓' },
-      { name: 'nano-banana-pro (2K)', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.12', replicate: '$0.12', discount: '-50% ↓' },
-      { name: 'nano-banana-pro-edit', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.12', replicate: '$0.12', discount: '-50% ↓' },
-      { name: 'seedance-pro-t2v (720p)', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
-      { name: 'seedance-pro-t2v (1080p)', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$3.00', replicate: 'Not available', discount: '-40% ↓' },
-      { name: 'veo3.1-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50 per gen', replicate: '$2.50', discount: '-28% ↓' },
-      { name: 'lipsync-studio-v1', modality: 'LIP SYNC', timecapsule: '30 cr ($0.120)', fal: '$0.20', replicate: '$0.20', discount: '-40% ↓' },
+      { name: 'nano-banana-pro (1K)', modality: 'TEXT TO IMAGE', timecapsule: '10 cr (Provisional: 66–118 cr proposed)', primaryProvider: 'Muapi ($0.12 verified)', fallbackRoute: 'Fal / Replicate ($0.003–$0.025)', status: 'Cost Verified ($0.12)' },
+      { name: 'nano-banana-pro (2K)', modality: 'TEXT TO IMAGE', timecapsule: '15 cr (Provisional: 66–118 cr proposed)', primaryProvider: 'Muapi ($0.12 verified)', fallbackRoute: 'Fal / Replicate ($0.003–$0.025)', status: 'Cost Verified ($0.12)' },
+      { name: 'nano-banana-pro-edit', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr (Provisional: 66–118 cr proposed)', primaryProvider: 'Muapi ($0.12 verified)', fallbackRoute: 'Kie ($0.10–$0.12)', status: 'Cost Verified ($0.12)' },
+      { name: 'seedance-pro-t2v (720p)', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', primaryProvider: 'Muapi ($0.18 verified)', fallbackRoute: 'Kie Seedance 1.5 (~$0.25)', status: 'Profitable (65%–82%)' },
+      { name: 'seedance-pro-t2v (1080p)', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', primaryProvider: 'Muapi (~$0.18–$0.25)', fallbackRoute: 'Kie Seedance 1.5 (~$0.25)', status: 'Profitable (60%–78%)' },
+      { name: 'veo3.1-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', primaryProvider: 'Kie ($0.30–$0.40 verified)', fallbackRoute: 'None (Direct route)', status: 'Profitable (55%–70%)' },
+      { name: 'lipsync-studio-v1', modality: 'LIP SYNC', timecapsule: '30 cr ($0.120)', primaryProvider: 'Muapi (~$0.02–$0.04)', fallbackRoute: 'Third-party sync', status: 'Profitable (~60%)' },
     ],
   },
   {
     name: 'Tools & Utilities',
     count: '20 models',
     models: [
-      { name: 'ai-image-upscaler', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.06 per gen', replicate: '$0.06 per gen', discount: '-33% ↓' },
-      { name: 'ai-image-face-swap', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.08', replicate: '$0.08', discount: '-25% ↓' },
-      { name: 'ai-product-shot', modality: 'IMAGE TO IMAGE', timecapsule: '20 cr ($0.080)', fal: '$0.12', replicate: '$0.12', discount: '-33% ↓' },
-      { name: 'ai-skin-enhancer', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.06 per gen', replicate: '$0.06 per gen', discount: '-33% ↓' },
-      { name: 'ai-background-remover', modality: 'IMAGE TO IMAGE', timecapsule: '5 cr ($0.020)', fal: '$0.04 per gen', replicate: '$0.04 per gen', discount: '-50% ↓' },
-    ],
-  },
-  {
-    name: 'Google Veo Series',
-    count: '4 models',
-    models: [
-      { name: 'veo3-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '875 cr ($3.50)', fal: '$5.00 per generation', replicate: '$5.00 per generation', discount: '-30% ↓' },
-      { name: 'veo3-fast-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50 per generation', replicate: '$2.50 per generation', discount: '-28% ↓' },
-      { name: 'veo3-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '875 cr ($3.50)', fal: '$5.00', replicate: '$5.00', discount: '-30% ↓' },
-      { name: 'veo3-fast-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$2.50', replicate: '$2.50', discount: '-28% ↓' },
+      { name: 'ai-image-upscaler', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', primaryProvider: 'Muapi / Fal (~$0.015)', fallbackRoute: 'Replicate', status: 'Profitable' },
+      { name: 'ai-image-face-swap', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', primaryProvider: 'Muapi / Fal (~$0.020)', fallbackRoute: 'Replicate', status: 'Profitable' },
+      { name: 'ai-product-shot', modality: 'IMAGE TO IMAGE', timecapsule: '20 cr ($0.080)', primaryProvider: 'Muapi (~$0.030)', fallbackRoute: 'Fal', status: 'Profitable' },
+      { name: 'ai-skin-enhancer', modality: 'IMAGE TO IMAGE', timecapsule: '10 cr ($0.040)', primaryProvider: 'Muapi (~$0.015)', fallbackRoute: 'Fal', status: 'Profitable' },
+      { name: 'ai-background-remover', modality: 'IMAGE TO IMAGE', timecapsule: '5 cr ($0.020)', primaryProvider: 'Muapi (~$0.008)', fallbackRoute: 'Fal', status: 'Profitable' },
     ],
   },
   {
     name: 'Black Forest Labs Flux',
     count: '11 models',
     models: [
-      { name: 'flux-dev', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.080', replicate: '$0.080', discount: '-25% ↓' },
-      { name: 'flux-schnell', modality: 'TEXT TO IMAGE', timecapsule: '10 cr ($0.040)', fal: '$0.050 per generation', replicate: '$0.050 per generation', discount: '-20% ↓' },
-      { name: 'flux-3-klein-text-to-image', modality: 'TEXT TO IMAGE', timecapsule: '12 cr ($0.048)', fal: '$0.070', replicate: '$0.070', discount: '-31% ↓' },
-      { name: 'flux-3-klein-edit-image', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', fal: '$0.080', replicate: '$0.080', discount: '-25% ↓' },
+      { name: 'flux-dev', modality: 'TEXT TO IMAGE', timecapsule: '15 cr ($0.060)', primaryProvider: 'Fal ($0.025 verified)', fallbackRoute: 'Replicate ($0.025)', status: 'Profitable (~54%)' },
+      { name: 'flux-schnell', modality: 'TEXT TO IMAGE', timecapsule: '10 cr ($0.040)', primaryProvider: 'Replicate ($0.003 verified)', fallbackRoute: 'Muapi ($0.003)', status: 'Profitable (~90%)' },
+      { name: 'flux-3-klein-text-to-image', modality: 'TEXT TO IMAGE', timecapsule: '12 cr ($0.048)', primaryProvider: 'Fal (~$0.015)', fallbackRoute: 'Replicate', status: 'Profitable' },
+      { name: 'flux-3-klein-edit-image', modality: 'IMAGE TO IMAGE', timecapsule: '15 cr ($0.060)', primaryProvider: 'Fal (~$0.015)', fallbackRoute: 'Replicate', status: 'Profitable' },
     ],
   },
   {
     name: 'ByteDance Seedance 2.5',
     count: '18 models',
     models: [
-      { name: 'seedance-2.5-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 per gen (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
-      { name: 'seedance-2.5-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '350 cr ($1.40)', fal: '$2.40 per gen (Higgsfield)', replicate: 'Not available', discount: '-42% ↓' },
-      { name: 'seedance-2.5-first-last-frame', modality: 'IMAGE TO VIDEO', timecapsule: '450 cr ($1.80)', fal: '$3.00 per generation', replicate: 'Not available', discount: '-40% ↓' },
+      { name: 'seedance-2.5-text-to-video', modality: 'TEXT TO VIDEO', timecapsule: '350 cr ($1.40)', primaryProvider: 'Muapi ($0.180 verified)', fallbackRoute: 'Kie', status: 'Profitable' },
+      { name: 'seedance-2.5-image-to-video', modality: 'IMAGE TO VIDEO', timecapsule: '350 cr ($1.40)', primaryProvider: 'Muapi ($0.180 verified)', fallbackRoute: 'Kie', status: 'Profitable' },
+      { name: 'seedance-2.5-first-last-frame', modality: 'IMAGE TO VIDEO', timecapsule: '450 cr ($1.80)', primaryProvider: 'Muapi (~$0.250)', fallbackRoute: 'Kie', status: 'Profitable' },
     ],
   },
   {
     name: 'Audio & Music Synthesis',
     count: '4 models',
     models: [
-      { name: 'mmaudio-v2-text-to-audio', modality: 'TEXT TO AUDIO', timecapsule: '10 cr ($0.040)', fal: '$0.06 per generation', replicate: '$0.06 per generation', discount: '-33% ↓' },
-      { name: 'lyria-3-music', modality: 'TEXT TO AUDIO', timecapsule: '25 cr ($0.100)', fal: '$0.15 per generation', replicate: '$0.15 per generation', discount: '-33% ↓' },
+      { name: 'mmaudio-v2-text-to-audio', modality: 'TEXT TO AUDIO', timecapsule: '10 cr ($0.040)', primaryProvider: 'Muapi (~$0.015)', fallbackRoute: 'Fal', status: 'Profitable' },
+      { name: 'lyria-3-music', modality: 'TEXT TO AUDIO', timecapsule: '25 cr ($0.100)', primaryProvider: 'Muapi (~$0.035)', fallbackRoute: 'Fal', status: 'Profitable' },
     ],
   },
 ];
 
 export default function PricingPage() {
-  const [activeTab, setActiveTab] = useState('packs'); // 'packs' | 'monthly' | 'backers' | 'models'
+  const [activeTab, setActiveTab] = useState('packs'); // 'packs' | 'monthly' | 'models'
   const [activeModality, setActiveModality] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -213,22 +174,31 @@ export default function PricingPage() {
       <PlatformNav activeModule="pricing" />
 
       <main className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex flex-col">
+        {/* Notice Banner */}
+        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">Notice</span>
+            <span>Single-Tenant Private Preview — Live commercial billing is paused pending verified rate card review. Rates below reflect the provisional studio price book.</span>
+          </div>
+          <span className="font-mono text-[11px] text-amber-400">1 Credit = $0.004 USD (Base Denomination)</span>
+        </div>
+
         {/* Header Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#00e5ff]">
-                  Transparent Rate Cards & Tokenomics
+                  Rate Cards & Compute Allocations
                 </span>
                 <span className="text-zinc-600">•</span>
-                <span className="text-[11px] text-zinc-400 font-mono">1,000 Credits = $1.00 USD</span>
+                <span className="text-[11px] text-zinc-400 font-mono">Proposed Denomination: 250 Credits = $1.00 USD</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#f5f7fa]">
                 Plans, Compute Packs & Economics
               </h1>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                Zero expiring credits. Multi-provider cascade failover across Fal.ai, Replicate, MuAPI, and Kie.
+                Transparent model pricing and credit pack tiers. Multi-provider cascade failover across verified provider routes.
               </p>
             </div>
 
@@ -236,8 +206,7 @@ export default function PricingPage() {
             <div className="flex items-center gap-1.5 p-1 bg-[#121217] border border-white/10 rounded-xl self-start sm:self-auto">
               {[
                 { id: 'packs', label: 'Credit Top-Ups ($10–$1,000)' },
-                { id: 'monthly', label: 'Studio Monthly ($3K–$10K)' },
-                { id: 'backers', label: 'Founder Backer Pass' },
+                { id: 'monthly', label: 'Studio Monthly Plans' },
                 { id: 'models', label: 'Model Rate Cards' },
               ].map((tab) => (
                 <button
@@ -399,71 +368,7 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* TAB 3: FOUNDER BACKER PASS (1,000 - 10,000 EARLY SEED INVESTORS) */}
-        {activeTab === 'backers' && (
-          <div className="mb-12">
-            <div className="p-8 rounded-3xl bg-gradient-to-br from-[#12141c] via-[#0d1017] to-[#12141c] border border-[#00e5ff]/30 shadow-[0_0_40px_rgba(0,229,255,0.08)] mb-8">
-              <div className="max-w-3xl">
-                <Badge variant="default" className="mb-3 text-[10px] tracking-widest uppercase">
-                  Seed Community Backer Tier (1,000 – 10,000 Members)
-                </Badge>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">
-                  Sovereign Founder Pass: Co-Own the Future of AI Cinema
-                </h2>
-                <p className="text-sm text-zinc-300 leading-relaxed mb-6">
-                  Early contributors who back Timecapsule Studio during our foundational stage receive perpetual software utility, monthly compounding compute allocations, and direct revenue sharing from the platform’s net margins.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                {BACKER_BENEFITS.map((benefit, idx) => (
-                  <div key={idx} className="p-5 rounded-2xl bg-[#14141c]/90 border border-white/10 flex flex-col justify-between">
-                    <div>
-                      <div className="w-9 h-9 rounded-xl bg-[#00e5ff]/10 border border-[#00e5ff]/30 flex items-center justify-center text-[#00e5ff] mb-3">
-                        <BrandIcon name="check" className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-bold text-sm text-white mb-2">{benefit.title}</h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">{benefit.desc}</p>
-                    </div>
-                  </div>
-                ))}
-
-                {/* 6th Card: Financial Revenue Sharing Waterfall */}
-                <div className="p-5 rounded-2xl bg-[#00e5ff]/10 border border-[#00e5ff]/40 flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] font-mono text-[#00e5ff] font-bold uppercase tracking-wider block mb-1">
-                      High-Margin Platform Waterfall
-                    </span>
-                    <h3 className="font-bold text-sm text-white mb-2">12% / 15% / 25% / 48% Model</h3>
-                    <p className="text-xs text-zinc-300 leading-relaxed">
-                      Every $100 earned allocates only $12 to compute (88% gross margin), $15 to infra/R&D, <strong>$25 to the Seed Backer Pool</strong>, and <strong>$48 directly to Company Retained Treasury</strong>.
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-[#00e5ff]/20 text-[11px] font-mono font-bold text-[#00e5ff]">
-                    48% Retained War Chest Margin
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4">
-                <Link
-                  href="/billing"
-                  className="px-6 py-3 rounded-xl bg-[#00e5ff] hover:bg-[#38bdf8] text-[#09090b] font-black text-xs uppercase tracking-wider transition-all shadow-glow"
-                >
-                  Join Founder Backer Waitlist
-                </Link>
-                <Link
-                  href="/docs/white-label"
-                  className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  Read White-Label Architecture
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: MODEL RATE CARDS */}
+        {/* TAB 3: MODEL RATE CARDS */}
         {activeTab === 'models' && (
           <div>
             {/* Filter and Search Bar */}
@@ -539,17 +444,17 @@ export default function PricingPage() {
                         <thead className="bg-[#14141a] text-zinc-400 uppercase font-semibold text-[10px] tracking-wider border-b border-white/5">
                           <tr>
                             <th className="px-6 py-3">MODEL & MODALITY</th>
-                            <th className="px-6 py-3">TIMECAPSULE RATE</th>
-                            <th className="px-6 py-3">FAL.AI RATE</th>
-                            <th className="px-6 py-3">REPLICATE RATE</th>
-                            <th className="px-6 py-3 text-right">SAVINGS</th>
+                            <th className="px-6 py-3">TIMECAPSULE RATE (PROVISIONAL)</th>
+                            <th className="px-6 py-3">PRIMARY PROVIDER COGS</th>
+                            <th className="px-6 py-3">FALLBACK ROUTE</th>
+                            <th className="px-6 py-3 text-right">STATUS</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 text-zinc-300">
                           {visibleModels.map((row) => (
                             <tr key={row.name} className="hover:bg-white/[0.02] transition-colors">
                               <td className="px-6 py-3.5">
-                                <Link href={`/${row.name}`} className="font-bold text-[#f5f7fa] hover:text-[#00e5ff] transition-colors block">
+                                <Link href={`/${row.name.split(' ')[0]}`} className="font-bold text-[#f5f7fa] hover:text-[#00e5ff] transition-colors block">
                                   {row.name}
                                 </Link>
                                 <span className="text-[10px] text-zinc-500 font-mono tracking-wider">
@@ -559,16 +464,16 @@ export default function PricingPage() {
                               <td className="px-6 py-3.5 font-bold text-[#00e5ff] font-mono">
                                 {row.timecapsule}
                               </td>
-                              <td className="px-6 py-3.5 text-zinc-400 font-mono">
-                                {row.fal}
+                              <td className="px-6 py-3.5 text-zinc-300 font-mono">
+                                {row.primaryProvider || '-'}
                               </td>
                               <td className="px-6 py-3.5 text-zinc-400 font-mono">
-                                {row.replicate}
+                                {row.fallbackRoute || '-'}
                               </td>
-                              <td className="px-6 py-3.5 text-right">
-                                {row.discount ? (
-                                  <Badge variant="success">
-                                    {row.discount}
+                              <td className="px-6 py-3.5 text-right font-mono text-[11px]">
+                                {row.status ? (
+                                  <Badge variant={row.status.includes('Profitable') ? 'success' : 'secondary'}>
+                                    {row.status}
                                   </Badge>
                                 ) : (
                                   <span className="text-zinc-600">-</span>
