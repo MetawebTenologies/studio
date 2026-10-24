@@ -105,9 +105,18 @@ export function createDurableWorker(options = {}) {
         let submissionResult = null;
         let lastError = null;
 
+        const allowAlt = Boolean(
+          currentJobToSubmit.inputs?.allow_alternative_models ??
+          currentJobToSubmit.inputs?.execution_policy?.allow_alternative_models ??
+          currentJobToSubmit.workflow?.allow_alternative_models ??
+          currentJobToSubmit.workflow?.execution_policy?.allow_alternative_models ??
+          currentJobToSubmit.execution_policy?.allow_alternative_models ??
+          (process.env.TIMECAPSULE_ALLOW_CROSS_MODEL_FALLBACK === '1')
+        );
         const cascadeRoutes = getCascadeRoutesForModel(
           currentJobToSubmit.model,
-          currentJobToSubmit.modality
+          currentJobToSubmit.modality,
+          { allowAlternativeModels: allowAlt }
         );
         const attemptedProviders = new Set();
 

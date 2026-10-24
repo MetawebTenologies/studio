@@ -102,7 +102,10 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
     upload_contract: 'POST https://kieai.redpandaai.co/api/file-base64-upload -> { code: 200, data: { downloadUrl } }',
     verified_rates: {
       'veo3_fast': {
-        unit_cost_usd: 0.350, // 60-80 Kie credits at $0.005/credit = $0.30 - $0.40
+        unit_cost_usd: 0.400, // Conservative upper bound (60-80 Kie credits at $0.005/credit = $0.300 - $0.400)
+        range_min_usd: 0.300,
+        range_max_usd: 0.400,
+        evidence_type: 'range_bound',
         currency: 'USD',
         checked_date: '2026-10-24',
         source: 'https://docs.kie.ai/veo3-api/generate-veo-3-video',
@@ -110,7 +113,7 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
         resolution_tiered: true,
       },
       'bytedance/seedance-1.5-pro': {
-        unit_cost_usd: 0.250, // ~50 Kie credits
+        unit_cost_usd: 0.250, // 50 Kie credits
         currency: 'USD',
         checked_date: '2026-10-24',
         source: 'https://docs.kie.ai/market/common/create-task',
@@ -120,7 +123,7 @@ export const PROVIDER_DOCUMENTATION_REGISTRY = Object.freeze({
     },
     unknowns: [
       'Kie recordInfo and veo/record-info do not consistently return a standardized provider credit debit field across all models; Timecapsule bills deterministic integer credits via credit_estimate_policy.',
-      'Kie market task pricing (seedance-1.5-pro) fluctuates with cluster demand.',
+      'Kie market task pricing (seedance-1.5-pro) lists 50 credits ($0.250) on create-task documentation.',
     ],
   },
   fal: {
@@ -191,12 +194,24 @@ export const SUPPORTED_RELEASE_MODELS = [
     pricing_policy_version: PRICING_POLICY_VERSION,
     cascade_order: ['muapi', 'fal', 'replicate', 'kie'],
     alternative_providers: {
+      kie: {
+        provider: 'kie',
+        provider_model_id: 'nano-banana-pro',
+        execution_route: 'kie:market-jobs/v1:nano-banana-pro',
+        execution_route_version: EXECUTION_ROUTE_VERSION,
+        verification_status: 'contract_tested',
+        is_cross_model_alternative: false,
+        requires_explicit_opt_in: false,
+      },
       fal: {
         provider: 'fal',
         provider_model_id: 'fal-ai/flux/dev',
         execution_route: 'fal:queue/v1:fal-ai/flux/dev',
         execution_route_version: EXECUTION_ROUTE_VERSION,
         verification_status: 'contract_tested',
+        is_cross_model_alternative: true,
+        requires_explicit_opt_in: true,
+        alternative_model_label: 'FLUX.1 Dev',
       },
       replicate: {
         provider: 'replicate',
@@ -204,13 +219,9 @@ export const SUPPORTED_RELEASE_MODELS = [
         execution_route: 'replicate:predictions/v1:black-forest-labs/flux-schnell',
         execution_route_version: EXECUTION_ROUTE_VERSION,
         verification_status: 'contract_tested',
-      },
-      kie: {
-        provider: 'kie',
-        provider_model_id: 'nano-banana-pro',
-        execution_route: 'kie:market-jobs/v1:nano-banana-pro',
-        execution_route_version: EXECUTION_ROUTE_VERSION,
-        verification_status: 'contract_tested',
+        is_cross_model_alternative: true,
+        requires_explicit_opt_in: true,
+        alternative_model_label: 'FLUX.1 Schnell',
       },
     },
     required_inputs: ['prompt'],
@@ -658,6 +669,8 @@ export function resolveReleaseRoute(modelId, modality, requestedProvider = null)
       credit_estimate_policy: entry.credit_estimate_policy,
       required_inputs: entry.required_inputs,
       optional_inputs: entry.optional_inputs,
+      is_cross_model_alternative: false,
+      requires_explicit_opt_in: false,
     };
   }
 
@@ -685,6 +698,9 @@ export function resolveReleaseRoute(modelId, modality, requestedProvider = null)
       credit_estimate_policy: entry.credit_estimate_policy,
       required_inputs: entry.required_inputs,
       optional_inputs: entry.optional_inputs,
+      is_cross_model_alternative: Boolean(alt.is_cross_model_alternative || alt.provider_model_id !== entry.provider_model_id),
+      requires_explicit_opt_in: Boolean(alt.requires_explicit_opt_in),
+      alternative_model_label: alt.alternative_model_label || null,
     };
   }
 
@@ -697,9 +713,17 @@ export function resolveReleaseRoute(modelId, modality, requestedProvider = null)
   throw err;
 }
 
-export function getCascadeRoutesForModel(modelId, modality) {
+export function getCascadeRoutesForModel(modelId, modality, options = {}) {
   const entry = getSupportedReleaseModel(modelId);
   if (!entry) return [];
+
+  // Cross-model alternatives (e.g. FLUX Dev for Nano Banana Pro) require explicit opt-in
+  const allowAlt = Boolean(
+    options.allowAlternativeModels ??
+    options.allow_alternative_models ??
+    (process.env.TIMECAPSULE_ALLOW_CROSS_MODEL_FALLBACK === '1')
+  );
+
   const order = entry.cascade_order || [
     entry.primary_provider,
     ...Object.keys(entry.alternative_providers || {}),
@@ -713,6 +737,10 @@ export function getCascadeRoutesForModel(modelId, modality) {
         (resolved.verification_status === 'contract_tested' ||
           resolved.verification_status === 'live_verified')
       ) {
+        if (resolved.is_cross_model_alternative && !allowAlt) {
+          // Block silent cross-model replacement
+          continue;
+        }
         routes.push(resolved);
       }
     } catch {

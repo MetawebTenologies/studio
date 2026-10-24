@@ -75,6 +75,7 @@ import {
 // Setup disposable test database environment
 process.env.TIMECAPSULE_ALLOW_DESTRUCTIVE_TEST_DB = '1';
 process.env.TIMECAPSULE_TEST_MODE = '1';
+process.env.TIMECAPSULE_ALLOW_CROSS_MODEL_FALLBACK = '1';
 process.env.TIMECAPSULE_SESSION_SECRET = 'super-secret-test-session-key-32chars!';
 process.env.TIMECAPSULE_PREVIEW_KEY = 'test-preview-key-1234';
 

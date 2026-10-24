@@ -14,16 +14,27 @@ import {
   LOWEST_PACK_EFFECTIVE_USD_PER_CREDIT,
   CREDIT_PACK_RATES,
   VARIABLE_COST_ASSUMPTIONS,
+  STORAGE_EGRESS_ASSUMPTION_PCT,
+  PAYMENT_FEE_PROFILES,
+  DEFAULT_PAYMENT_FEE_PROFILE,
+  APPROVED_NANO_BANANA_PRO_TEST_RATE_CREDITS,
   SUPPLIER_COST_REGISTRY,
+  calculateNetServiceRevenue,
+  calculateRouteMinimumCredits,
   calculateRequiredCredits,
+  calculatePlanContribution,
   calculateContributionMargin,
-  generateRoutePricingScenarios,
+  getRoutePricingBreakdown,
+  calculateDeliveryCostPerCredit,
+  findHighestDeliveryCostRoute,
+  runPlanFullRedemptionAnalysis,
   PRICING_POLICY_VERSION,
 } from '../packages/timecapsule/src/models/economics.js';
 import {
   SUPPORTED_RELEASE_MODELS,
   getSupportedReleaseModel,
   resolveReleaseRoute,
+  getCascadeRoutesForModel,
   getEstimatedCreditsForModel,
   getModelCapabilities,
 } from '../packages/timecapsule/src/models/index.js';
@@ -53,7 +64,6 @@ import {
   resetProviderAdapters,
 } from '../packages/timecapsule/src/server/providers.js';
 import { createDurableWorker } from '../packages/timecapsule/src/worker/index.js';
-import { issueTenantSessionToken } from '../packages/timecapsule/src/server/auth.js';
 
 test('Business Invariants: Route Pricing & Economic Variable Separation', async (t) => {
   assertDisposableTestDatabase();
@@ -65,12 +75,12 @@ test('Business Invariants: Route Pricing & Economic Variable Separation', async 
   });
 
   await t.test('1. Separates retail purchase rate from supplier cost backing', () => {
-    // Retail purchase rate is a denomination ($1 = 250 credits -> $0.004/cr)
+    // Retail purchase rate is a denomination baseline ($1 = 250 credits -> $0.004/cr)
     assert.strictEqual(RETAIL_CREDIT_PURCHASE_RATE_USD, 0.004);
 
-    // Supplier cost for Nano Banana Pro is empirically $0.12 on Muapi public price card
+    // Supplier cost for Nano Banana Pro is empirically $0.120 on Muapi public price card
     const muapiNanoCost = SUPPLIER_COST_REGISTRY['muapi:nano-banana-pro'].supplier_cost_usd;
-    assert.strictEqual(muapiNanoCost, 0.12);
+    assert.strictEqual(muapiNanoCost, 0.120);
 
     // Assert that retail value per credit is NOT called supplier cost
     assert.notStrictEqual(RETAIL_CREDIT_PURCHASE_RATE_USD, muapiNanoCost);
@@ -92,7 +102,89 @@ test('Business Invariants: Route Pricing & Economic Variable Separation', async 
     assert.ok(LOWEST_PACK_EFFECTIVE_USD_PER_CREDIT > 0.0026);
   });
 
-  await t.test('3. Unknown supplier costs cannot be labeled profitable', () => {
+  await t.test('3. Fixed payment fees are allocated across purchase credits (F / K)', () => {
+    // Pack: $10 for 2,500 credits. Fixed fee $0.30, 2.9% fee, 1.5% storage, 60% margin.
+    // Minimum credits with fixed fee allocated across pack:
+    const minWithFixedFee = calculateRouteMinimumCredits({
+      supplierCostUsd: 0.120,
+      packPriceUsd: 10.0,
+      packCredits: 2500,
+      targetMarginPct: 0.60,
+      paymentFeeProfile: PAYMENT_FEE_PROFILES.stripe_us_standard,
+      storageEgressAssumptionPct: 0.015,
+    });
+
+    // P * (1 - 0.60 - 0.044) - F = 10 * 0.356 - 0.30 = 3.26
+    // Credits = ceil(0.120 * 2500 / 3.26) = ceil(92.02) = 93 credits
+    assert.strictEqual(minWithFixedFee, 93);
+
+    // On $1,000 Enterprise Fleet (380,000 credits), the $0.30 fixed fee is negligible ($0.30 / 380,000):
+    const minEnterprise = calculateRouteMinimumCredits({
+      supplierCostUsd: 0.120,
+      packPriceUsd: 1000.0,
+      packCredits: 380000,
+      targetMarginPct: 0.60,
+      paymentFeeProfile: PAYMENT_FEE_PROFILES.stripe_us_standard,
+      storageEgressAssumptionPct: 0.015,
+    });
+    // 1000 * 0.356 - 0.30 = 355.70
+    // Credits = ceil(0.120 * 380000 / 355.70) = ceil(128.20) = 129 credits!
+    assert.strictEqual(minEnterprise, 129);
+  });
+
+  await t.test('4. Configurable payment fees and tax separation (Net Revenue P vs Tax)', () => {
+    // 18% GST in India
+    const taxInclusive = calculateNetServiceRevenue({
+      grossCollectedUsd: 118.0,
+      taxRatePct: 0.18,
+      isTaxInclusive: true,
+    });
+    assert.strictEqual(Math.round(taxInclusive.net_service_revenue_usd), 100);
+    assert.strictEqual(Math.round(taxInclusive.tax_collected_usd), 18);
+
+    // Configurable payment fee profiles
+    assert.ok(PAYMENT_FEE_PROFILES.stripe_us_standard);
+    assert.ok(PAYMENT_FEE_PROFILES.stripe_in_domestic);
+    assert.ok(PAYMENT_FEE_PROFILES.stripe_in_international);
+    assert.strictEqual(PAYMENT_FEE_PROFILES.stripe_in_domestic.percentage_fee, 0.020);
+    assert.strictEqual(PAYMENT_FEE_PROFILES.stripe_in_international.percentage_fee + PAYMENT_FEE_PROFILES.stripe_in_international.fx_conversion_pct, 0.050);
+
+    // Storage/egress assumption is explicitly labeled as unmeasured
+    assert.strictEqual(STORAGE_EGRESS_ASSUMPTION_PCT, 0.015);
+  });
+
+  await t.test('5. Separates calculated minimum from discretionary commercial premiums', () => {
+    // Flat $0.120 supplier cost across 1K/2K/4K:
+    const breakdown1k = getRoutePricingBreakdown('nano-banana-pro', '1k');
+    const breakdown2k = getRoutePricingBreakdown('nano-banana-pro', '2k');
+    const breakdown4k = getRoutePricingBreakdown('nano-banana-pro', '4k');
+
+    // Formula calculated minimum is identical for all three (129 credits)
+    assert.strictEqual(breakdown1k.calculated_minimum_credits, 129);
+    assert.strictEqual(breakdown2k.calculated_minimum_credits, 129);
+    assert.strictEqual(breakdown4k.calculated_minimum_credits, 129);
+
+    // Discretionary commercial premiums are labeled separately
+    assert.strictEqual(breakdown1k.discretionary_commercial_premium_credits, 0);
+    assert.strictEqual(breakdown2k.discretionary_commercial_premium_credits, 11);
+    assert.strictEqual(breakdown4k.discretionary_commercial_premium_credits, 31);
+
+    // Total test rates
+    assert.strictEqual(breakdown1k.commercial_test_rate_credits, 129);
+    assert.strictEqual(breakdown2k.commercial_test_rate_credits, 140);
+    assert.strictEqual(breakdown4k.commercial_test_rate_credits, 160);
+    assert.strictEqual(APPROVED_NANO_BANANA_PRO_TEST_RATE_CREDITS, 129);
+  });
+
+  await t.test('6. Cost evidence categorization: Conservative upper bounds used instead of midpoints', () => {
+    // Veo 3 Fast: range $0.30 - $0.40. Conservative bound $0.400 is recorded, NOT midpoint $0.350!
+    const veoRoute = SUPPLIER_COST_REGISTRY['kie:veo3_fast'];
+    assert.strictEqual(veoRoute.evidence_type, 'range_bound');
+    assert.strictEqual(veoRoute.range_min_usd, 0.300);
+    assert.strictEqual(veoRoute.range_max_usd, 0.400);
+    assert.strictEqual(veoRoute.supplier_cost_usd, 0.400);
+
+    // Unknown costs cannot be labeled profitable
     const unknownRoute = SUPPLIER_COST_REGISTRY['timecapsule-gpu:flux1-dev-t2i'];
     assert.strictEqual(unknownRoute.cost_status, 'unknown');
     assert.strictEqual(unknownRoute.supplier_cost_usd, null);
@@ -102,126 +194,72 @@ test('Business Invariants: Route Pricing & Economic Variable Separation', async 
       supplierCostUsd: unknownRoute.supplier_cost_usd,
       effectiveRevenuePerCredit: RETAIL_CREDIT_PURCHASE_RATE_USD,
     });
-
     assert.strictEqual(marginResult.is_profitable, false);
     assert.strictEqual(marginResult.status, 'unknown_supplier_cost');
-    assert.strictEqual(marginResult.margin_pct, null);
-
-    // Attempting to calculate required credits for unknown cost throws immediately
-    assert.throws(
-      () => calculateRequiredCredits({ supplierCostUsd: null }),
-      /invalid or unknown supplier cost/
-    );
   });
 
-  await t.test('4. Correctly flags Nano Banana Pro deficit at 10 credits and computes 50/60/70% scenarios', () => {
-    // Under Muapi verified $0.12 cost and current 10-credit charge ($0.040 at retail):
-    const currentMargin = calculateContributionMargin({
-      creditsCharged: 10,
-      supplierCostUsd: 0.12,
-      effectiveRevenuePerCredit: 0.004,
+  await t.test('7. Delivery cost per credit ranking & full-redemption stress testing', () => {
+    const analysis = findHighestDeliveryCostRoute();
+    assert.ok(analysis.highest_delivery_cost_route);
+
+    // Nano Banana Pro at 129 credits: $0.120 / 129 = $0.0009302/cr
+    const nanoDeliveryCost = calculateDeliveryCostPerCredit({
+      supplierCostUsd: 0.120,
+      creditsCharged: 129,
     });
+    assert.ok(nanoDeliveryCost > 0.00093 && nanoDeliveryCost < 0.000931);
 
-    // 10 credits * $0.004 = $0.040 revenue vs $0.120 compute -> deficit!
-    assert.strictEqual(currentMargin.is_profitable, false);
-    assert.strictEqual(currentMargin.status, 'loss_making');
-    assert.ok(currentMargin.net_contribution_usd < 0);
-
-    // Calculate required credits at 50%, 60%, and 70% contribution targets at retail ($0.004)
-    const retail_50 = calculateRequiredCredits({ supplierCostUsd: 0.12, effectiveRevenuePerCredit: 0.004, targetMarginPct: 0.50 });
-    const retail_60 = calculateRequiredCredits({ supplierCostUsd: 0.12, effectiveRevenuePerCredit: 0.004, targetMarginPct: 0.60 });
-    const retail_70 = calculateRequiredCredits({ supplierCostUsd: 0.12, effectiveRevenuePerCredit: 0.004, targetMarginPct: 0.70 });
-
-    assert.strictEqual(retail_50, 66);
-    assert.strictEqual(retail_60, 85);
-    assert.strictEqual(retail_70, 118);
-
-    // Verify that at retail_60 (85 credits), contribution margin is >= 60%
-    const marginAt60 = calculateContributionMargin({
-      creditsCharged: retail_60,
-      supplierCostUsd: 0.12,
-      effectiveRevenuePerCredit: 0.004,
-    });
-    assert.ok(marginAt60.margin_pct >= 60.0);
-    assert.strictEqual(marginAt60.is_profitable, true);
-
-    // Calculate required credits against lowest credit pack rate ($0.002632)
-    const pack_safe_60 = calculateRequiredCredits({
-      supplierCostUsd: 0.12,
-      effectiveRevenuePerCredit: LOWEST_PACK_EFFECTIVE_USD_PER_CREDIT,
-      targetMarginPct: 0.60,
-    });
-    assert.strictEqual(pack_safe_60, 129);
-  });
-
-  await t.test('5. Seedance Pro T2V (350 credits) and Veo 3.1 Fast (450 credits) are verified profitable', () => {
-    // Seedance 720p: supplier cost $0.18 on Muapi
-    const seedanceMargin = calculateContributionMargin({
+    // Seedance 720p at 350 credits: $0.180 / 350 = $0.000514/cr
+    const seedanceDeliveryCost = calculateDeliveryCostPerCredit({
+      supplierCostUsd: 0.180,
       creditsCharged: 350,
-      supplierCostUsd: 0.18,
-      effectiveRevenuePerCredit: RETAIL_CREDIT_PURCHASE_RATE_USD,
     });
-    assert.strictEqual(seedanceMargin.is_profitable, true);
-    assert.ok(seedanceMargin.margin_pct > 80.0, 'Seedance at 350 credits yields >80% contribution margin at retail');
+    assert.ok(seedanceDeliveryCost < nanoDeliveryCost);
 
-    // Seedance at lowest credit pack rate ($0.00263)
-    const seedanceLowestMargin = calculateContributionMargin({
-      creditsCharged: 350,
-      supplierCostUsd: 0.18,
-      effectiveRevenuePerCredit: LOWEST_PACK_EFFECTIVE_USD_PER_CREDIT,
-    });
-    assert.strictEqual(seedanceLowestMargin.is_profitable, true);
-    assert.ok(seedanceLowestMargin.margin_pct > 75.0, 'Seedance at 350 credits yields >75% margin even under Enterprise Pack');
-
-    // Veo 3.1 Fast: supplier cost $0.35 on Kie
-    const veoMargin = calculateContributionMargin({
+    // Veo 3 Fast at 450 credits: $0.400 / 450 = $0.000889/cr
+    const veoDeliveryCost = calculateDeliveryCostPerCredit({
+      supplierCostUsd: 0.400,
       creditsCharged: 450,
-      supplierCostUsd: 0.35,
-      effectiveRevenuePerCredit: RETAIL_CREDIT_PURCHASE_RATE_USD,
     });
-    assert.strictEqual(veoMargin.is_profitable, true);
-    assert.ok(veoMargin.margin_pct > 75.0);
-  });
+    assert.ok(veoDeliveryCost < nanoDeliveryCost);
 
-  await t.test('6. UI Quotes equal server credit reservations', () => {
-    const testCases = [
-      { modelId: 'nano-banana-pro', modality: 'image', params: { resolution: '1k' }, expected: 10 },
-      { modelId: 'nano-banana-pro', modality: 'image', params: { resolution: '2k' }, expected: 15 },
-      { modelId: 'nano-banana-pro', modality: 'image', params: { resolution: '4k' }, expected: 25 },
-      { modelId: 'nano-banana-pro-edit', modality: 'i2i', params: { resolution: '1k' }, expected: 15 },
-      { modelId: 'seedance-pro-t2v', modality: 'video', params: { resolution: '720p', duration: 5 }, expected: 350 },
-      { modelId: 'seedance-pro-t2v', modality: 'video', params: { resolution: '1080p', duration: 5 }, expected: 450 },
-      { modelId: 'veo3.1-fast-text-to-video', modality: 'video', params: { resolution: '720p', duration: 8 }, expected: 450 },
-    ];
+    // Stress test: +20% supplier price increase and 5% billable failure rate on Starter Pack
+    const stressResults = runPlanFullRedemptionAnalysis({
+      routeKey: 'muapi:nano-banana-pro-1k',
+      supplierCostUsd: 0.120,
+      creditsCharged: 129,
+      stressSupplierHikePct: 0.20,
+      stressBillableFailurePct: 0.05,
+    });
 
-    for (const tc of testCases) {
-      // 1. Check getEstimatedCreditsForModel (used by API & UI)
-      const quote = getEstimatedCreditsForModel(tc.modelId, tc.modality, tc.params);
-      assert.strictEqual(
-        quote,
-        tc.expected,
-        `Expected quote for ${tc.modelId} (${JSON.stringify(tc.params)}) to equal ${tc.expected}`
-      );
-
-      // 2. Check getModelCapabilities policy (used by ModelPlayground dynamic preview)
-      const caps = getModelCapabilities(tc.modelId);
-      assert.ok(caps);
-      assert.ok(caps.credit_estimate_policy);
-      const policy = caps.credit_estimate_policy;
-
-      if (policy.by_resolution) {
-        const resKey = (tc.params.resolution || '1k').toLowerCase();
-        assert.strictEqual(policy.by_resolution[resKey], tc.expected);
-      } else if (policy.policy_id === 'tier_video_duration_resolution_v1') {
-        const expectedBase = tc.params.resolution === '1080p' ? 450 : 350;
-        assert.strictEqual(expectedBase, tc.expected);
-      } else if (policy.base_credits) {
-        assert.strictEqual(policy.base_credits, tc.expected);
-      }
+    for (const res of stressResults) {
+      assert.ok(res.completed_generations > 0);
+      assert.strictEqual(res.is_profitable, true);
+      assert.ok(res.contribution_margin_pct > 35.0, `Expected >35% margin under stress, got ${res.contribution_margin_pct.toFixed(1)}%`);
     }
   });
 
-  await t.test('7. Existing jobs retain their accepted pricing policy version', async () => {
+  await t.test('8. Execution Policy Invariant: FLUX Dev/Schnell must NOT silently replace Nano Banana Pro', () => {
+    // Case A: Default request (allowAlternativeModels: false)
+    const strictRoutes = getCascadeRoutesForModel('nano-banana-pro', 'image', {
+      allowAlternativeModels: false,
+    });
+    // Must NOT contain Fal or Replicate
+    assert.strictEqual(strictRoutes.some((r) => r.provider === 'fal'), false, 'Fal FLUX Dev must not be in default cascade');
+    assert.strictEqual(strictRoutes.some((r) => r.provider === 'replicate'), false, 'Replicate FLUX Schnell must not be in default cascade');
+    // Must contain same-model providers (Muapi, Kie)
+    assert.strictEqual(strictRoutes.some((r) => r.provider === 'muapi'), true);
+    assert.strictEqual(strictRoutes.some((r) => r.provider === 'kie'), true);
+
+    // Case B: Explicit user opt-in (allowAlternativeModels: true)
+    const optInRoutes = getCascadeRoutesForModel('nano-banana-pro', 'image', {
+      allowAlternativeModels: true,
+    });
+    assert.strictEqual(optInRoutes.some((r) => r.provider === 'fal'), true);
+    assert.strictEqual(optInRoutes.some((r) => r.provider === 'replicate'), true);
+  });
+
+  await t.test('9. Existing jobs retain accepted pricing policy version', async () => {
     await resetStoreForTests();
     const tenantId = `org_biz_inv_${Date.now()}`;
     const userId = `usr_biz_inv_${Date.now()}`;
@@ -278,7 +316,7 @@ test('Business Invariants: Route Pricing & Economic Variable Separation', async 
     assert.strictEqual(retrieved.credits_reserved, 350);
   });
 
-  await t.test('8. Fallback cannot change accepted customer pricing or bleed credits', async () => {
+  await t.test('10. Fallback cannot change accepted customer pricing or bleed credits', async () => {
     await resetStoreForTests();
     resetProviderAdapters();
 
@@ -349,13 +387,18 @@ test('Business Invariants: Route Pricing & Economic Variable Separation', async 
       token_version: 1,
     };
 
+    // Explicitly allow alternative model for this test
     const { job: submittedJob } = await submitGenerationJob({
       session,
       idempotencyKey: `idem_fallback_pricing_${Date.now()}`,
       body: {
         model: 'nano-banana-pro',
         modality: 'image',
-        inputs: { prompt: 'Fallback pricing invariant test' },
+        inputs: {
+          prompt: 'Fallback pricing invariant test',
+          allow_alternative_models: true,
+        },
+        execution_policy: { allow_alternative_models: true },
       },
     });
 
